@@ -1,0 +1,54 @@
+{# Sidebar navigation — shared by desktop + mobile drawer #}
+<nav class="px-3 py-4" aria-label="সাইডবার">
+    <p class="px-3 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">সার্ভিস</p>
+
+    {% set groups = [
+        {
+            label: 'সার্ভিস হাব',
+            icon: 'layout-grid',
+            items: [
+                { label: 'ড্যাশবোর্ড', href: '/dashboard', icon: 'home', match: 'dashboard' },
+                { label: 'সকল সার্ভিস', href: '/services', icon: 'layers', match: 'services' },
+            ],
+        },
+        {
+            label: 'অ্যাকাউন্ট',
+            icon: 'user',
+            items: [
+                { label: 'প্রোফাইল', href: '/profile', icon: 'user-circle', match: 'profile' },
+                { label: 'লেনদেন', href: '/transactions', icon: 'receipt', match: 'transactions' },
+                { label: 'নোটিফিকেশন', href: '/notifications', icon: 'bell', match: 'notifications' },
+            ],
+        },
+    ] %}
+
+    {% if identity.canAccessAdmin() %}
+        {% set groups = groups|merge([{ label: 'অ্যাডমিন', icon: 'shield', items: [
+            { label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge', match: 'admin' },
+            { label: 'টপ-আপ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' },
+            { label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' },
+        ] }]) %}
+    {% endif %}
+
+    {% for group in groups %}
+        <div class="mb-1" x-data="{ open: true }">
+            <button @click="open = !open" class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50" aria-expanded="true">
+                <span class="flex items-center gap-2.5">{{ icon(group.icon, 'w-4 h-4 text-primary-600') }} {{ group.label }}</span>
+                <svg class="h-4 w-4 text-neutral-400 transition" :class="open && 'rotate-180'" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-down"></use></svg>
+            </button>
+            <div x-show="open" class="mt-0.5 space-y-0.5">
+                {% for item in group.items %}
+                    {% set isActive = currentPath is defined and currentPath starts with item.href %}
+                    <a href="{{ item.href }}" class="nav-link {{ isActive ? 'nav-link-active' }}" {% if isActive %}aria-current="page"{% endif %}>
+                        {{ icon(item.icon, 'w-4 h-4') }} {{ item.label }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+
+    <div class="mt-6 rounded-xl bg-primary-50 p-4 text-center">
+        <p class="text-xs font-medium text-primary-800">💡 ডেমো মোড</p>
+        <p class="mt-1 text-[11px] leading-relaxed text-primary-700/80">সকল সার্ভিস ও ডাটা কাল্পনিক — শুধুমাত্র ডেমো উদ্দেশ্যে।</p>
+    </div>
+</nav>

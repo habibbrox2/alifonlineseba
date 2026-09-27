@@ -1,0 +1,122 @@
+{% extends 'layouts/base.twig' %}
+
+{# Authenticated app area — never index. #}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block body %}
+<div x-data="{ sidebarOpen: false }" class="min-h-screen">
+    <!-- Topbar -->
+    <header class="sticky top-0 z-40 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-700 shadow-md">
+        <div class="container-app flex h-16 items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <!-- Mobile menu button -->
+                <button @click="sidebarOpen = true" class="btn btn-ghost-dark btn-sm lg:hidden" aria-label="সাইডবার খুলুন">
+                    {{ icon('menu', 'w-5 h-5') }}
+                </button>
+                <a href="/dashboard" class="flex items-center gap-2.5 font-bold text-white">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-500 text-sm font-extrabold text-primary-900">TH</span>
+                    <span class="hidden text-lg tracking-tight sm:block">TH Tools</span>
+                </a>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <a href="/profile" class="hidden items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-white/15 sm:inline-flex">
+                    {{ icon('wallet', 'w-4 h-4') }}
+                    <span>{{ identity.balance|money }}</span>
+                </a>
+
+                <!-- Notifications -->
+                <div x-data="{ open: false }" class="relative">
+                    <button @click="open = !open" class="relative rounded-full p-2 text-white/90 transition hover:bg-white/10" aria-label="নোটিফিকেশন" aria-expanded="false">
+                        {{ icon('bell', 'w-5 h-5') }}
+                        {% if unread > 0 %}
+                            <span class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-bold text-primary-900">{{ unread > 9 ? '9+' : unread }}</span>
+                        {% endif %}
+                    </button>
+                    <div x-show="open" x-cloak @click.outside="open = false" x-transition
+                         class="absolute right-0 mt-2 w-80 rounded-xl border border-neutral-200 bg-white shadow-lg">
+                        <div class="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
+                            <p class="text-sm font-semibold text-neutral-800">নোটিফিকেশন</p>
+                            <form method="post" action="/notifications/read-all">
+                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                <button type="submit" class="text-xs font-medium text-primary-600 hover:underline">সব পড়া হয়েছে</button>
+                            </form>
+                        </div>
+                        <div class="max-h-80 overflow-y-auto" id="notification-dropdown-body">
+                            <p class="px-4 py-6 text-center text-sm text-neutral-500">লোড হচ্ছে…</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User menu -->
+                <div x-data="{ open: false }" class="relative">
+                    <button @click="open = !open" class="flex items-center gap-2 rounded-full p-1 pr-2 transition hover:bg-white/10" aria-label="ইউজার মেনু" aria-expanded="false">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent-500 text-sm font-bold text-primary-900">{{ identity.username|first|upper }}</span>
+                        {{ icon('chevron-down', 'w-4 h-4 text-white/70') }}
+                    </button>
+                    <div x-show="open" x-cloak @click.outside="open = false" x-transition
+                         class="absolute right-0 mt-2 w-52 rounded-xl border border-neutral-200 bg-white py-1.5 shadow-lg">
+                        <div class="border-b border-neutral-100 px-4 py-2.5">
+                            <p class="truncate text-sm font-semibold text-neutral-800">{{ identity.username }}</p>
+                            <p class="text-xs text-neutral-500">{{ identity.phone }}</p>
+                        </div>
+                        <a href="/profile" class="nav-link">{{ icon('user', 'w-4 h-4') }} প্রোফাইল</a>
+                        <a href="/transactions" class="nav-link">{{ icon('receipt', 'w-4 h-4') }} অর্ডার হিস্ট্রি</a>
+                        {% if identity.canAccessAdmin() %}
+                            <a href="/admin" class="nav-link">{{ icon('shield', 'w-4 h-4') }} অ্যাডমিন প্যানেল</a>
+                        {% endif %}
+                        <form method="post" action="/logout" class="mt-1 border-t border-neutral-100 pt-1">
+                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                            <button type="submit" class="nav-link w-full text-danger-600 hover:bg-danger-50 hover:text-danger-700">
+                                {{ icon('log-out', 'w-4 h-4') }} লগআউট
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex">
+        <!-- Sidebar (desktop) -->
+        <aside class="fixed inset-y-16 left-0 z-30 hidden w-64 overflow-y-auto border-r border-neutral-200 bg-white lg:block">
+            {% include 'partials/sidebar.twig' %}
+        </aside>
+
+        <!-- Sidebar (mobile drawer) -->
+        <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-50 lg:hidden">
+            <div x-show="sidebarOpen" @click="sidebarOpen = false" x-transition.opacity class="absolute inset-0 bg-neutral-900/50"></div>
+            <aside x-show="sidebarOpen" x-transition class="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-white shadow-xl">
+                <div class="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
+                    <span class="font-bold text-neutral-800">মেনু</span>
+                    <button @click="sidebarOpen = false" class="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100" aria-label="বন্ধ করুন">
+                        {{ icon('x', 'w-5 h-5') }}
+                    </button>
+                </div>
+                {% include 'partials/sidebar.twig' %}
+            </aside>
+        </div>
+
+        <!-- Content -->
+        <main class="min-w-0 flex-1 lg:ml-64">
+            <div class="container-app py-6 sm:py-8">
+                {% if flash_success is defined and flash_success %}
+                    <div class="alert alert-success" role="status">
+                        {{ icon('check-circle', 'w-5 h-5 shrink-0') }}
+                        <span>{{ flash_success }}</span>
+                    </div>
+                {% endif %}
+                {% if flash_error is defined and flash_error %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ icon('alert-circle', 'w-5 h-5 shrink-0') }}
+                        <span>{{ flash_error }}</span>
+                    </div>
+                {% endif %}
+                {% block dashboard_content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+</div>
+
+{% include 'partials/whatsapp-float.twig' %}
+{% endblock %}

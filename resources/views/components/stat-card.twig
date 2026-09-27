@@ -1,0 +1,20 @@
+{# Reusable stat card #}
+{# @var label string #}
+{# @var value string #}
+{# @var icon string #}
+{# @var tone string primary|accent|info|success #}
+<div class="card card-hover flex items-center gap-4 p-5">
+    {% set tones = {
+        primary: 'bg-primary-50 text-primary-600',
+        accent: 'bg-accent-50 text-accent-600',
+        info: 'bg-info-50 text-info-600',
+        success: 'bg-success-50 text-success-600',
+    } %}
+    <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl {{ tones[tone|default('primary')] }}">
+        {{ icon(icon, 'w-6 h-6') }}
+    </span>
+    <div class="min-w-0">
+        <p class="truncate text-2xl font-extrabold leading-tight text-neutral-800">{{ value }}</p>
+        <p class="truncate text-xs font-medium text-neutral-500">{{ label }}</p>
+    </div>
+</div>

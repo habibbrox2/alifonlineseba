@@ -1,0 +1,32 @@
+{# Floating WhatsApp support widget — shown only when admin sets whatsapp_url.
+   whatsapp_url accepts https://wa.me/<number> (or any https support link). #}
+{% if site.whatsapp_url|default('') %}
+<div class="fixed bottom-5 right-5 z-50 sm:bottom-6 sm:right-6" x-data="{ open: false }">
+    {# Expanded bubble #}
+    <div x-show="open" x-cloak x-transition.opacity.duration.150ms
+         class="absolute bottom-14 right-0 w-60 rounded-2xl bg-white p-4 shadow-xl ring-1 ring-neutral-200">
+        <p class="flex items-center gap-2 text-sm font-bold text-neutral-800">
+            {{ icon('headphones', 'w-4 h-4 text-primary-600') }} সহায়তা দরকার?
+        </p>
+        <p class="mt-1.5 text-xs leading-relaxed text-neutral-500">
+            হোয়াটসঅ্যাপে মেসেজ করুন — আমরা দ্রুত উত্তর দেই।
+        </p>
+        <a href="{{ site.whatsapp_url }}" target="_blank" rel="noopener noreferrer"
+           class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#25D366] px-3 py-2 text-sm font-semibold text-white transition hover:brightness-95">
+            {{ icon('message-circle', 'w-4 h-4') }} চ্যাট শুরু করুন
+        </a>
+        <button type="button" @click="open = false"
+                class="mt-2 w-full text-center text-[11px] text-neutral-400 hover:text-neutral-600">
+            পরে দেখব
+        </button>
+    </div>
+
+    {# FAB #}
+    <button type="button" @click="open = !open"
+            class="flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 hover:shadow-xl"
+            aria-label="হোয়াটসঅ্যাপে সাপোর্ট চ্যাট" :aria-expanded="open">
+        <span x-show="!open">{{ icon('message-circle', 'w-6 h-6') }}</span>
+        <span x-show="open" x-cloak>{{ icon('x', 'w-5 h-5') }}</span>
+    </button>
+</div>
+{% endif %}

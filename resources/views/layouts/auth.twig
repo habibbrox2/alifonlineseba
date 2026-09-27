@@ -1,0 +1,30 @@
+{% extends 'layouts/base.twig' %}
+
+{% block body %}
+<div class="flex min-h-screen flex-col bg-gradient-to-br from-primary-900 via-primary-800 to-primary-600">
+    <header class="flex items-center justify-between px-4 py-4 sm:px-8">
+        <a href="/" class="flex items-center gap-2.5 font-bold text-white">
+            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-500 text-sm font-extrabold text-primary-900">TH</span>
+            <span class="text-lg tracking-tight">TH Tools</span>
+        </a>
+        {% if site.telegram_url|default('') %}
+            <a href="{{ site.telegram_url }}" target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-2 rounded-full border border-white/25 px-3.5 py-2 text-[13px] font-medium text-white/90 transition hover:bg-white/10 sm:px-4 sm:text-sm">
+                {{ icon('send', 'w-4 h-4 shrink-0') }} টেলিগ্রাম চ্যানেল
+            </a>
+        {% endif %}
+    </header>
+
+    <main class="flex flex-1 items-center justify-center px-4 py-8 sm:px-6">
+        <div class="w-full max-w-md">
+            {% block auth_content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="px-4 py-6 text-center text-xs text-white/50 sm:px-8">
+        &copy; {{ 'now'|date('Y') }} TH Tools (Demo). সকল ডাটা কাল্পনিক।
+    </footer>
+</div>
+
+{% include 'partials/whatsapp-float.twig' %}
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends 'layouts/public.twig' %}
+
+{% block title %}TH Tools — এনআইডি সার্ভার কপি ও ডিজিটাল সেবা হাব (ডেমো){% endblock %}
+{% block description %}TH Tools-এ পাবেন ইনস্ট্যান্ট NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ সকল ডিজিটাল সেবার ডেমো অভিজ্ঞতা — দ্রুত, নিরাপদ ও সহজ। (সব ডাটা কাল্পনিক){% endblock %}
+
+{% block og_image %}<meta property="og:image" content="{{ siteUrl }}/assets/img/og-cover.png">{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "TH Tools",
+    "url": "{{ siteUrl }}/",
+    "description": "ডেমো ডিজিটাল সার্ভিস প্ল্যাটফর্ম — NID কপি, ভোটার সার্চ, টিন সার্টিফিকেট (সব ডাটা কাল্পনিক)",
+    "areaServed": "BD",
+    "knowsLanguage": "bn"
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<section class="relative overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 to-primary-600 pb-24 pt-16 text-center text-white sm:pb-28 sm:pt-24">
+    <div class="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-accent-500/10"></div>
+    <div class="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-accent-500/10"></div>
+
+    <div class="container-app relative">
+        <p class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wide">
+            {{ icon('sparkles', 'w-4 h-4') }} TH Tools, A TotthoHub-style প্ল্যাটফর্ম ২০২৬
+        </p>
+        <h1 class="mx-auto max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
+            ডিজিটাল সেবা এক ক্লিকে!
+        </h1>
+        <p class="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
+            TH Tools ডেমো প্ল্যাটফর্মে পাবেন সকল ধরনের ডিজিটাল ও অফিশিয়াল সেবার ডেমো অভিজ্ঞতা —
+            NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ (সব ডাটা কাল্পনিক)।
+        </p>
+
+        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <span class="badge border border-white/20 bg-white/10 py-1.5 px-3.5 text-white/90">{{ icon('shield-check', 'w-4 h-4') }} ১০০% সুরক্ষিত</span>
+            <span class="badge border border-white/20 bg-white/10 py-1.5 px-3.5 text-white/90">{{ icon('zap', 'w-4 h-4') }} ইনস্ট্যান্ট ডেলিভারি</span>
+            <span class="badge border border-white/20 bg-white/10 py-1.5 px-3.5 text-white/90">{{ icon('headphones', 'w-4 h-4') }} ২৪/৭ সাপোর্ট</span>
+        </div>
+
+        <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <a href="/login" class="btn btn-accent px-7 py-3 text-base">{{ icon('log-in', 'w-5 h-5') }} লগইন করুন</a>
+            <a href="/register" class="btn btn-ghost-dark px-7 py-3 text-base">{{ icon('user-plus', 'w-5 h-5') }} নিবন্ধন করুন</a>
+        </div>
+    </div>
+</section>
+
+<!-- Feature cards -->
+<section class="container-app -mt-14 pb-4">
+    <div class="grid gap-5 sm:grid-cols-3">
+        {% set features = [
+            { icon: 'shield-check', title: '১০০% সুরক্ষিত', desc: 'CSRF, সেশন সিকিউরিটি ও এনক্রিপ্টেড পাসওয়ার্ডসহ আধুনিক নিরাপত্তা।' },
+            { icon: 'zap', title: 'ইনস্ট্যান্ট ডেলিভারি', desc: 'সার্ভিস অর্ডারের সাথে সাথেই ডেমো ফলাফল প্রদর্শন।' },
+            { icon: 'headphones', title: '২৪/৭ সাপোর্ট', desc: 'যেকোনো সময় সাপোর্ট সেন্টারে মেসেজ করুন (ডেমো)।' },
+        ] %}
+        {% for feature in features %}
+            <div class="card card-hover p-6">
+                <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                    {{ icon(feature.icon, 'w-6 h-6') }}
+                </span>
+                <h2 class="text-lg font-bold text-neutral-800">{{ feature.title }}</h2>
+                <p class="mt-1.5 text-sm leading-relaxed text-neutral-500">{{ feature.desc }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- About / CTA -->
+<section class="container-app py-14">
+    <div class="card mx-auto max-w-3xl p-8 text-center sm:p-10">
+        <h2 class="text-2xl font-extrabold text-neutral-900">এটি কীভাবে কাজ করে?</h2>
+        <p class="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-neutral-500">
+            নিবন্ধন করুন → সার্ভিস বাছাই করুন → ফর্ম পূরণ করুন → ডেমো ফলাফল পান।
+            সব সার্ভিস মক (mock) — কোনো সরকারি ডাটাবেজ ব্যবহার হয় না।
+        </p>
+        <a href="/register" class="btn btn-primary mt-6 px-8 py-3">এখনই শুরু করুন</a>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+{# Sortable table header link. #}
+{# @var string label     Column label text #}
+{# @var string column    Whitelisted sort key for this column #}
+{# @var string sort      Currently active sort key #}
+{# @var string dir       Currently active direction (asc|desc) #}
+{# @var string base      Query base, e.g. "/admin/users?q=x&" (must end with & or ?) #}
+{# @var bool   right     Optional: right-align the cell #}
+{% set isActive = column == sort %}
+{% set nextDir = isActive and dir == 'asc' ? 'desc' : 'asc' %}
+<th {{ right ? 'class="text-right"' }} scope="col">
+    <a href="{{ base }}sort={{ column }}&dir={{ nextDir }}"
+       class="inline-flex items-center gap-1 transition {{ isActive ? 'font-semibold text-primary-700' : 'text-neutral-500 hover:text-neutral-800' }}"
+       aria-label="{{ label }} অনুযায়ী সাজান">
+        {{ label }}
+        {% if isActive %}
+            <svg class="h-3.5 w-3.5" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#arrow-{{ dir == 'asc' ? 'up' : 'down' }}"></use></svg>
+        {% else %}
+            <svg class="h-3.5 w-3.5 opacity-40" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevrons-up-down"></use></svg>
+        {% endif %}
+    </a>
+</th>

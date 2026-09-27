@@ -1,0 +1,30 @@
+{% extends 'layouts/public.twig' %}
+
+{% block title %}গোপনীয়তা নীতি — TH Tools{% endblock %}
+{% block description %}TH Tools গোপনীয়তা নীতি — ডেমো অ্যাপ্লিকেশন হিসেবে আমরা কী ডাটা সংরক্ষণ করি এবং কীভাবে ব্যবহার করি।{% endblock %}
+
+{% block content %}
+<section class="container-app py-12">
+    <div class="mx-auto max-w-3xl">
+        <h1 class="text-3xl font-extrabold text-neutral-900">গোপনীয়তা নীতি</h1>
+        <div class="card mt-6 p-6 leading-relaxed text-neutral-600 sm:p-8">
+            <p><em>সর্বশেষ হালনাগাদ: {{ 'now'|date('Y') }}</em></p>
+            <h2 class="mt-6 text-lg font-bold text-neutral-900">১. ডেমো সিস্টেম</h2>
+            <p class="mt-2">
+                এটি একটি ডেমো অ্যাপ্লিকেশন। আমরা কোনো বাস্তব পরিচয় তথ্য (NID, জন্মতারিখ, ঠিকানা)
+                সংগ্রহ বা সংরক্ষণ করি না। সকল ডাটা কাল্পনিক এবং শুধুমাত্র প্রদর্শনের উদ্দেশ্যে।
+            </p>
+            <h2 class="mt-6 text-lg font-bold text-neutral-900">২. যা সংরক্ষণ করা হয়</h2>
+            <ul class="mt-2 list-disc space-y-1.5 pl-6">
+                <li>অ্যাকাউন্ট তথ্য: ইউজারনেম, মোবাইল, (ঐচ্ছিক) ইমেইল — পাসওয়ার্ড শুধু হ্যাশ আকারে।</li>
+                <li>সার্ভিস ব্যবহারের লগ (সুরক্ষা নিরীক্ষার জন্য): অ্যাকশন, আইপি, ব্রাউজার।</li>
+                <li>ডেমো লেনদেন রেফারেন্স — কোনো আসল অর্থ লেনদেন হয় না।</li>
+            </ul>
+            <h2 class="mt-6 text-lg font-bold text-neutral-900">৩. কুকি</h2>
+            <p class="mt-2">
+                শুধুমাত্র সেশন পরিচালনার জন্য প্রয়োজনীয় কুকি ব্যবহার করা হয় (HttpOnly, SameSite)।
+            </p>
+        </div>
+    </div>
+</section>
+{% endblock %}

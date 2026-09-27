@@ -1,0 +1,37 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}{{ category.name }} — TH Tools{% endblock %}
+
+{% block dashboard_content %}
+<nav class="mb-5 flex items-center gap-2 text-sm text-neutral-500" aria-label="ব্রেডকাম্ব">
+    <a href="/dashboard" class="hover:text-primary-600">ড্যাশবোর্ড</a>
+    <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-right"></use></svg>
+    <span class="font-medium text-neutral-700">{{ category.name }}</span>
+</nav>
+
+<header class="mb-6 flex items-center gap-4">
+    <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600">
+        {{ icon(category.icon ?? 'grid', 'w-7 h-7') }}
+    </span>
+    <div>
+        <h1 class="text-2xl font-extrabold text-neutral-900">{{ category.name }}</h1>
+        <p class="mt-0.5 text-sm text-neutral-500">{{ category.description }}</p>
+    </div>
+</header>
+
+<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% if services is empty %}
+        <div class="card col-span-full flex flex-col items-center gap-2 py-14 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('inbox', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">এই ক্যাটাগরিতে এখনো কোনো সার্ভিস নেই।</p>
+            <a href="/services" class="btn btn-primary btn-sm mt-2">সকল সার্ভিস দেখুন</a>
+        </div>
+    {% else %}
+        {% for service in services %}
+            {% include 'components/service-card.twig' with { service: service } %}
+        {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}

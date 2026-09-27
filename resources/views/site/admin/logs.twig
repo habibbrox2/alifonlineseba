@@ -1,0 +1,40 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}অ্যাক্টিভিটি লগ — Admin{% endblock %}
+
+{% block dashboard_content %}
+<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">অ্যাক্টিভিটি লগ</h1>
+
+<form method="get" action="/admin/activity-logs" class="mb-5 flex gap-2 sm:max-w-md">
+    <input type="search" name="q" value="{{ q }}" class="form-input" placeholder="অ্যাকশন বা IP দিয়ে খুঁজুন…">
+    <button type="submit" class="btn btn-primary btn-sm">{{ icon('search', 'w-4 h-4') }} খুঁজুন</button>
+</form>
+
+<div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr><th>অ্যাকশন</th><th>বর্ণনা</th><th>ইউজার</th><th>IP</th><th>সময়</th></tr>
+            </thead>
+            <tbody>
+                {% for log in rows %}
+                    <tr>
+                        <td class="font-mono text-xs">{{ log.action }}</td>
+                        <td class="max-w-xs truncate">{{ log.description ?? '—' }}</td>
+                        <td class="text-sm">{{ log.user_id ? '#' ~ log.user_id : '—' }}</td>
+                        <td class="font-mono text-xs">{{ log.ip_address ?? '—' }}</td>
+                        <td class="whitespace-nowrap text-neutral-500">{{ log.created_at|bndate }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো লগ পাওয়া যায়নি।</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total,
+    baseUrl: '/admin/activity-logs?' ~ (q ? 'q=' ~ q ~ '&' : '') ~ 'page=',
+} %}
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}লেনদেন পরিদর্শন — Admin{% endblock %}
+
+{% block dashboard_content %}
+<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">লেনদেন পরিদর্শন</h1>
+
+<form method="get" action="/admin/transactions" class="mb-5 flex flex-wrap gap-2">
+    <input type="search" name="q" value="{{ q }}" class="form-input sm:w-72" placeholder="রেফারেন্স / ইউজার দিয়ে খুঁজুন…">
+    <select name="status" class="form-input sm:w-40">
+        <option value="">সব স্ট্যাটাস</option>
+        {% for st in ['completed', 'pending', 'processing', 'failed', 'cancelled'] %}
+            <option value="{{ st }}" {{ status == st ? 'selected' }}>{{ st }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">{{ icon('filter', 'w-4 h-4') }} ফিল্টার</button>
+</form>
+
+{% set txQuery = '/admin/transactions?' ~ (q ? ('q=' ~ q|url_encode) ~ '&' : '') ~ (status ? ('status=' ~ status) ~ '&' : '') %}
+
+<div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr>
+                    {% include 'components/sortable-header.twig' with { label: 'রেফারেন্স', column: 'reference', sort: sort, dir: dir, base: txQuery } %}
+                    {% include 'components/sortable-header.twig' with { label: 'ইউজার', column: 'username', sort: sort, dir: dir, base: txQuery } %}
+                    <th>সার্ভিস</th>
+                    {% include 'components/sortable-header.twig' with { label: 'পরিমাণ', column: 'amount', sort: sort, dir: dir, base: txQuery, right: true } %}
+                    {% include 'components/sortable-header.twig' with { label: 'স্ট্যাটাস', column: 'status', sort: sort, dir: dir, base: txQuery } %}
+                    {% include 'components/sortable-header.twig' with { label: 'তারিখ', column: 'created_at', sort: sort, dir: dir, base: txQuery } %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in rows %}
+                    <tr>
+                        <td class="font-mono text-xs">{{ tx.reference }}</td>
+                        <td>
+                            <p class="font-medium text-neutral-800">{{ tx.username ?? '—' }}</p>
+                            <p class="text-xs text-neutral-400">{{ tx.phone ?? '' }}</p>
+                        </td>
+                        <td>{{ tx.service_name ?? '—' }}</td>
+                        <td class="font-semibold text-primary-700">{{ tx.amount|money }}</td>
+                        <td>{% include 'components/status-badge.twig' with { status: tx.status } %}</td>
+                        <td class="whitespace-nowrap text-neutral-500">{{ tx.created_at|bndate }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো লেনদেন পাওয়া যায়নি।</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total,
+    baseUrl: txQuery ~ 'page=',
+    sort: sort, dir: dir,
+} %}
+{% endblock %}

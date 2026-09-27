@@ -1,0 +1,34 @@
+{# Reusable form field: input/select/textarea with label + error + help #}
+{# @var field {name, label, type, required, placeholder, help, value, options?, error?} #}
+{% set type = field.type|default('text') %}
+{% set id = 'fld-' ~ field.name %}
+
+<div>
+    <label for="{{ id }}" class="form-label">
+        {{ field.label }}
+        {% if field.required|default(false) %}<span class="text-danger-600">*</span>{% endif %}
+    </label>
+
+    {% if type == 'select' %}
+        <select id="{{ id }}" name="{{ field.name }}" class="form-input" {% if field.required|default(false) %}required{% endif %}>
+            {% for option in field.options ?? [] %}
+                <option value="{{ option.value }}" {{ field.value == option.value ? 'selected' }}>{{ option.label }}</option>
+            {% endfor %}
+        </select>
+    {% elseif type == 'textarea' %}
+        <textarea id="{{ id }}" name="{{ field.name }}" rows="{{ field.rows|default(3) }}" class="form-input"
+                  {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}
+                  {% if field.required|default(false) %}required{% endif %}>{{ field.value|default('') }}</textarea>
+    {% else %}
+        <input id="{{ id }}" type="{{ type }}" name="{{ field.name }}" value="{{ field.value|default('') }}"
+               class="form-input" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}
+               {% if field.help %}aria-describedby="{{ id }}-help"{% endif %}
+               {% if field.required|default(false) %}required{% endif %}>
+    {% endif %}
+
+    {% if field.error %}
+        <p class="form-error" role="alert">{{ field.error }}</p>
+    {% elseif field.help %}
+        <p class="form-help" id="{{ id }}-help">{{ field.help }}</p>
+    {% endif %}
+</div>

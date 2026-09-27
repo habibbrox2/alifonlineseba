@@ -1,0 +1,110 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}ড্যাশবোর্ড — TH Tools{% endblock %}
+
+{% block page_scripts %}
+    <script type="module" src="/assets/js/dashboard.js"></script>
+{% endblock %}
+
+{% block dashboard_content %}
+<!-- Welcome banner -->
+<section class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary-900 via-primary-800 to-primary-700 p-6 text-white sm:p-8">
+    <div class="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent-500/10"></div>
+    <p class="text-xs font-semibold uppercase tracking-wider text-accent-300">TH TOOLS HUB</p>
+    <h1 class="mt-1.5 text-2xl font-extrabold sm:text-3xl">স্বাগতম, {{ identity.username }}!</h1>
+    <p class="mt-2 max-w-xl text-sm leading-relaxed text-white/80">
+        TH Tools এর মাধ্যমে আমাদের সকল ডিজিটাল সেবার ডেমো অভিজ্ঞতা সম্পূর্ণ চালু রয়েছে।
+        (সকল ডাটা কাল্পনিক)
+    </p>
+    <div class="mt-5 flex flex-wrap gap-2.5">
+        <a href="/services" class="btn btn-accent btn-sm">{{ icon('layers', 'w-4 h-4') }} সকল সার্ভিস</a>
+        <a href="/transactions" class="btn btn-ghost-dark btn-sm">{{ icon('receipt', 'w-4 h-4') }} আমার অর্ডার</a>
+        <a href="/profile" class="btn btn-ghost-dark btn-sm">{{ icon('wallet', 'w-4 h-4') }} রিচার্জ (ডেমো)</a>
+    </div>
+</section>
+
+<!-- Stats -->
+<section class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    {% include 'components/stat-card.twig' with {
+        label: 'বর্তমান ব্যালেন্স',
+        value: identity.balance|money,
+        icon: 'wallet',
+        tone: 'primary',
+    } %}
+    {% include 'components/stat-card.twig' with {
+        label: 'সফল অনুসন্ধান',
+        value: stats.total ~ ' টি',
+        icon: 'search-check',
+        tone: 'success',
+    } %}
+    {% include 'components/stat-card.twig' with {
+        label: 'মোট খরচ',
+        value: stats.amount|money,
+        icon: 'trending-up',
+        tone: 'accent',
+    } %}
+</section>
+
+<!-- Service hub -->
+<section class="mt-8" x-data="thDashboard()" data-page="dashboard">
+    <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 class="text-xl font-extrabold text-neutral-900">সার্ভিস হাব</h2>
+        <div class="relative sm:w-80">
+            <input x-ref="search" type="search" x-model.debounce.300ms="query"
+                   placeholder="সেবা খুঁজুন (যেমন: NID, টিন)…"
+                   class="form-input pl-10" aria-label="সেবা খুঁজুন">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">{{ icon('search', 'w-5 h-5') }}</span>
+        </div>
+    </div>
+
+    <!-- Category chips -->
+    <div class="mb-6 flex flex-wrap gap-2">
+        <button class="chip {{ 'chip-active' }}" :class="activeCategory === 'all' && 'chip-active'" @click="activeCategory = 'all'">
+            সকল সার্ভিস
+        </button>
+        {% for category in categories %}
+            <button class="chip" :class="activeCategory === '{{ category.slug }}' && 'chip-active'"
+                    @click="activeCategory = '{{ category.slug }}'">
+                {{ icon(category.icon ?? 'grid', 'w-4 h-4') }} {{ category.name }}
+            </button>
+        {% endfor %}
+    </div>
+
+    <!-- Service grid -->
+    <div id="service-grid"
+         data-services="{{ services|json_encode|e('html_attr') }}"
+         class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <template x-for="service in filtered" :key="service.slug">
+            <article class="card card-hover flex flex-col p-5">
+                <div class="mb-3 flex items-start justify-between gap-2">
+                    <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                        <svg class="h-6 w-6" aria-hidden="true"><use :href="'/assets/icons/lucide-sprite.svg#' + (service.icon || 'zap')"></use></svg>
+                    </span>
+                    <template x-if="service.badge">
+                        <span class="badge badge-info" x-text="service.badge"></span>
+                    </template>
+                </div>
+                <h3 class="text-base font-bold leading-snug text-neutral-800" x-text="service.name"></h3>
+                <p class="mt-1.5 line-clamp-2 flex-1 text-sm leading-relaxed text-neutral-500" x-text="service.description"></p>
+                <div class="mt-4 flex items-center justify-between border-t border-neutral-100 pt-4">
+                    <span class="text-lg font-extrabold text-primary-700" x-text="money(service.price)"></span>
+                    <a :href="'/services/view/' + service.slug" class="btn btn-primary btn-sm">
+                        অর্ডার করুন
+                        <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#arrow-right"></use></svg>
+                    </a>
+                </div>
+            </article>
+        </template>
+
+        <!-- Fallback (no JS) + empty state -->
+        <template x-if="filtered.length === 0">
+            <div class="card col-span-full flex flex-col items-center gap-2 py-14 text-center">
+                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                    {{ icon('search-x', 'w-6 h-6') }}
+                </span>
+                <p class="text-sm text-neutral-500">কোনো সার্ভিস পাওয়া যায়নি।</p>
+            </div>
+        </template>
+    </div>
+</section>
+{% endblock %}

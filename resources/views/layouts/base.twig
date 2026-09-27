@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="bn" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="_csrf" content="{{ csrf }}">
+
+    {# ————— SEO core ————— #}
+    {% set seoUrl = siteUrl is defined and siteUrl ? siteUrl : 'http://localhost:8099' %}
+    {% set seoTitle = block('title')|default('TH Tools — ডিজিটাল সেবা হাব (ডেমো)')|trim %}
+    {% set seoDesc = block('description') is defined ? block('description')|trim : 'TH Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম (ডেমো)।' %}
+    {% set seoRobots = block('robots') is defined ? block('robots')|trim : 'index, follow' %}
+    {% set seoCanonical = block('canonical_url') is defined ? block('canonical_url')|trim : seoUrl ~ currentPath %}
+
+    <title>{{ seoTitle }}</title>
+    <meta name="description" content="{{ seoDesc }}">
+    <meta name="robots" content="{{ seoRobots }}">
+    <link rel="canonical" href="{{ seoCanonical }}">
+
+    {# ————— Open Graph / Twitter ————— #}
+    <meta property="og:title" content="{{ seoTitle }}">
+    <meta property="og:description" content="{{ seoDesc }}">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:site_name" content="TH Tools">
+    <meta property="og:url" content="{{ seoCanonical }}">
+    <meta property="og:locale" content="bn_BD">
+    {% block og_image %}{% endblock %}
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{ seoTitle }}">
+    <meta name="twitter:description" content="{{ seoDesc }}">
+
+    {# ————— Structured data (site identity + WebSite) ————— #}
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "TH Tools",
+        "url": "{{ seoUrl }}/",
+        "description": "ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম (ডেমো)",
+        "inLanguage": "bn-BD"
+    }
+    </script>
+    {% block structured_data %}{% endblock %}
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/app.css">
+    <script type="module" src="/assets/js/app.js"></script>
+    {% block page_scripts %}{% endblock %}
+    <script defer src="/assets/js/alpine.min.js"></script>
+    {% block scripts %}{% endblock %}
+</head>
+<body class="flex min-h-full flex-col">
+    {% block body %}{% endblock %}
+</body>
+</html>

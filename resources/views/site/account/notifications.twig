@@ -1,0 +1,48 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}নোটিফিকেশন — TH Tools{% endblock %}
+
+{% block dashboard_content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-extrabold text-neutral-900">নোটিফিকেশন</h1>
+    <form method="post" action="/notifications/read-all">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <button type="submit" class="btn btn-ghost btn-sm">{{ icon('check-check', 'w-4 h-4') }} সব পড়া হয়েছে</button>
+    </form>
+</div>
+
+<div class="space-y-3">
+    {% if rows is empty %}
+        <div class="card flex flex-col items-center gap-2 py-14 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('bell-off', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">কোনো নোটিফিকেশন নেই।</p>
+        </div>
+    {% endif %}
+
+    {% for notification in rows %}
+        <article class="card card-hover flex items-start gap-4 p-4 sm:p-5 {{ notification.read_at ? '' : 'border-l-4 border-l-primary-500' }}">
+            {% set typeIcons = { info: 'info', success: 'check-circle-2', warning: 'alert-triangle', danger: 'alert-circle' } %}
+            {% set typeTones = { info: 'bg-info-50 text-info-600', success: 'bg-success-50 text-success-600', warning: 'bg-warning-50 text-warning-600', danger: 'bg-danger-50 text-danger-600' } %}
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {{ typeTones[notification.type] ?? typeTones.info }}">
+                {{ icon(typeIcons[notification.type] ?? 'info', 'w-5 h-5') }}
+            </span>
+            <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-sm font-bold text-neutral-800">{{ notification.title }}</h2>
+                    {% if notification.read_at is empty %}
+                        <span class="badge badge-primary bg-primary-50 text-primary-700">নতুন</span>
+                    {% endif %}
+                </div>
+                <p class="mt-1 text-sm leading-relaxed text-neutral-500">{{ notification.message }}</p>
+                <p class="mt-1.5 text-xs text-neutral-400">{{ notification.created_at|bndate }}</p>
+            </div>
+        </article>
+    {% endfor %}
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total, baseUrl: '/notifications?page=',
+} %}
+{% endblock %}

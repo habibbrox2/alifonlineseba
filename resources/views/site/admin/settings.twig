@@ -1,0 +1,81 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}সাইট সেটিংস — Admin{% endblock %}
+
+{% block dashboard_content %}
+<h1 class="mb-2 text-2xl font-extrabold text-neutral-900">সাইট সেটিংস</h1>
+<p class="mb-6 text-sm text-neutral-500">সাইটের তথ্য, যোগাযোগ ও সোশ্যাল লিংক এখানে আপডেট করুন — পাবলিক পেজের ফুটারে সাথে সাথে দেখা যাবে।</p>
+
+<form method="post" action="/admin/settings" class="max-w-2xl space-y-5" novalidate>
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('info', 'w-4 h-4 text-primary-600') }} সাইট তথ্য
+        </h2>
+        <div class="space-y-4">
+            <div>
+                <label for="f-tagline" class="form-label">ট্যাগলাইন</label>
+                <input type="text" id="f-tagline" name="site_tagline" value="{{ settings.site_tagline }}" class="form-input" maxlength="200" placeholder="ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম">
+                {% if errors.site_tagline is defined %}<p class="form-error">{{ errors.site_tagline }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="f-footer-note" class="form-label">ফুটার নোট</label>
+                <textarea id="f-footer-note" name="footer_note" rows="2" class="form-input" maxlength="500" placeholder="ডেমো নোট বা ছোট বিবরণী">{{ settings.footer_note }}</textarea>
+                {% if errors.footer_note is defined %}<p class="form-error">{{ errors.footer_note }}</p>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('send', 'w-4 h-4 text-primary-600') }} যোগাযোগ
+        </h2>
+        <div class="space-y-4">
+            <div>
+                <label for="f-email" class="form-label">ইমেইল</label>
+                <input type="email" id="f-email" name="contact_email" value="{{ settings.contact_email }}" class="form-input" maxlength="200" placeholder="support@example.com">
+                {% if errors.contact_email is defined %}<p class="form-error">{{ errors.contact_email }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="f-phone" class="form-label">ফোন</label>
+                <input type="tel" id="f-phone" name="contact_phone" value="{{ settings.contact_phone }}" class="form-input" maxlength="20" placeholder="+8801XXXXXXXXX">
+                {% if errors.contact_phone is defined %}<p class="form-error">{{ errors.contact_phone }}</p>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('globe', 'w-4 h-4 text-primary-600') }} সোশ্যাল লিংক
+        </h2>
+        <p class="mb-4 text-xs text-neutral-500">খালি রাখলে ফুটারে দেখানো হবে না। সম্পূর্ণ http(s) লিংক দিন।</p>
+        <div class="space-y-4">
+            <div>
+                <label for="f-facebook" class="form-label">ফেসবুক পেজ</label>
+                <input type="url" id="f-facebook" name="facebook_url" value="{{ settings.facebook_url }}" class="form-input" maxlength="500" placeholder="https://facebook.com/yourpage">
+                {% if errors.facebook_url is defined %}<p class="form-error">{{ errors.facebook_url }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="f-youtube" class="form-label">ইউটিউব চ্যানেল</label>
+                <input type="url" id="f-youtube" name="youtube_url" value="{{ settings.youtube_url }}" class="form-input" maxlength="500" placeholder="https://youtube.com/@yourchannel">
+                {% if errors.youtube_url is defined %}<p class="form-error">{{ errors.youtube_url }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="f-whatsapp" class="form-label">হোয়াটসঅ্যাপ</label>
+                <input type="url" id="f-whatsapp" name="whatsapp_url" value="{{ settings.whatsapp_url }}" class="form-input" maxlength="500" placeholder="https://wa.me/8801XXXXXXXXX">
+                {% if errors.whatsapp_url is defined %}<p class="form-error">{{ errors.whatsapp_url }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="f-telegram" class="form-label">টেলিগ্রাম</label>
+                <input type="url" id="f-telegram" name="telegram_url" value="{{ settings.telegram_url }}" class="form-input" maxlength="500" placeholder="https://t.me/yourchannel">
+                {% if errors.telegram_url is defined %}<p class="form-error">{{ errors.telegram_url }}</p>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+        {{ icon('save', 'w-4 h-4') }} সংরক্ষণ করুন
+    </button>
+</form>
+{% endblock %}

@@ -1,0 +1,181 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}প্রোফাইল — TH Tools{% endblock %}
+
+{% block dashboard_content %}
+<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">প্রোফাইল</h1>
+
+<div class="grid gap-6 lg:grid-cols-3">
+    <div class="space-y-6 lg:col-span-2">
+        <!-- Account info -->
+        <section class="card p-6">
+            <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('user-circle', 'w-5 h-5 text-primary-600') }} অ্যাকাউন্ট তথ্য
+            </h2>
+            <form method="post" action="/profile" class="space-y-4">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                <input type="hidden" name="do" value="profile">
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="form-label">ইউজারনেম</label>
+                        <input type="text" class="form-input bg-neutral-100" value="{{ user.username }}" disabled>
+                    </div>
+                    <div>
+                        <label class="form-label">মোবাইল</label>
+                        <input type="text" class="form-input bg-neutral-100" value="{{ user.phone }}" disabled>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="email" class="form-label">ইমেইল (ঐচ্ছিক)</label>
+                    <input id="email" type="email" name="email" value="{{ user.email }}" class="form-input" placeholder="you@example.com">
+                    {% if errors.email is defined %}<p class="form-error" role="alert">{{ errors.email }}</p>{% endif %}
+                </div>
+
+                <button type="submit" class="btn btn-primary">{{ icon('save', 'w-4 h-4') }} সেভ করুন</button>
+            </form>
+        </section>
+
+        <!-- Balance top-up (mock payment) -->
+        <section class="card p-6">
+            <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('wallet', 'w-5 h-5 text-primary-600') }} ব্যালেন্স টপ-আপ
+                <span class="badge badge-info ml-1">মক পেমেন্ট</span>
+            </h2>
+            <form method="post" action="/profile/topup" class="space-y-4" x-data="{ method: 'bkash' }">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                <input type="hidden" name="do" value="topup">
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="topup_amount" class="form-label">পরিমাণ (৳)</label>
+                        <input id="topup_amount" type="number" name="amount" min="10" max="10000" step="0.01" class="form-input" placeholder="যেমন: 500" required>
+                        {% if errors.amount is defined %}<p class="form-error" role="alert">{{ errors.amount }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="topup_method" class="form-label">পেমেন্ট মেথড</label>
+                        <select id="topup_method" name="method" class="form-input" x-model="method">
+                            {% for m in topupMethods %}
+                                <option value="{{ m }}">{{ m|upper }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if errors.method is defined %}<p class="form-error" role="alert">{{ errors.method }}</p>{% endif %}
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="topup_sender" class="form-label">সেন্ডার নম্বর</label>
+                        <input id="topup_sender" type="text" name="sender_number" class="form-input" placeholder="01XXXXXXXXX">
+                        {% if errors.sender_number is defined %}<p class="form-error" role="alert">{{ errors.sender_number }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="topup_reference" class="form-label">ট্রানজেকশন আইডি (ঐচ্ছিক)</label>
+                        <input id="topup_reference" type="text" name="reference" class="form-input" placeholder="TrxID">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="topup_note" class="form-label">নোট (ঐচ্ছিক)</label>
+                    <input id="topup_note" type="text" name="note" class="form-input" maxlength="500">
+                </div>
+
+                <p class="rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">
+                    💡 ডেমো মোড: পেমেন্ট আসল নয় — অনুরোধ জমা দিলে অ্যাডমিন প্যানেল থেকে অনুমোদনের পর ব্যালেন্স যোগ হবে।
+                </p>
+
+                <button type="submit" class="btn btn-primary">{{ icon('plus', 'w-4 h-4') }} টপ-আপ অনুরোধ জমা দিন</button>
+            </form>
+
+            {% if topups is not empty %}
+                <div class="mt-6 border-t border-neutral-100 pt-5">
+                    <h3 class="mb-3 text-sm font-bold text-neutral-700">আমার টপ-আপ অনুরোধ</h3>
+                    <ul class="space-y-2.5">
+                        {% for t in topups %}
+                            <li class="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 px-3.5 py-2.5">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold text-neutral-800">{{ t.amount|money }} <span class="font-normal text-neutral-400">· {{ t.method|upper }}</span></p>
+                                    <p class="text-xs text-neutral-400">{{ t.created_at|bndate }}{% if t.sender_number %} · {{ t.sender_number }}{% endif %}</p>
+                                </div>
+                                {% include 'components/status-badge.twig' with { status: t.status } %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </section>
+
+        <!-- Password change -->
+        <section class="card p-6">
+            <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('key-round', 'w-5 h-5 text-primary-600') }} পাসওয়ার্ড পরিবর্তন
+            </h2>
+            <form method="post" action="/profile" class="space-y-4">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                <input type="hidden" name="do" value="password">
+
+                <div>
+                    <label for="current_password" class="form-label">বর্তমান পাসওয়ার্ড</label>
+                    <input id="current_password" type="password" name="current_password" class="form-input" autocomplete="current-password" required>
+                    {% if errors.current_password is defined %}<p class="form-error" role="alert">{{ errors.current_password }}</p>{% endif %}
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="new_password" class="form-label">নতুন পাসওয়ার্ড</label>
+                        <input id="new_password" type="password" name="new_password" class="form-input" autocomplete="new-password" required>
+                        {% if errors.new_password is defined %}<p class="form-error" role="alert">{{ errors.new_password }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="confirm_password" class="form-label">নিশ্চিত করুন</label>
+                        <input id="confirm_password" type="password" name="confirm_password" class="form-input" autocomplete="new-password" required>
+                        {% if errors.confirm_password is defined %}<p class="form-error" role="alert">{{ errors.confirm_password }}</p>{% endif %}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">{{ icon('shield-check', 'w-4 h-4') }} পাসওয়ার্ড আপডেট</button>
+            </form>
+        </section>
+    </div>
+
+    <aside class="space-y-6">
+        <!-- Summary card -->
+        <section class="card bg-gradient-to-br from-primary-800 to-primary-600 p-6 text-white">
+            <div class="flex items-center gap-3">
+                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-accent-500 text-lg font-extrabold text-primary-900">{{ user.username|first|upper }}</span>
+                <div>
+                    <p class="font-bold">{{ user.username }}</p>
+                    <p class="text-xs text-white/70">{{ user.phone }}</p>
+                </div>
+            </div>
+            <dl class="mt-5 space-y-2 text-sm">
+                <div class="flex justify-between"><dt class="text-white/70">ব্যালেন্স</dt><dd class="font-bold">{{ user.balance|money }}</dd></div>
+                <div class="flex justify-between"><dt class="text-white/70">মোট অর্ডার</dt><dd class="font-bold">{{ stats.total }}</dd></div>
+                <div class="flex justify-between"><dt class="text-white/70">রোল</dt><dd class="font-bold uppercase">{{ user.role }}</dd></div>
+            </dl>
+        </section>
+
+        <!-- Activity -->
+        <section class="card p-6">
+            <h2 class="mb-3 flex items-center gap-2 text-base font-bold text-neutral-900">
+                {{ icon('activity', 'w-5 h-5 text-primary-600') }} সাম্প্রতিক অ্যাক্টিভিটি
+            </h2>
+            {% if activity is empty %}
+                <p class="py-4 text-center text-sm text-neutral-400">কোনো অ্যাক্টিভিটি নেই।</p>
+            {% else %}
+                <ul class="space-y-3">
+                    {% for log in activity %}
+                        <li class="flex items-start gap-3">
+                            <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary-400"></span>
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium text-neutral-700">{{ log.description ?? log.action }}</p>
+                                <p class="text-xs text-neutral-400">{{ log.created_at|bndate }}</p>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </section>
+    </aside>
+</div>
+{% endblock %}

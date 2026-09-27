@@ -1,0 +1,13 @@
+# TH Tools robots.txt — পাবলিক পেজ ইনডেক্স হবে, প্রাইভেট অ্যাপ নয়।
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /services/
+Disallow: /transactions
+Disallow: /notifications
+Disallow: /profile
+Disallow: /admin
+Disallow: /api/
+Disallow: /logout
+
+Sitemap: http://localhost:8099/sitemap.xml

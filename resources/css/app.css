@@ -1,0 +1,184 @@
+/* ============================================================
+ * TH Tools — Tailwind entry + design tokens
+ * ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface-100 text-neutral-800 antialiased;
+    font-family: 'Hind Siliguri', 'Noto Sans Bengali', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  [x-cloak] {
+    display: none !important;
+  }
+
+  ::selection {
+    @apply bg-primary-100 text-primary-800;
+  }
+}
+
+@layer components {
+  /* Container */
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Cards */
+  .card {
+    @apply rounded-xl border border-neutral-200 bg-white shadow-sm;
+  }
+  .card-hover {
+    @apply transition duration-200 hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+      transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
+      focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800;
+  }
+  .btn-accent {
+    @apply bg-accent-500 text-neutral-900 hover:bg-accent-600;
+  }
+  .btn-ghost {
+    @apply border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50;
+  }
+  .btn-ghost-dark {
+    @apply border border-white/40 bg-transparent text-white hover:bg-white/10;
+  }
+  .btn-danger {
+    @apply bg-danger-600 text-white hover:bg-danger-700;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  .btn-block {
+    @apply w-full;
+  }
+
+  /* Form controls */
+  .form-label {
+    @apply mb-1.5 block text-sm font-medium text-neutral-700;
+  }
+  .form-input {
+    @apply block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm
+      text-neutral-900 placeholder-neutral-400 shadow-sm transition
+      focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25
+      disabled:cursor-not-allowed disabled:bg-neutral-100;
+  }
+  .form-error {
+    @apply mt-1.5 text-xs font-medium text-danger-600;
+  }
+  .form-help {
+    @apply mt-1.5 text-xs text-neutral-500;
+  }
+
+  /* Badges / tags */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .badge-success {
+    @apply bg-success-50 text-success-700;
+  }
+  .badge-warning {
+    @apply bg-warning-50 text-warning-700;
+  }
+  .badge-danger {
+    @apply bg-danger-50 text-danger-700;
+  }
+  .badge-info {
+    @apply bg-info-50 text-info-700;
+  }
+  .badge-neutral {
+    @apply bg-neutral-100 text-neutral-600;
+  }
+
+  /* Sidebar links */
+  .nav-link {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-neutral-600
+      transition hover:bg-primary-50 hover:text-primary-700;
+  }
+  .nav-link-active {
+    @apply bg-primary-50 text-primary-700;
+  }
+
+  /* Tables */
+  .table-base {
+    @apply w-full min-w-[640px] text-left text-sm;
+  }
+  .table-base thead th {
+    @apply whitespace-nowrap border-b border-neutral-200 bg-neutral-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500;
+  }
+  .table-base tbody td {
+    @apply border-b border-neutral-100 px-4 py-3 align-middle text-neutral-700;
+  }
+  .table-base tbody tr:hover {
+    @apply bg-neutral-50/70;
+  }
+
+  /* Chips */
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-4 py-2
+      text-sm font-medium text-neutral-600 transition hover:border-primary-300 hover:text-primary-700;
+  }
+  .chip-active {
+    @apply border-primary-600 bg-primary-600 text-white hover:text-white;
+  }
+
+  /* Alert */
+  .alert {
+    @apply mb-6 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm;
+  }
+  .alert-success {
+    @apply border-success-200 bg-success-50 text-success-700;
+  }
+  .alert-danger {
+    @apply border-danger-200 bg-danger-50 text-danger-700;
+  }
+  .alert-info {
+    @apply border-info-200 bg-info-50 text-info-700;
+  }
+  .alert-warning {
+    @apply border-warning-200 bg-warning-50 text-warning-700;
+  }
+}
+
+/* ————— Mobile friendliness ————— */
+
+/* iOS Safari auto-zooms inputs with font-size < 16px.
+   Keep 16px on phones (<640px), 14px on larger screens.
+   Placed after all component definitions so it wins the cascade. */
+.form-input {
+  font-size: 16px;
+}
+@media (min-width: 640px) {
+  .form-input {
+    font-size: 0.875rem;
+  }
+}
+
+/* Comfortable touch targets on phones for small actions. */
+@media (max-width: 639.98px) {
+  .btn-sm {
+    @apply px-3.5 py-2 text-[13px];
+    min-height: 40px;
+  }
+  .chip {
+    @apply px-4 py-2.5;
+  }
+  table {
+    min-width: 40rem;
+  }
+}

@@ -1,0 +1,233 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}সার্ভিস ম্যানেজমেন্ট — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set isEdit = editService is defined and editService %}
+{# Rejected submissions come back as formValues so the admin does not retype them. #}
+{% set fv = formValues|default({}) %}
+{% set fvName = fv.name|default(editService.name|default('')) %}
+{% set fvSlug = fv.slug|default('') %}
+{% set fvCategory = fv.category_id|default(editService.category_id|default('')) %}
+{% set fvPrice = fv.price|default(editService.price|default('0')) %}
+{% set fvIcon = fv.icon|default(editService.icon|default('zap')) %}
+{% set fvBadge = fv.badge|default(editService.badge|default('')) %}
+{% set fvDescription = fv.description|default(editService.description|default('')) %}
+{% set fvStatus = fv.status|default(editService.status|default('active')) %}
+{% set fvSortOrder = fv.sort_order|default(editService.sort_order|default(0)) %}
+
+<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">সার্ভিস ম্যানেজমেন্ট</h1>
+
+<div class="grid gap-6 lg:grid-cols-3">
+    <!-- Create / Edit form -->
+    <section class="card h-fit p-6">
+        <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+            {{ icon(isEdit ? 'file-text' : 'plus', 'w-5 h-5 text-primary-600') }}
+            {{ isEdit ? 'সার্ভিস এডিট করুন' : 'নতুন সার্ভিস' }}
+        </h2>
+        {% if isEdit %}
+            <p class="mb-3 rounded-lg bg-info-50 px-3 py-2 text-xs text-info-700">
+                এডিট করা হচ্ছে: <strong>{{ editService.name }}</strong>
+                ({{ editService.slug }}) —
+                <a href="/admin/services" class="font-semibold underline">বাতিল</a>
+            </p>
+        {% endif %}
+        <form method="post" action="/admin/services" class="space-y-4">
+            <input type="hidden" name="_csrf" value="{{ csrf }}">
+            <input type="hidden" name="do" value="{{ isEdit ? 'update' : 'create' }}">
+            {% if isEdit %}<input type="hidden" name="id" value="{{ editService.id }}">{% endif %}
+            <div>
+                <label for="name" class="form-label">নাম <span class="text-danger-600">*</span></label>
+                <input id="name" type="text" name="name" class="form-input" required maxlength="190" value="{{ fvName }}">
+            </div>
+            {% if not isEdit %}
+                <div>
+                    <label for="slug" class="form-label">স্লাগ (ঐচ্ছিক)</label>
+                    <input id="slug" type="text" name="slug" class="form-input" maxlength="190" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="নাম থেকে অটো তৈরি হবে" value="{{ fvSlug }}">
+                    <p class="form-help">শুধু ছোট ইংরেজি অক্ষর, সংখ্যা ও হাইফেন (-) — ডুপ্লিকেট স্লাগ সংরক্ষণ করা হবে না।</p>
+                </div>
+            {% endif %}
+            <div>
+                <label for="category_id" class="form-label">ক্যাটাগরি <span class="text-danger-600">*</span></label>
+                <select id="category_id" name="category_id" class="form-input" required>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if fvCategory == category.id %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="price" class="form-label">মূল্য (৳)</label>
+                <input id="price" type="number" step="0.01" min="0" name="price" class="form-input" value="{{ fvPrice }}">
+                <p class="form-help">শূন্য বা তার বেশি — ঋণাত্মক মূল্য দেওয়া যাবে না।</p>
+            </div>
+            <div>
+                <label for="icon" class="form-label">আইকন (Lucide)</label>
+                <input id="icon" type="text" name="icon" class="form-input" value="{{ fvIcon }}">
+            </div>
+            <div>
+                <label for="badge" class="form-label">ব্যাজ</label>
+                <input id="badge" type="text" name="badge" class="form-input" placeholder="যেমন: ইনস্ট্যান্ট ডেলিভারি" value="{{ fvBadge }}">
+            </div>
+            <div>
+                <label for="description" class="form-label">বর্ণনা</label>
+                <textarea id="description" name="description" rows="2" class="form-input">{{ fvDescription }}</textarea>
+            </div>
+            {% if isEdit %}
+                <div>
+                    <label for="status" class="form-label">স্ট্যাটাস</label>
+                    <select id="status" name="status" class="form-input">
+                        <option value="active" {% if fvStatus == 'active' %}selected{% endif %}>সক্রিয়</option>
+                        <option value="inactive" {% if fvStatus == 'inactive' %}selected{% endif %}>নিষ্ক্রিয়</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="sort_order" class="form-label">সর্ট অর্ডার</label>
+                    <input id="sort_order" type="number" min="0" name="sort_order" class="form-input" value="{{ fvSortOrder }}">
+                </div>
+            {% endif %}
+            <button type="submit" class="btn btn-primary btn-block">
+                {{ icon('save', 'w-4 h-4') }} {{ isEdit ? 'আপডেট করুন' : 'তৈরি করুন' }}
+            </button>
+        </form>
+
+        {# Form field configuration: which inputs the end-user sees (NID, জন্মতারিখ, …) #}
+        {% if isEdit %}
+            <div class="card mt-6 p-6">
+                <h2 class="mb-1 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('settings', 'w-5 h-5 text-primary-600') }} ফর্ম ফিল্ড কনফিগারেশন
+                </h2>
+                <p class="mb-4 text-xs text-neutral-500">
+                    ইউজার ফর্মে কোন ফিল্ড দেখাবে এবং কোনগুলো আবশ্যক, তা এখান থেকে ঠিক করুন।
+                </p>
+                {% if fieldOptions|default([]) is empty %}
+                    <p class="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+                        এই সার্ভিসের জন্য কোনো ফর্ম ফিল্ড নেই।
+                    </p>
+                {% else %}
+                    <form method="post" action="/admin/services" class="space-y-3">
+                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                        <input type="hidden" name="do" value="fields">
+                        <input type="hidden" name="id" value="{{ editService.id }}">
+                        {% for option in fieldOptions|default([]) %}
+                            <div class="rounded-lg border border-neutral-200 p-4">
+                                <label class="flex items-center gap-2 text-sm font-medium text-neutral-800">
+                                    <input type="checkbox" name="fields[]" value="{{ option.name }}" class="rounded border-neutral-300" {% if option.enabled %}checked{% endif %}>
+                                    {{ option.label }}
+                                    <code class="text-xs text-neutral-400">{{ option.name }}</code>
+                                    <span class="text-xs text-neutral-400">({{ option.type }})</span>
+                                </label>
+                                <label class="mt-2 flex items-center gap-2 pl-6 text-xs text-neutral-500">
+                                    <input type="checkbox" name="required_fields[]" value="{{ option.name }}" class="rounded border-neutral-300" {% if option.required and option.enabled %}checked{% endif %}>
+                                    এটি আবশ্যক
+                                </label>
+                            </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-ghost btn-block">
+                            {{ icon('save', 'w-4 h-4') }} ফর্ম ফিল্ড সংরক্ষণ করুন
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        {% else %}
+            <p class="mt-4 rounded-lg bg-info-50 px-3 py-2 text-xs text-info-600">
+                সার্ভিস তৈরি করার পর <strong>এডিট</strong> থেকে NID / জন্মতারিখ ফর্ম ফিল্ড কনফিগার করা যাবে।
+            </p>
+        {% endif %}
+    </section>
+
+    <!-- List -->
+    <section class="lg:col-span-2">
+        <div class="card overflow-hidden">
+            {% if trashedCount|default(0) > 0 %}
+                {# Trash bar: soft-deleted services stay here until restored or purged. #}
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-danger-50/60 px-4 py-3">
+                    <p class="text-sm font-medium text-danger-700">
+                        {{ icon('alert-triangle', 'w-4 h-4 inline-block align-text-bottom') }}
+                        ট্র্যাশে <strong>{{ trashedCount }}</strong>টি সার্ভিস আছে — ওগুলো সাইটে দেখা যাচ্ছে না, লেনদেন রেকর্ড অক্ষত আছে।
+                    </p>
+                    <form method="post" action="/admin/services" onsubmit="return confirm('ট্র্যাশের সব সার্ভিস ফিরিয়ে আনবেন?')">
+                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                        <input type="hidden" name="do" value="restore_all">
+                        <button type="submit" class="btn btn-sm">
+                            {{ icon('history', 'w-4 h-4') }} সব ফিরিয়ে আনুন
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+            <div class="overflow-x-auto">
+                <table class="table-base">
+                    <thead>
+                        <tr><th>সার্ভিস</th><th>ক্যাটাগরি</th><th>মূল্য</th><th>স্ট্যাটাস</th><th class="text-right">অ্যাকশন</th></tr>
+                    </thead>
+                    <tbody>
+                        {% set catNames = {} %}
+                        {% for category in categories %}
+                            {% set catNames = catNames|merge({(category.id): category.name}) %}
+                        {% endfor %}
+                        {% for service in services %}
+                            {% set isTrashed = service.deleted_at is not empty %}
+                            <tr class="{{ isTrashed ? 'bg-neutral-50 text-neutral-400' : (isEdit and editService.id == service.id ? 'bg-primary-50/60' : '') }}">
+                                <td>
+                                    <p class="font-semibold {{ isTrashed ? 'text-neutral-400 line-through' : 'text-neutral-800' }}">{{ service.name }}</p>
+                                    <p class="font-mono text-xs text-neutral-400">{{ service.slug }}</p>
+                                    {% if isTrashed %}
+                                        <p class="text-xs text-danger-600">মুছে ফেলা: {{ service.deleted_at|bndate }}</p>
+                                    {% endif %}
+                                </td>
+                                <td class="text-sm text-neutral-500">{{ catNames[service.category_id] ?? service.category_id }}</td>
+                                <td class="font-semibold {{ isTrashed ? 'text-neutral-400' : 'text-primary-700' }}">{{ service.price|money }}</td>
+                                <td>
+                                    {% if isTrashed %}
+                                        {% include 'components/status-badge.twig' with { status: 'deleted' } %}
+                                    {% else %}
+                                        {% include 'components/status-badge.twig' with { status: service.status } %}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="flex justify-end gap-2">
+                                        {% if isTrashed %}
+                                            {# Trashed: restore brings it back, purge is the only way to really remove it. #}
+                                            <form method="post" action="/admin/services">
+                                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                                <input type="hidden" name="do" value="restore">
+                                                <input type="hidden" name="id" value="{{ service.id }}">
+                                                <button type="submit" class="btn btn-primary btn-sm">
+                                                    {{ icon('history', 'w-4 h-4') }} রিস্টোর
+                                                </button>
+                                            </form>
+                                            <form method="post" action="/admin/services" onsubmit="return confirm('&quot;{{ service.name }}&quot; স্থায়ীভাবে মুছে ফেলবেন? এটি আর ফেরানো যাবে না।')">
+                                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                                <input type="hidden" name="do" value="purge">
+                                                <input type="hidden" name="id" value="{{ service.id }}">
+                                                <button type="submit" class="btn btn-danger btn-sm">স্থায়ী মুছুন</button>
+                                            </form>
+                                        {% else %}
+                                            <a href="/admin/services?edit={{ service.id }}" class="btn btn-ghost btn-sm" aria-label="{{ service.name }} এডিট করুন">এডিট</a>
+                                            <form method="post" action="/admin/services">
+                                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                                <input type="hidden" name="do" value="toggle">
+                                                <input type="hidden" name="id" value="{{ service.id }}">
+                                                <button type="submit" class="btn btn-ghost btn-sm">
+                                                    {{ service.status == 'active' ? 'নিষ্ক্রিয়' : 'সক্রিয়' }}
+                                                </button>
+                                            </form>
+                                            <form method="post" action="/admin/services" onsubmit="return confirm('&quot;{{ service.name }}&quot; ট্র্যাশে পাঠাবেন? পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে এবং চাইলে রিস্টোর করা যাবে।')">
+                                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                                <input type="hidden" name="do" value="delete">
+                                                <input type="hidden" name="id" value="{{ service.id }}">
+                                                <button type="submit" class="btn btn-danger btn-sm">মুছুন</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো সার্ভিস নেই।</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

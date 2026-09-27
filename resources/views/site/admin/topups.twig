@@ -1,0 +1,89 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}টপ-আপ অনুরোধ — Admin{% endblock %}
+
+{% block dashboard_content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div>
+        <h1 class="text-2xl font-extrabold text-neutral-900">টপ-আপ অনুরোধ</h1>
+        <p class="text-sm text-neutral-500">ইউজারের ব্যালেন্স টপ-আপ অনুমোদন/বাতিল</p>
+    </div>
+    {% if pendingCount > 0 %}
+        <span class="badge badge-warning">{{ icon('bell', 'w-3.5 h-3.5') }} {{ pendingCount }}টি পেন্ডিং</span>
+    {% endif %}
+</div>
+
+<form method="get" action="/admin/topups" class="mb-5 flex flex-wrap gap-2">
+    <select name="status" class="form-input sm:w-40" onchange="this.form.submit()">
+        <option value="">সব স্ট্যাটাস</option>
+        {% for st in ['pending', 'approved', 'rejected'] %}
+            <option value="{{ st }}" {{ status == st ? 'selected' }}>{{ st }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+<div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr>
+                    <th>ইউজার</th>
+                    <th>পরিমাণ</th>
+                    <th>মেথড</th>
+                    <th>সেন্ডার / TrxID</th>
+                    <th>স্ট্যাটাস</th>
+                    <th>তারিখ</th>
+                    <th class="text-right">অ্যাকশন</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in rows %}
+                    <tr>
+                        <td>
+                            <p class="font-medium text-neutral-800">{{ t.username ?? '—' }}</p>
+                            <p class="text-xs text-neutral-400">{{ t.phone ?? '' }}</p>
+                        </td>
+                        <td class="font-semibold text-primary-700">{{ t.amount|money }}</td>
+                        <td class="uppercase">{{ t.method }}</td>
+                        <td>
+                            <p class="text-sm text-neutral-700">{{ t.sender_number ?? '—' }}</p>
+                            {% if t.reference %}<p class="font-mono text-xs text-neutral-400">{{ t.reference }}</p>{% endif %}
+                        </td>
+                        <td>{% include 'components/status-badge.twig' with { status: t.status } %}</td>
+                        <td class="whitespace-nowrap text-neutral-500">{{ t.created_at|bndate }}</td>
+                        <td>
+                            <div class="flex justify-end gap-2">
+                                {% if t.status == 'pending' %}
+                                    <form method="post" action="/admin/topups">
+                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                        <input type="hidden" name="do" value="approve">
+                                        <input type="hidden" name="topup_id" value="{{ t.id }}">
+                                        <button type="submit" class="btn btn-primary btn-sm">{{ icon('check', 'w-3.5 h-3.5') }} অনুমোদন</button>
+                                    </form>
+                                    <form method="post" action="/admin/topups" onsubmit="const r = prompt('বাতিলের কারণ (ঐচ্ছিক):'); if (r === null) return false; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'reason'; i.value = r; this.appendChild(i);">
+                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                        <input type="hidden" name="do" value="reject">
+                                        <input type="hidden" name="topup_id" value="{{ t.id }}">
+                                        <button type="submit" class="btn btn-ghost btn-sm text-danger-600">বাতিল</button>
+                                    </form>
+                                {% elseif t.transaction_id %}
+                                    <span class="text-xs text-neutral-400">TX: {{ t.transaction_id }}</span>
+                                {% else %}
+                                    <span class="text-xs text-neutral-400">—</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="7" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো টপ-আপ অনুরোধ নেই।</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total,
+    baseUrl: '/admin/topups?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ 'page=',
+} %}
+{% endblock %}

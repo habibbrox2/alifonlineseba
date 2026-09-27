@@ -1,0 +1,25 @@
+{% extends 'layouts/public.twig' %}
+
+{% block title %}{{ code }} · {{ heading }} — TH Tools{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<section class="container-app flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
+    <p class="text-7xl font-extrabold text-primary-600 sm:text-8xl">{{ code }}</p>
+    <h1 class="mt-4 text-2xl font-extrabold text-neutral-900 sm:text-3xl">{{ heading }}</h1>
+    <p class="mt-3 max-w-md text-neutral-500">{{ message }}</p>
+
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <a href="/" class="btn btn-primary px-6 py-2.5">
+            {{ icon('home', 'w-4 h-4') }} হোমে ফিরে যান
+        </a>
+        {% if code == 401 %}
+            <a href="/login" class="btn btn-outline px-6 py-2.5">
+                {{ icon('log-in', 'w-4 h-4') }} লগইন করুন
+            </a>
+        {% endif %}
+    </div>
+
+    <p class="mt-10 text-xs text-neutral-400">Error code: {{ code }}</p>
+</section>
+{% endblock %}

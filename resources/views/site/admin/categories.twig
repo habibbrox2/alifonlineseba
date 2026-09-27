@@ -1,0 +1,109 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}ক্যাটাগরি ম্যানেজমেন্ট — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set isEdit = editCategory is defined and editCategory %}
+
+<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">ক্যাটাগরি ম্যানেজমেন্ট</h1>
+
+<div class="grid gap-6 lg:grid-cols-3">
+    <!-- Create / Edit form -->
+    <section class="card h-fit p-6">
+        <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+            {{ icon(isEdit ? 'file-text' : 'plus', 'w-5 h-5 text-primary-600') }}
+            {{ isEdit ? 'ক্যাটাগরি এডিট করুন' : 'নতুন ক্যাটাগরি' }}
+        </h2>
+        {% if isEdit %}
+            <p class="mb-3 rounded-lg bg-info-50 px-3 py-2 text-xs text-info-700">
+                এডিট করা হচ্ছে: <strong>{{ editCategory.name }}</strong>
+                ({{ editCategory.slug }}) —
+                <a href="/admin/categories" class="font-semibold underline">বাতিল</a>
+            </p>
+        {% endif %}
+        <form method="post" action="/admin/categories" class="space-y-4">
+            <input type="hidden" name="_csrf" value="{{ csrf }}">
+            <input type="hidden" name="do" value="{{ isEdit ? 'update' : 'create' }}">
+            {% if isEdit %}<input type="hidden" name="id" value="{{ editCategory.id }}">{% endif %}
+            <div>
+                <label for="name" class="form-label">নাম <span class="text-danger-600">*</span></label>
+                <input id="name" type="text" name="name" class="form-input" required value="{{ editCategory.name ?? '' }}">
+            </div>
+            {% if not isEdit %}
+                <div>
+                    <label for="slug" class="form-label">স্লাগ (ঐচ্ছিক)</label>
+                    <input id="slug" type="text" name="slug" class="form-input" placeholder="auto-generated">
+                </div>
+            {% endif %}
+            <div>
+                <label for="icon" class="form-label">আইকন (Lucide)</label>
+                <input id="icon" type="text" name="icon" class="form-input" value="{{ editCategory.icon ?? 'grid' }}">
+            </div>
+            <div>
+                <label for="description" class="form-label">বর্ণনা</label>
+                <textarea id="description" name="description" rows="2" class="form-input">{{ editCategory.description ?? '' }}</textarea>
+            </div>
+            <div>
+                <label for="sort_order" class="form-label">সর্ট অর্ডার</label>
+                <input id="sort_order" type="number" name="sort_order" class="form-input" value="{{ editCategory.sort_order ?? 0 }}">
+            </div>
+            {% if isEdit %}
+                <div>
+                    <label for="status" class="form-label">স্ট্যাটাস</label>
+                    <select id="status" name="status" class="form-input">
+                        <option value="active" {% if editCategory.status == 'active' %}selected{% endif %}>সক্রিয়</option>
+                        <option value="inactive" {% if editCategory.status == 'inactive' %}selected{% endif %}>নিষ্ক্রিয়</option>
+                    </select>
+                </div>
+            {% endif %}
+            <button type="submit" class="btn btn-primary btn-block">
+                {{ icon('save', 'w-4 h-4') }} {{ isEdit ? 'আপডেট করুন' : 'তৈরি করুন' }}
+            </button>
+        </form>
+    </section>
+
+    <!-- List -->
+    <section class="lg:col-span-2">
+        <div class="card overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="table-base">
+                    <thead>
+                        <tr><th>ক্যাটাগরি</th><th>স্লাগ</th><th>সর্ট</th><th>স্ট্যাটাস</th><th class="text-right">অ্যাকশন</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for category in categories %}
+                            <tr class="{{ isEdit and editCategory.id == category.id ? 'bg-primary-50/60' }}">
+                                <td class="font-semibold text-neutral-800">{{ category.name }}</td>
+                                <td class="font-mono text-xs text-neutral-500">{{ category.slug }}</td>
+                                <td>{{ category.sort_order }}</td>
+                                <td>{% include 'components/status-badge.twig' with { status: category.status } %}</td>
+                                <td>
+                                    <div class="flex justify-end gap-2">
+                                        <a href="/admin/categories?edit={{ category.id }}" class="btn btn-ghost btn-sm" aria-label="{{ category.name }} এডিট করুন">এডিট</a>
+                                        <form method="post" action="/admin/categories">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="toggle">
+                                            <input type="hidden" name="id" value="{{ category.id }}">
+                                            <button type="submit" class="btn btn-ghost btn-sm">
+                                                {{ category.status == 'active' ? 'নিষ্ক্রিয়' : 'সক্রিয়' }}
+                                            </button>
+                                        </form>
+                                        <form method="post" action="/admin/categories" onsubmit="return confirm('সত্যিই "{{ category.name }}" মুছে ফেলবেন?')">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="delete">
+                                            <input type="hidden" name="id" value="{{ category.id }}">
+                                            <button type="submit" class="btn btn-danger btn-sm">মুছুন</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো ক্যাটাগরি নেই।</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

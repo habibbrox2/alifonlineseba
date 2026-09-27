@@ -1,0 +1,75 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}অ্যাডমিন — TH Tools{% endblock %}
+
+{% block dashboard_content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div>
+        <h1 class="text-2xl font-extrabold text-neutral-900">অ্যাডমিন প্যানেল</h1>
+        <p class="text-sm text-neutral-500">সিস্টেম ওভারভিউ ও ম্যানেজমেন্ট</p>
+    </div>
+    <span class="badge badge-info">{{ icon('shield', 'w-3.5 h-3.5') }} Staff/Admin</span>
+</div>
+
+<section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {% include 'components/stat-card.twig' with { label: 'মোট ইউজার', value: userCount, icon: 'users', tone: 'primary' } %}
+    {% include 'components/stat-card.twig' with { label: 'ক্যাটাগরি', value: categoryCount, icon: 'layout-grid', tone: 'info' } %}
+    {% include 'components/stat-card.twig' with { label: 'সার্ভিস', value: serviceCount, icon: 'layers', tone: 'accent' } %}
+    {% include 'components/stat-card.twig' with { label: 'মোট লেনদেন', value: txStats.total, icon: 'receipt', tone: 'success' } %}
+</section>
+
+<div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <a href="/admin/topups" class="card card-hover p-5 {{ pendingCount > 0 ? 'ring-2 ring-accent-400' }}">
+        {{ icon('wallet', 'w-6 h-6 text-primary-600') }}
+        <h2 class="mt-2 font-bold text-neutral-800">টপ-আপ অনুরোধ</h2>
+        <p class="mt-1 text-xs text-neutral-500">
+            {% if pendingCount > 0 %}<span class="font-semibold text-accent-600">{{ pendingCount }}টি পেন্ডিং</span>{% else %}কোনো পেন্ডিং নেই{% endif %}
+        </p>
+    </a>
+    <a href="/admin/users" class="card card-hover p-5">
+        {{ icon('users', 'w-6 h-6 text-primary-600') }}
+        <h2 class="mt-2 font-bold text-neutral-800">ইউজার ম্যানেজমেন্ট</h2>
+        <p class="mt-1 text-xs text-neutral-500">স্ট্যাটাস, রোল ও পাসওয়ার্ড রিসেট</p>
+    </a>
+    <a href="/admin/categories" class="card card-hover p-5">
+        {{ icon('layout-grid', 'w-6 h-6 text-primary-600') }}
+        <h2 class="mt-2 font-bold text-neutral-800">ক্যাটাগরি</h2>
+        <p class="mt-1 text-xs text-neutral-500">তৈরি, সম্পাদনা, সক্রিয়/নিষ্ক্রিয়</p>
+    </a>
+    <a href="/admin/services" class="card card-hover p-5">
+        {{ icon('layers', 'w-6 h-6 text-primary-600') }}
+        <h2 class="mt-2 font-bold text-neutral-800">সার্ভিস</h2>
+        <p class="mt-1 text-xs text-neutral-500">মূল্য, ব্যাজ, স্ট্যাটাস</p>
+    </a>
+    <a href="/admin/activity-logs" class="card card-hover p-5">
+        {{ icon('scroll-text', 'w-6 h-6 text-primary-600') }}
+        <h2 class="mt-2 font-bold text-neutral-800">অ্যাক্টিভিটি লগ</h2>
+        <p class="mt-1 text-xs text-neutral-500">নিরাপত্তা নিরীক্ষা</p>
+    </a>
+</div>
+
+<section class="mt-8">
+    <h2 class="mb-4 text-lg font-bold text-neutral-900">সাম্প্রতিক অ্যাক্টিভিটি</h2>
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
+                    <tr><th>অ্যাকশন</th><th>বর্ণনা</th><th>IP</th><th>সময়</th></tr>
+                </thead>
+                <tbody>
+                    {% for log in recentLogs %}
+                        <tr>
+                            <td class="font-mono text-xs">{{ log.action }}</td>
+                            <td class="max-w-xs truncate">{{ log.description ?? '—' }}</td>
+                            <td class="font-mono text-xs">{{ log.ip_address ?? '—' }}</td>
+                            <td class="whitespace-nowrap text-neutral-500">{{ log.created_at|bndate }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="4" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো লগ নেই।</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

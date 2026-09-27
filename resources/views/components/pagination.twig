@@ -1,0 +1,33 @@
+{# Reusable pagination #}
+{# @var page, perPage, total, baseUrl (ends with 'page=') #}
+{# @var sort, dir   optional — preserved in every page link #}
+{% set pages = (total / perPage)|round(0, 'ceil') %}
+{% set extra = sort is defined and dir is defined and sort ? ('&sort=' ~ sort ~ '&dir=' ~ dir) : '' %}
+{% if pages > 1 %}
+    <nav class="mt-6 flex flex-wrap items-center justify-center gap-1.5" aria-label="পেজিনেশন">
+        {% set from = max(1, page - 3) %}
+        {% set to = min(pages, page + 3) %}
+
+        <a href="{{ baseUrl }}{{ page > 1 ? page - 1 : 1 }}{{ extra }}" class="btn btn-ghost btn-sm {{ page <= 1 ? 'pointer-events-none opacity-50' }}" aria-label="আগের পেজ">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-left"></use></svg>
+        </a>
+
+        {% if from > 1 %}
+            <a href="{{ baseUrl }}1{{ extra }}" class="btn btn-ghost btn-sm">1</a>
+            {% if from > 2 %}<span class="px-1 text-neutral-400">…</span>{% endif %}
+        {% endif %}
+
+        {% for p in from..to %}
+            <a href="{{ baseUrl }}{{ p }}{{ extra }}" class="btn btn-sm {{ p == page ? 'btn-primary' : 'btn-ghost' }}" aria-current="{{ p == page ? 'page' : 'false' }}">{{ p }}</a>
+        {% endfor %}
+
+        {% if to < pages %}
+            {% if to < pages - 1 %}<span class="px-1 text-neutral-400">…</span>{% endif %}
+            <a href="{{ baseUrl }}{{ pages }}{{ extra }}" class="btn btn-ghost btn-sm">{{ pages }}</a>
+        {% endif %}
+
+        <a href="{{ baseUrl }}{{ page < pages ? page + 1 : pages }}{{ extra }}" class="btn btn-ghost btn-sm {{ page >= pages ? 'pointer-events-none opacity-50' }}" aria-label="পরের পেজ">
+            <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-right"></use></svg>
+        </a>
+    </nav>
+{% endif %}

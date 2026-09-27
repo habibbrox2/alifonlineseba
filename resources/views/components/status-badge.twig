@@ -1,0 +1,20 @@
+{# @var status string: pending|processing|completed|failed|cancelled|active|disabled|info|success|warning|danger|deleted #}
+{% set map = {
+    pending:    ['পেন্ডিং', 'badge-warning'],
+    processing: ['প্রসেসিং', 'badge-info'],
+    completed:  ['সম্পন্ন', 'badge-success'],
+    failed:     ['ব্যর্থ', 'badge-danger'],
+    cancelled:  ['বাতিল', 'badge-danger'],
+    approved:   ['অনুমোদিত', 'badge-success'],
+    rejected:   ['বাতিলকৃত', 'badge-danger'],
+    active:     ['সক্রিয়', 'badge-success'],
+    disabled:   ['নিষ্ক্রিয়', 'badge-neutral'],
+    inactive:   ['নিষ্ক্রিয়', 'badge-neutral'],
+    deleted:    ['মুছে ফেলা', 'badge-danger'],
+    info:       ['তথ্য', 'badge-info'],
+    success:    ['সফল', 'badge-success'],
+    warning:    ['সতর্কতা', 'badge-warning'],
+    danger:     ['অ্যালার্ট', 'badge-danger'],
+} %}
+{% set meta = map[status] ?? [status|title, 'badge-neutral'] %}
+<span class="badge {{ meta[1] }}">{{ meta[0] }}</span>
