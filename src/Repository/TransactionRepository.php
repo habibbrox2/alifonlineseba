@@ -41,6 +41,44 @@ final class TransactionRepository
         return $row === false ? null : $row;
     }
 
+    /** A request the given user owns, or null — the ownership check for every status action. */
+    public function findOwned(int $id, int $userId): ?array
+    {
+        $row = $this->db
+            ->createCommand('SELECT * FROM {{%transaction}} WHERE [[id]] = :id AND [[user_id]] = :uid LIMIT 1')
+            ->bindValues([':id' => $id, ':uid' => $userId])
+            ->queryOne();
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * Read the JSON metadata column as an array.
+     *
+     * @return array<string, mixed>
+     */
+    public static function metadata(array $row): array
+    {
+        $raw = $row['metadata'] ?? null;
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        if (is_string($raw)) {
+            $raw = json_decode($raw, true);
+        }
+        return is_array($raw) ? $raw : [];
+    }
+
+    /** Move a request to a new status, merging (not replacing) its metadata. */
+    public function setStatus(int $id, string $status, array $metadata = []): void
+    {
+        $values = ['status' => $status];
+        if ($metadata !== []) {
+            $existing = self::metadata($this->findById($id) ?? []);
+            $values['metadata'] = json_encode($metadata + $existing, JSON_UNESCAPED_UNICODE);
+        }
+        $this->update($id, $values);
+    }
+
     public function forUser(int $userId, int $page, int $perPage, string $status = ''): array
     {
         $where = '{{%transaction}}.[[user_id]] = :uid';
@@ -109,6 +147,28 @@ final class TransactionRepository
         $col = self::SORTABLE[$sort] ?? self::SORTABLE['id'];
         $direction = strtolower($dir) === 'asc' ? 'ASC' : 'DESC';
         return "{$col} {$direction}";
+    }
+
+    /**
+     * How many requests the user has in each status, keyed by status.
+     *
+     * @return array<string, int>
+     */
+    public function statusCounts(int $userId): array
+    {
+        $rows = $this->db
+            ->createCommand(
+                'SELECT [[status]], COUNT(*) AS [[c]] FROM {{%transaction}}'
+                . ' WHERE [[user_id]] = :uid GROUP BY [[status]]'
+            )
+            ->bindValue(':uid', $userId)
+            ->queryAll();
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(string) $row['status']] = (int) $row['c'];
+        }
+        return $counts;
     }
 
     public function statsForUser(int $userId): array

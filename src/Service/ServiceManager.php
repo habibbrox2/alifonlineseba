@@ -179,7 +179,13 @@ final class ServiceManager
         return is_array($raw) ? $raw : null;
     }
 
-    public function execute(array $service, Identity $user, array $input, string $ip, string $userAgent): ServiceResult
+    /**
+     * Charge the user and open a request in `pending`.
+     *
+     * The request is deliberately *not* executed here: the history page owns the
+     * lifecycle, so a user can cancel a pending request and get the money back.
+     */
+    public function submit(array $service, Identity $user, array $input, string $ip, string $userAgent): ServiceResult
     {
         $provider = $this->providerFor($service);
         if ($provider === null) {
@@ -187,8 +193,7 @@ final class ServiceManager
         }
 
         $price = (float) $service['price'];
-        $fresh = $this->users->findById($user->id);
-        if ($fresh === null || (float) $fresh['balance'] < $price) {
+        if (!$this->hasBalance($user->id, $price)) {
             return ServiceResult::fail('পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজনীয়: ৳' . number_format($price, 2));
         }
 
@@ -206,41 +211,209 @@ final class ServiceManager
             return ServiceResult::fail('Validation failed.', $missing);
         }
 
-        // Validate + execute through provider
-        $result = $provider->execute($input);
-        if (!$result->success) {
-            return $result;
-        }
+        $this->users->adjustBalance($user->id, -$price);
 
-        // Deduct balance, create transaction, notify + log
-        $newBalance = round((float) $fresh['balance'] - $price, 2);
-        $this->users->update($user->id, ['balance' => $newBalance]);
-
-        $reference = 'TH' . strtoupper(dechex(time())) . random_int(1000, 9999);
+        $reference = self::newReference();
         $txId = $this->transactions->create([
             'user_id' => $user->id,
             'service_id' => (int) $service['id'],
             'reference' => $reference,
             'amount' => $price,
-            'status' => 'completed',
-            'metadata' => ['provider' => $provider->key(), 'input_keys' => array_keys($input)],
+            'status' => StatusPresenter::PENDING,
+            'metadata' => [
+                'provider' => $provider->key(),
+                'input_keys' => array_keys($input),
+                // Kept so a retry can re-run the provider without the form again.
+                'input' => $input,
+                'service_name' => (string) ($service['name'] ?? 'Service'),
+            ],
         ]);
 
         $this->notifications->create(
             $user->id,
-            'সার্ভিস সম্পন্ন হয়েছে',
+            'অনুরোধ গৃহীত হয়েছে',
             ($service['name'] ?? 'Service') . ' — রেফারেন্স: ' . $reference,
+            'info'
+        );
+        $this->log($user, 'service.submit', ($service['name'] ?? 'Service') . ' requested', $ip, $userAgent, $service, $reference);
+
+        return new ServiceResult(
+            true,
+            'অনুরোধটি গ্রহণ করা হয়েছে। এখন সার্ভিস হিস্ট্রি থেকে চালু করতে পারবেন।',
+            ['_reference' => $reference, '_request_id' => $txId, '_status' => StatusPresenter::PENDING],
+            [],
+        );
+    }
+
+    /**
+     * Run a pending request through its provider and settle the final status.
+     *
+     * On failure the charged amount is refunded, so a failed request is always
+     * retryable without the user topping up again.
+     */
+    public function start(array $request, Identity $user, string $ip, string $userAgent): ServiceResult
+    {
+        // Re-read: a caller may hand us a row it read before someone else moved
+        // the request on, and re-running a settled request would charge twice.
+        $request = $this->fresh($request);
+        $id = (int) $request['id'];
+        if ((string) $request['status'] !== StatusPresenter::PENDING) {
+            return ServiceResult::fail('এই অনুরোধটি ইতিমধ্যে প্রক্রিয়া করা হয়েছে।');
+        }
+
+        $metadata = TransactionRepository::metadata($request);
+        $provider = $this->providers[(string) ($metadata['provider'] ?? '')] ?? null;
+        if ($provider === null) {
+            $this->fail($request, $user, $ip, $userAgent, 'সার্ভিস প্রদানক পাওয়া যায়নি।');
+            return ServiceResult::fail('সার্ভিস প্রদানক পাওয়া যায়নি।');
+        }
+
+        $this->transactions->setStatus($id, StatusPresenter::PROCESSING);
+
+        $result = $provider->execute((array) ($metadata['input'] ?? []));
+        if (!$result->success) {
+            $this->fail($request, $user, $ip, $userAgent, $result->message);
+            return $result;
+        }
+
+        $this->transactions->setStatus($id, StatusPresenter::COMPLETED, ['result' => $result->data]);
+
+        $reference = (string) $request['reference'];
+        $serviceName = (string) ($metadata['service_name'] ?? 'Service');
+        $this->notifications->create(
+            $user->id,
+            'সার্ভিস সম্পন্ন হয়েছে',
+            $serviceName . ' — রেফারেন্স: ' . $reference,
             'success'
         );
+        $this->log($user, 'service.complete', $serviceName . ' completed', $ip, $userAgent, null, $reference);
+
+        return new ServiceResult(
+            true,
+            $result->message,
+            $result->data + [
+                '_reference' => $reference,
+                '_request_id' => $id,
+                '_status' => StatusPresenter::COMPLETED,
+            ],
+            [],
+        );
+    }
+
+    /** Cancel a still-pending request and refund it. */
+    public function cancel(array $request, Identity $user, string $ip, string $userAgent): ServiceResult
+    {
+        $request = $this->fresh($request);
+        $id = (int) $request['id'];
+        if ((string) $request['status'] !== StatusPresenter::PENDING) {
+            return ServiceResult::fail('শুধুমাত্র পেন্ডিং অনুরোধ বাতিল করা যায়।');
+        }
+
+        $this->transactions->setStatus($id, StatusPresenter::CANCELLED);
+        $this->refund($request);
+
+        $reference = (string) $request['reference'];
+        $this->notifications->create(
+            $user->id,
+            'অনুরোধ বাতিল হয়েছে',
+            'রেফারেন্স: ' . $reference . ' — ৳' . number_format((float) $request['amount'], 2) . ' ফেরত দেওয়া হয়েছে।',
+            'warning'
+        );
+        $this->log($user, 'service.cancel', 'Request cancelled', $ip, $userAgent, null, $reference);
+
+        return new ServiceResult(
+            true,
+            'অনুরোধটি বাতিল হয়েছে এবং টাকা ফেরত দেওয়া হয়েছে।',
+            ['_reference' => $reference, '_request_id' => $id, '_status' => StatusPresenter::CANCELLED],
+            [],
+        );
+    }
+
+    /**
+     * Re-charge a failed or cancelled request and run it again.
+     *
+     * Cancelling and failing both refund, so the retry pays the price again.
+     */
+    public function retry(array $request, Identity $user, string $ip, string $userAgent): ServiceResult
+    {
+        $request = $this->fresh($request);
+        $id = (int) $request['id'];
+        $status = (string) $request['status'];
+        if (!in_array($status, [StatusPresenter::FAILED, StatusPresenter::CANCELLED], true)) {
+            return ServiceResult::fail('শুধুমাত্র ব্যর্থ বা বাতিল অনুরোধ পুনরায় চালানো যায়।');
+        }
+
+        $price = (float) $request['amount'];
+        if (!$this->hasBalance($user->id, $price)) {
+            return ServiceResult::fail('পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজনীয়: ৳' . number_format($price, 2));
+        }
+
+        $attempts = (int) (TransactionRepository::metadata($request)['attempts'] ?? 0) + 1;
+        $this->users->adjustBalance($user->id, -$price);
+        $this->transactions->setStatus($id, StatusPresenter::PENDING, ['attempts' => $attempts]);
+        $this->log($user, 'service.retry', 'Request retried (attempt ' . $attempts . ')', $ip, $userAgent, null, (string) $request['reference']);
+
+        // start() re-reads the row, so it now sees the request in its pending state.
+        return $this->start($request, $user, $ip, $userAgent);
+    }
+
+    /** The current database state of a request, falling back to what we were given. */
+    private function fresh(array $request): array
+    {
+        return $this->transactions->findById((int) $request['id']) ?? $request;
+    }
+
+    private function hasBalance(int $userId, float $price): bool
+    {
+        $fresh = $this->users->findById($userId);
+        return $fresh !== null && (float) $fresh['balance'] >= $price;
+    }
+
+    private function refund(array $request): void
+    {
+        $this->users->adjustBalance((int) $request['user_id'], abs((float) $request['amount']));
+    }
+
+    private function fail(array $request, Identity $user, string $ip, string $userAgent, string $reason): void
+    {
+        $id = (int) $request['id'];
+        $this->transactions->setStatus($id, StatusPresenter::FAILED, ['error' => $reason]);
+        $this->refund($request);
+
+        $reference = (string) $request['reference'];
+        $this->notifications->create(
+            $user->id,
+            'সার্ভিস ব্যর্থ হয়েছে',
+            'রেফারেন্স: ' . $reference . ' — ' . $reason,
+            'danger'
+        );
+        $this->log($user, 'service.failed', $reason, $ip, $userAgent, null, $reference);
+    }
+
+    private function log(
+        Identity $user,
+        string $action,
+        string $description,
+        string $ip,
+        string $userAgent,
+        ?array $service,
+        string $reference,
+    ): void {
         $this->logs->create([
             'user_id' => $user->id,
-            'action' => 'service.execute',
-            'description' => ($service['name'] ?? 'Service') . ' executed',
+            'action' => $action,
+            'description' => $description,
             'ip_address' => $ip,
             'user_agent' => $userAgent,
-            'metadata' => ['service_id' => $service['id'], 'tx' => $reference],
+            'metadata' => array_filter([
+                'service_id' => $service['id'] ?? null,
+                'tx' => $reference,
+            ], static fn ($value): bool => $value !== null),
         ]);
+    }
 
-        return new ServiceResult(true, $result->message, $result->data + ['_reference' => $reference, '_tx_id' => $txId], []);
+    private static function newReference(): string
+    {
+        return 'TH' . strtoupper(dechex(time())) . random_int(1000, 9999);
     }
 }

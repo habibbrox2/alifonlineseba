@@ -7,6 +7,7 @@ use App\Auth\ApiAuthMiddleware;
 use App\Auth\AuthMiddleware;
 use App\Web\Account\NotificationsAction;
 use App\Web\Account\ProfileAction;
+use App\Web\Account\ServiceHistoryAction;
 use App\Web\Account\TransactionsAction;
 use App\Web\Admin\AdminCategoriesAction;
 use App\Web\Admin\AdminDashboardAction;
@@ -19,6 +20,7 @@ use App\Web\Admin\AdminUsersAction;
 use App\Web\Api\DashboardApiAction;
 use App\Web\Api\NotificationsApiAction;
 use App\Web\Api\ProfileApiAction;
+use App\Web\Api\ServiceRequestApiAction;
 use App\Web\Api\ServicesApiAction;
 use App\Web\Api\TransactionsApiAction;
 use App\Web\Auth\LoginAction;
@@ -60,6 +62,7 @@ return [
         Route::methods(['GET', 'POST'], '/services/view/{slug}')->action(ServiceDetailAction::class)->name('service-detail'),
         Route::post('/profile/topup')->action(ProfileAction::class)->name('profile-topup'),
         Route::get('/transactions')->action(TransactionsAction::class)->name('transactions'),
+        Route::get('/service-history')->action(ServiceHistoryAction::class)->name('service-history'),
         Route::get('/notifications')->action(NotificationsAction::class)->name('notifications'),
         Route::post('/notifications/read-all')->action(NotificationsAction::class)->name('notifications-read-all'),
         Route::methods(['GET', 'POST'], '/profile')->action(ProfileAction::class)->name('profile'),
@@ -71,6 +74,7 @@ return [
         Route::get('/services')->action(ServicesApiAction::class)->name('api-services'),
         Route::get('/services/{slug}')->action(ServicesApiAction::class)->name('api-service'),
         Route::get('/transactions')->action(TransactionsApiAction::class)->name('api-transactions'),
+        Route::post('/service-requests/{id}/{action}')->action(ServiceRequestApiAction::class)->name('api-service-request'),
         Route::get('/notifications')->action(NotificationsApiAction::class)->name('api-notifications'),
         Route::patch('/notifications/{id}/read')->action(NotificationsApiAction::class)->name('api-notification-read'),
         Route::get('/profile')->action(ProfileApiAction::class)->name('api-profile'),

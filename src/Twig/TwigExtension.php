@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Twig;
 
 use App\Env;
+use App\Service\StatusPresenter;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
@@ -42,6 +43,11 @@ final class TwigExtension extends AbstractExtension
     public function money(float|int|string|null $amount): string
     {
         return '৳ ' . number_format((float) ($amount ?? 0), 2);
+    }
+
+    public function statusBadge(string $status): string
+    {
+        return StatusPresenter::html($status);
     }
 
     public function bngDate(?string $date): string

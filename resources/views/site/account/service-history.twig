@@ -1,0 +1,147 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}সার্ভিস হিস্ট্রি — TH Tools{% endblock %}
+
+{% block dashboard_content %}
+<h1 class="mb-1 text-2xl font-extrabold text-neutral-900">সার্ভিস হিস্ট্রি</h1>
+<p class="mb-6 text-sm text-neutral-500">আপনার সব সার্ভিস অনুরোধের বর্তমান অবস্থা ও কার্যক্রম।</p>
+
+<!-- Status filter chips, each with its row count -->
+<div class="mb-5 flex flex-wrap gap-2">
+    {% set filters = [
+        { key: '', label: 'সব' },
+        { key: 'pending', label: 'পেন্ডিং' },
+        { key: 'processing', label: 'প্রসেসিং' },
+        { key: 'completed', label: 'সম্পন্ন' },
+        { key: 'failed', label: 'ব্যর্থ' },
+        { key: 'cancelled', label: 'বাতিল' },
+    ] %}
+    {% for filter in filters %}
+        <a href="/service-history{% if filter.key %}?status={{ filter.key }}{% endif %}"
+           data-count-status="{{ filter.key|default('all') }}"
+           class="chip {{ status == filter.key ? 'chip-active' }}">
+            {{ filter.label }}
+            <span class="ml-1 opacity-60" data-count>{{ counts[filter.key|default('all')] ?? 0 }}</span>
+        </a>
+    {% endfor %}
+</div>
+
+<div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr>
+                    <th>রেফারেন্স</th>
+                    <th>সার্ভিস</th>
+                    <th>পরিমাণ</th>
+                    <th>অবস্থা</th>
+                    <th>তারিখ</th>
+                    <th class="text-right">কার্যক্রম</th>
+                </tr>
+            </thead>
+            {% if requests is empty %}
+                <tbody>
+                    <tr>
+                        <td colspan="6" class="px-4 py-12 text-center">
+                            <div class="mx-auto flex max-w-xs flex-col items-center gap-2">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                                    {{ icon('inbox', 'w-6 h-6') }}
+                                </span>
+                                <p class="text-sm text-neutral-500">কোনো সার্ভিস অনুরোধ পাওয়া যায়নি।</p>
+                                <a href="/services" class="btn btn-primary btn-sm mt-2">সার্ভিস দেখুন</a>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            {% else %}
+                    {# One <tbody> per request: the row and its result panel are siblings, #}
+                    {# so the Alpine scope has to be the element that contains both of them. #}
+                    {% for request in requests %}
+                        <tbody data-request="{{ request|json_encode|e('html_attr') }}"
+                               x-data="thServiceRequest($el.dataset.request)">
+                        <tr class="align-top">
+
+                            <td class="font-mono text-xs">{{ request.reference }}</td>
+                            <td>
+                                <p class="font-medium text-neutral-800">{{ request.service_name }}</p>
+                                <p class="text-[11px] text-neutral-400" x-show="updatedAt !== initialUpdatedAt"
+                                   x-text="updatedAt ? 'হালনাগাদ: ' + updatedAt : ''"></p>
+                            </td>
+                            <td class="whitespace-nowrap font-semibold text-primary-700">{{ request.amount|money }}</td>
+                            <td>
+                                <span class="badge" :class="badge" x-text="label"></span>
+                            </td>
+                            <td class="whitespace-nowrap text-neutral-500">{{ request.created_at|bndate }}</td>
+                            <td>
+                                <div class="flex flex-col items-end gap-1.5">
+                                    {# Actions come from the server, so they always match the current status. #}
+                                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                                        <template x-for="action in actions" :key="action.key">
+                                            <span class="inline-flex items-center gap-1">
+                                                <button type="button" class="btn btn-sm" :class="action.variant"
+                                                        :disabled="loading !== null"
+                                                        @click="run(action)">
+                                                    <svg class="h-3.5 w-3.5" aria-hidden="true">
+                                                        <use :href="'/assets/icons/lucide-sprite.svg#' + action.icon"></use>
+                                                    </svg>
+                                                    <span x-text="confirming === action.key ? 'নিশ্চিত করুন' : action.label"></span>
+                                                </button>
+                                                <button type="button" x-show="confirming === action.key" x-cloak
+                                                        class="text-[11px] text-neutral-500 hover:underline"
+                                                        @click="confirming = null">না</button>
+                                            </span>
+                                        </template>
+                                        <span x-show="actions.length === 0" class="text-xs text-neutral-400">—</span>
+                                    </div>
+
+                                    <p x-show="notice" x-cloak
+                                       class="max-w-[16rem] text-right text-[11px] font-medium"
+                                       :class="notice?.kind === 'success' ? 'text-success-600' : 'text-danger-600'"
+                                       x-text="notice ? notice.text : ''"></p>
+
+                                    <p x-show="error && !showResult" x-cloak class="max-w-[16rem] text-right text-[11px] text-danger-600">
+                                        <span x-text="error"></span>
+                                        <button type="button" class="ml-1 underline" @click="showResult = true">বিস্তারিত</button>
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+
+                        {# Result / error detail — revealed by the "ফলাফল দেখুন" button. #}
+                        <tr x-show="showResult" x-cloak class="bg-neutral-50">
+                            <td colspan="6" class="px-4 py-3">
+                                <div class="alert alert-danger" x-show="error" x-cloak>
+                                    <span x-text="error"></span>
+                                </div>
+                                <dl x-show="entries.length" class="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                                    <template x-for="entry in entries" :key="entry.key">
+                                        {# The table keeps a 640px minimum, so on narrow screens the value would #}
+                                        {# sit off-screen to the right. Stack label over value until there is room. #}
+                                        <div class="flex flex-col items-start gap-0.5 border-b border-dashed border-neutral-200 py-1
+                                                    sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                                            <dt class="text-xs text-neutral-500" x-text="entry.label"></dt>
+                                            <dd class="text-sm font-medium text-neutral-800 sm:text-right" x-text="entry.value"></dd>
+                                        </div>
+                                    </template>
+                                </dl>
+                                <p x-show="!entries.length && !error" class="text-sm text-neutral-500">
+                                    এই অনুরোধের জন্য কোনো ফলাফল সংরক্ষিত নেই।
+                                </p>
+                            </td>
+                        </tr>
+                        </tbody>
+                    {% endfor %}
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total,
+    baseUrl: '/service-history?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ 'page=',
+} %}
+{% endblock %}
+
+{% block page_scripts %}
+<script type="module" src="/assets/js/service-history.js"></script>
+{% endblock %}

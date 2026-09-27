@@ -13,6 +13,7 @@ function ensure(dir) {
 ensure(dest + '/js');
 fs.copyFileSync(root + '/resources/js/app.js', dest + '/js/app.js');
 fs.copyFileSync(root + '/resources/js/dashboard.js', dest + '/js/dashboard.js');
+fs.copyFileSync(root + '/resources/js/service-history.js', dest + '/js/service-history.js');
 
 // Alpine.js (vendored, no CDN dependency at runtime).
 const alpineSrc = root + '/node_modules/alpinejs/dist/cdn.min.js';

@@ -68,11 +68,13 @@ final class AdminListTest extends \Codeception\Test\Unit
         sort($sorted);
         assertSame($sorted, $refs);
 
+        // The whitelist falls back to the default column but keeps the requested
+        // direction, so compare against an explicit id sort at the same direction.
         $invalid = $repo->all(1, 20, '', '', '1=1; --', 'asc');
         assertSame(
-            array_column($asc['rows'], 'id'),
+            array_column($repo->all(1, 20, '', '', 'id', 'asc')['rows'], 'id'),
             array_column($invalid['rows'], 'id'),
-            'Invalid sort column must fall back to default ordering.',
+            'Invalid sort column must fall back to the default column.',
         );
     }
 }

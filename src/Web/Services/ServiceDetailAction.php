@@ -12,6 +12,7 @@ use App\ServiceProvider\ServiceResult;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\CurrentRoute;
+use Yiisoft\Router\UrlGeneratorInterface;
 use Yiisoft\Session\SessionInterface;
 use Yiisoft\Yii\View\Renderer\WebViewRenderer;
 
@@ -23,6 +24,7 @@ final readonly class ServiceDetailAction
         private ServiceManager $manager,
         private TransactionRepository $transactions,
         private SessionInterface $session,
+        private UrlGeneratorInterface $url,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
@@ -49,9 +51,14 @@ final readonly class ServiceDetailAction
             unset($input['csrf']);
             $ip = $_SERVER['REMOTE_ADDR'] ?? '-';
             $ua = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512);
-            $result = $this->manager->execute($service, $identity, $input, $ip, $ua);
+            $result = $this->manager->submit($service, $identity, $input, $ip, $ua);
             if (!$result->success) {
                 $errors = $result->errors;
+            } else {
+                // The request is queued, not executed — the history page owns the
+                // lifecycle, so send the user straight there.
+                $this->session->set('flash_success', $result->message);
+                return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('service-history')]);
             }
         }
 
