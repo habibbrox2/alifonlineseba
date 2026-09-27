@@ -31,22 +31,22 @@ use App\Web\Services\CategoryAction;
 use App\Web\Services\ServiceDetailAction;
 use App\Web\Site\HomeAction;
 use App\Web\Site\SitemapAction;
+use App\Web\Site\StaticPageAction;
 use Yiisoft\Router\Group;
 use Yiisoft\Router\Route;
-use Yiisoft\Yii\View\Renderer\WebViewRenderer;
 
 return [
     // Public site
     Route::get('/')->action(HomeAction::class)->name('home'),
     Route::get('/sitemap.xml')->action(SitemapAction::class)->name('sitemap'),
     Route::get('/about')
-        ->action(static fn (WebViewRenderer $view) => $view->render('@views/site/about.twig'))
+        ->action(static fn (StaticPageAction $page) => $page('about'))
         ->name('about'),
     Route::get('/privacy')
-        ->action(static fn (WebViewRenderer $view) => $view->render('@views/site/privacy.twig'))
+        ->action(static fn (StaticPageAction $page) => $page('privacy'))
         ->name('privacy'),
     Route::get('/terms')
-        ->action(static fn (WebViewRenderer $view) => $view->render('@views/site/terms.twig'))
+        ->action(static fn (StaticPageAction $page) => $page('terms'))
         ->name('terms'),
 
     // Auth

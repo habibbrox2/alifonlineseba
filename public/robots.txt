@@ -10,4 +10,4 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /logout
 
-Sitemap: http://localhost:8099/sitemap.xml
+Sitemap: https://onlinesheba.broxlab.online/sitemap.xml

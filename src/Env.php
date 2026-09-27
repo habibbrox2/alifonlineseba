@@ -49,7 +49,7 @@ final class Env
 
     public static function isProd(): bool
     {
-        return strtolower((string) self::get('APP_ENV')) === 'production';
+        return strtolower((string) self::get('APP_ENV')) === 'prod';
     }
 
     public static function isDev(): bool

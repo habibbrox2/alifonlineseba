@@ -59,6 +59,6 @@ final class Environment
 
     public static function isProd(): bool
     {
-        return self::appEnv() === 'prod';
+        return Env::isProd();
     }
 }
