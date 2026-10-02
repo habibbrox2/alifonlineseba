@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- windowBackground is pinned to the same colour the splash uses. It is
+         what shows in the gap between the system splash vanishing and the
+         first app frame; left at the platform default it is white, which draws
+         a bright sliver across the bottom of the green launch on every cold
+         start. values-night/themes.xml pins the dark equivalent. -->
+    <style name="Theme.AlifTools" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/brand_primary</item>
+    </style>
+
+    <!-- Launch theme: brand-green backdrop with the centred mark.
+         androidx core-splashscreen maps these two attributes onto the platform
+         splash on API 31+ and composes the same look as a centred layer-list
+         on API 24-30, so one definition covers the whole minSdk range.
+         postSplashScreenTheme hands off to the real Compose theme. -->
+    <style name="Theme.AlifTools.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_primary</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.AlifTools</item>
+    </style>
+</resources>

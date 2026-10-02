@@ -1,0 +1,49 @@
+{# Shared page header for the admin screens: title, optional back link, description
+   and an optional right-hand slot.
+
+   One component so every admin screen opens with the same rhythm — previously
+   some pages used a bare <h1 class="mb-6"> and others a flex wrapper, so the
+   vertical rhythm jumped when moving between screens, and only some of them
+   carried a description.
+
+   `embed` is deliberately NOT used: Twig forbids a block-bearing component inside
+   a template that `{% extends %}` the layout ("cannot include content outside
+   Twig blocks"). Pass the right-hand content as a pre-rendered string instead:
+
+       {% set headActions %}
+           <span class="badge badge-info">…</span>
+       {% endset %}
+       {% include 'components/page-header.twig' with {
+           title: 'রিচার্জ অনুরোধ', description: '…', actions: headActions,
+       } %}
+
+   Markup captured by `{% set %}…{% endset %}` is raw HTML, so it is printed
+   with `|raw` below rather than being escaped into visible tags. #}
+
+{# @var title string #}
+{# @var description string  optional #}
+{# @var actions string       optional, pre-rendered HTML #}
+{# @var backUrl string       optional #}
+{# @var backLabel string     optional #}
+<div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+    <div class="min-w-0">
+        {% if backUrl is defined and backUrl %}
+            <a href="{{ backUrl }}" class="mb-1 inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-primary-700">
+                {{ icon('arrow-left', 'w-4 h-4') }} {{ backLabel|default('ফিরে যান') }}
+            </a>
+        {% endif %}
+        <h1 class="text-2xl font-extrabold text-neutral-900">{{ title }}</h1>
+        {% if description is defined and description %}
+            <p class="mt-1 max-w-2xl text-sm leading-relaxed text-neutral-500">{{ description }}</p>
+        {% endif %}
+    </div>
+    {# flex-col on a phone drops the slot under the title at full width, so a
+       two-button toolbar stays thumb-reachable instead of being squeezed. The
+       wrapper is only rendered when there is something to put in it, otherwise
+       it would leave a stray gap on every page that has no actions. #}
+    {% if actions is defined and actions %}
+        <div class="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            {{ actions|raw }}
+        </div>
+    {% endif %}
+</div>

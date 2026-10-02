@@ -7,6 +7,7 @@ namespace App\Web\Admin;
 use App\Repository\ActivityLogRepository;
 use App\Repository\ServiceRepository;
 use App\Service\ServiceManager;
+use App\ServiceProvider\ServiceField;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\UrlGeneratorInterface;
@@ -76,6 +77,10 @@ final readonly class AdminServicesAction
                 $id = (int) ($input['id'] ?? 0);
                 $redirectId = $id;
                 $this->saveFormFields($id, $input, $adminId);
+            } elseif ($do === 'fields_reset') {
+                $id = (int) ($input['id'] ?? 0);
+                $redirectId = $id;
+                $this->resetFormFields($id, $adminId);
             } elseif ($do === 'toggle') {
                 $id = (int) ($input['id'] ?? 0);
                 $service = $this->services->findServiceById($id);
@@ -125,9 +130,56 @@ final readonly class AdminServicesAction
             'editService' => $editService,
             'formValues' => $formValues,
             'formDo' => $form !== null ? (string) $form['do'] : null,
+            'fvRules' => $this->rulesForEditor($formValues, $editService),
+            'fvVariants' => $this->variantsForEditor($formValues, $editService),
             'fieldOptions' => $editService === null ? [] : $this->fieldOptions($editService),
+            'fieldTypes' => ServiceField::TYPES,
+            'usingFieldDefaults' => $editService === null || $this->manager->formFieldConfig($editService) === null,
             'trashedCount' => $this->services->countTrashed(),
         ]);
+    }
+
+    /** Rules text for the editor: submitted value wins, else the stored one. */
+    private function rulesForEditor(?array $formValues, ?array $editService): string
+    {
+        if ($formValues !== null && array_key_exists('rules', $formValues)) {
+            return (string) $formValues['rules'];
+        }
+        return (string) ($editService['rules'] ?? '');
+    }
+
+    /**
+     * Variant rows for the editor: submitted values win, else the stored JSON.
+     * Always at least three blank rows so the admin can start typing right away.
+     *
+     * @return array<int, array{label: string, price: string}>
+     */
+    private function variantsForEditor(?array $formValues, ?array $editService): array
+    {
+        $rows = [];
+        $source = null;
+        if ($formValues !== null && array_key_exists('variants', $formValues)) {
+            $source = json_decode((string) ($formValues['variants'] ?? ''), true);
+        } elseif ($editService !== null) {
+            $raw = $editService['variants'] ?? null;
+            $source = is_string($raw) && $raw !== '' ? json_decode($raw, true) : $raw;
+        }
+        if (is_array($source)) {
+            foreach ($source as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $label = trim((string) ($item['label'] ?? ''));
+                if ($label === '') {
+                    continue;
+                }
+                $rows[] = ['label' => $label, 'price' => (string) ($item['price'] ?? '')];
+            }
+        }
+        while (count($rows) < 3) {
+            $rows[] = ['label' => '', 'price' => ''];
+        }
+        return $rows;
     }
 
     /**
@@ -279,11 +331,46 @@ final readonly class AdminServicesAction
             'status' => ($input['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active',
         ];
 
+        // Per-service variants: rows of {label, price}; blank labels dropped.
+        $variants = $this->parseVariantsInput($input, $errors);
+        $values['variants'] = $variants === null ? null : json_encode($variants, JSON_UNESCAPED_UNICODE);
+        // Ordering rules/instructions (newline separated); empty string -> NULL.
+        $rules = trim((string) ($input['rules'] ?? ''));
+        $values['rules'] = $rules !== '' ? $rules : null;
+
         return [$errors, $values];
     }
 
     /**
-     * Saves the NID / date-of-birth form field configuration of a service.
+     * Variant rows from the admin form: parallel arrays variant_label[N] /
+     * variant_price[N]. Labels are kept in order; blank rows are dropped and
+     * an empty result is stored as NULL (no selector on the order page).
+     *
+     * @return array|null JSON-ready list of {label, price} or null when none
+     */
+    private function parseVariantsInput(array $input, array &$errors): ?array
+    {
+        $labels = (array) ($input['variant_label'] ?? []);
+        $prices = (array) ($input['variant_price'] ?? []);
+        $variants = [];
+        foreach ($labels as $i => $label) {
+            $label = trim((string) $label);
+            if ($label === '') {
+                continue;
+            }
+            $price = (float) str_replace(',', '', (string) ($prices[$i] ?? '0'));
+            if ($price < 0) {
+                $errors[] = "ভ্যারিয়েন্ট '{$label}'-এর মূল্য ঋণাত্মক হতে পারে না।";
+                continue;
+            }
+            $variants[] = ['label' => $label, 'price' => $price];
+        }
+        return $variants === [] ? null : $variants;
+    }
+
+    /**
+     * Saves the form field configuration of a service: which provider fields are
+     * shown, which admin-defined custom fields exist, and which are required.
      */
     private function saveFormFields(int $id, array $input, ?int $adminId): void
     {
@@ -293,19 +380,131 @@ final readonly class AdminServicesAction
             return;
         }
 
-        $known = [];
-        foreach ($this->manager->defaultFieldsFor($service) as $field) {
-            $known[$field->name] = $field->label;
-        }
-        if ($known === []) {
-            $this->session->set('flash_error', 'এই সার্ভিসের জন্য কোনো ফর্ম ফিল্ড নেই।');
+        $result = self::buildFormFieldConfig(
+            $input,
+            $this->manager->defaultFieldsFor($service),
+            $this->manager->customFieldsFor($service),
+        );
+        if ($result['errors'] !== []) {
+            $this->session->set('flash_error', implode(' ', $result['errors']));
             return;
         }
 
+        $config = $result['config'];
+        $this->services->updateFormFields($id, $config);
+        $this->logs->create([
+            'user_id' => $adminId,
+            'action' => 'admin.service.fields_updated',
+            'description' => "Service '{$service['name']}' form fields updated (" . ($config === [] ? 'none' : implode(', ', array_column($config, 'name'))) . ')',
+            'metadata' => ['service_id' => $id, 'fields' => $config],
+        ]);
+
+        $notes = [];
+        if ($result['added'] !== []) {
+            $notes[] = count($result['added']) . 'টি নতুন ফিল্ড যোগ হয়েছে';
+        }
+        if ($result['removed'] !== []) {
+            $notes[] = count($result['removed']) . 'টি কাস্টম ফিল্ড মুছে ফেলা হয়েছে';
+        }
+        $suffix = $notes === [] ? '' : ' (' . implode(', ', $notes) . ')';
+
+        $this->session->set('flash_success', ($config === []
+            ? 'সার্ভিস ফর্ম থেকে সব ফিল্ড সরানো হয়েছে।'
+            : 'ফর্ম ফিল্ড কনফিগারেশন সংরক্ষিত হয়েছে।') . $suffix);
+    }
+
+    /**
+     * Turns the field-configuration form into the list to store.
+     *
+     * Pure on purpose: what gets saved depends only on what the admin posted
+     * and on what the service already had, so the whole add / edit / remove
+     * cycle can be exercised without a request, a session or the database.
+     *
+     * Custom field definitions are always rewritten, not only the visible ones:
+     * a field that is switched off keeps its label, type and help so it can be
+     * switched back on later. Only an explicit "remove" actually deletes.
+     *
+     * @param ServiceField[] $providerFields
+     * @param ServiceField[] $existingCustoms
+     * @return array{config: array<int, array<string, mixed>>, errors: string[], added: string[], removed: string[]}
+     */
+    public static function buildFormFieldConfig(array $input, array $providerFields, array $existingCustoms): array
+    {
+        $errors = [];
+
+        $customs = [];
+        foreach ($existingCustoms as $field) {
+            $customs[$field->name] = $field;
+        }
+
+        // 1. Delete the custom fields the admin ticked for removal.
+        $removed = [];
+        foreach (self::toNameList($input['remove_custom'] ?? []) as $name) {
+            if (isset($customs[$name])) {
+                unset($customs[$name]);
+                $removed[] = $name;
+                continue;
+            }
+            $errors[] = "মুছে ফেলার অনুরোধ করা কাস্টম ফিল্ডটি পাওয়া যায়নি: '{$name}'।";
+        }
+
+        // 2. Apply the inline edits to the custom fields that survived.
+        //    An absent key means "not posted", so the stored value survives; only
+        //    a key the admin actually sent can blank a label out.
+        $labels = self::namedList($input, 'custom_label');
+        $types = self::namedList($input, 'custom_type');
+        $placeholders = self::namedList($input, 'custom_placeholder');
+        $helps = self::namedList($input, 'custom_help');
+        foreach ($customs as $name => $field) {
+            $label = array_key_exists($name, $labels) ? self::text($labels[$name], 120) : $field->label;
+            if ($label === '') {
+                $errors[] = "'{$name}' ফিল্ডের লেবেল খালি রাখা যাবে না।";
+                continue;
+            }
+            $customs[$name] = new ServiceField(
+                $name,
+                $label,
+                array_key_exists($name, $types) && is_scalar($types[$name])
+                    ? ServiceField::normaliseType($types[$name])
+                    : $field->type,
+                $field->required,
+                array_key_exists($name, $placeholders) ? self::text($placeholders[$name], 120) : $field->placeholder,
+                array_key_exists($name, $helps) ? self::text($helps[$name], 190) : $field->help,
+            );
+        }
+
+        // 3. Add the brand new custom fields; each lands switched on.
         $enabled = self::toNameList($input['fields'] ?? []);
         $required = self::toNameList($input['required_fields'] ?? []);
+        [$newFields, $newErrors] = self::newCustomFields($input['custom_new'] ?? []);
+        $errors = array_merge($errors, $newErrors);
 
-        $errors = [];
+        $added = [];
+        foreach ($newFields as $field) {
+            if (self::findField($providerFields, $field->name) !== null) {
+                $errors[] = "'{$field->name}' নামটি আগে থেকেই একটি ফিল্ডে ব্যবহৃত হচ্ছে।";
+                continue;
+            }
+            if (isset($customs[$field->name])) {
+                $errors[] = "'{$field->name}' নামে আরেকটি কাস্টম ফিল্ড আছে।";
+                continue;
+            }
+            $customs[$field->name] = $field;
+            $added[] = $field->name;
+            $enabled[] = $field->name;
+            if ($field->required) {
+                $required[] = $field->name;
+            }
+        }
+
+        // 4. The enabled/required checkboxes may only name fields that exist.
+        $known = [];
+        foreach ($providerFields as $field) {
+            $known[$field->name] = true;
+        }
+        foreach ($customs as $name => $field) {
+            $known[$name] = true;
+        }
         foreach (array_diff($enabled, array_keys($known)) as $unknown) {
             $errors[] = "অজানা ফর্ম ফিল্ড: '{$unknown}'।";
         }
@@ -316,55 +515,247 @@ final readonly class AdminServicesAction
             $errors[] = "'{$orphan}' ফিল্ডটি আবশ্যক হলে সেটি সক্রিয় থাকতে হবে।";
         }
         if ($errors !== []) {
-            $this->session->set('flash_error', implode(' ', $errors));
+            return ['config' => [], 'errors' => $errors, 'added' => [], 'removed' => $removed];
+        }
+
+        // 5. Provider fields first, then the custom ones in the order they were added.
+        $config = [];
+        foreach ($enabled as $name) {
+            if (self::findField($providerFields, $name) !== null) {
+                $config[] = ['name' => $name, 'required' => in_array($name, $required, true)];
+            }
+        }
+        foreach ($customs as $name => $field) {
+            $config[] = [
+                'name' => $field->name,
+                'label' => $field->label,
+                'type' => $field->type,
+                'required' => in_array($name, $required, true),
+                'placeholder' => $field->placeholder,
+                'help' => $field->help,
+                'enabled' => in_array($name, $enabled, true),
+            ];
+        }
+
+        return ['config' => $config, 'errors' => [], 'added' => $added, 'removed' => $removed];
+    }
+
+    /**
+     * Throws away the stored configuration so the provider defaults apply again
+     * and every custom field disappears.
+     */
+    private function resetFormFields(int $id, ?int $adminId): void
+    {
+        $service = $id > 0 ? $this->services->findServiceById($id) : null;
+        if ($service === null) {
+            $this->session->set('flash_error', 'সার্ভিসটি পাওয়া যায়নি।');
             return;
         }
 
-        $config = [];
-        foreach ($enabled as $name) {
-            $config[] = ['name' => $name, 'required' => in_array($name, $required, true)];
-        }
-
-        $this->services->updateFormFields($id, $config);
+        $this->services->updateFormFields($id, null);
         $this->logs->create([
             'user_id' => $adminId,
-            'action' => 'admin.service.fields_updated',
-            'description' => "Service '{$service['name']}' form fields updated (" . ($config === [] ? 'none' : implode(', ', array_column($config, 'name'))) . ')',
-            'metadata' => ['service_id' => $id, 'fields' => $config],
+            'action' => 'admin.service.fields_reset',
+            'description' => "Service '{$service['name']}' form fields reset to provider defaults",
+            'metadata' => ['service_id' => $id],
         ]);
-        $this->session->set('flash_success', $config === []
-            ? 'সার্ভিস ফর্ম থেকে সব ফিল্ড সরানো হয়েছে।'
-            : 'ফর্ম ফিল্ড কনফিগারেশন সংরক্ষিত হয়েছে।');
+        $this->session->set('flash_success', 'ফর্ম ফিল্ড কনফিগারেশন ডিফল্টে ফিরিয়ে আনা হয়েছে — সব কাস্টম ফিল্ড মুছে গেছে।');
     }
 
     /**
      * Field rows for the admin UI: every field the service supports, with the
      * currently stored enabled/required state.
      *
-     * @return array<int, array{name: string, label: string, type: string, enabled: bool, required: bool}>
+     * @return array<int, array{name: string, label: string, type: string, enabled: bool, required: bool, custom: bool, placeholder: string, help: string}>
      */
     private function fieldOptions(array $service): array
     {
-        $config = $this->manager->formFieldConfig($service);
-        $state = [];
-        foreach ($config ?? [] as $item) {
-            $state[$item['name']] = $item['required'];
-        }
+        return self::buildFieldOptions(
+            $this->manager->defaultFieldsFor($service),
+            $this->manager->formFieldConfig($service),
+        );
+    }
+
+    /**
+     * Provider fields come first, then the admin-defined ones in the order they
+     * were added. A null config means the provider defaults still apply, so
+     * every one of them is on.
+     *
+     * @param ServiceField[] $defaults
+     * @param array<int, array<string, mixed>>|null $config
+     * @return array<int, array{name: string, label: string, type: string, enabled: bool, required: bool, custom: bool, placeholder: string, help: string}>
+     */
+    public static function buildFieldOptions(array $defaults, ?array $config): array
+    {
         $usingDefaults = $config === null;
 
-        $options = [];
-        foreach ($this->manager->defaultFieldsFor($service) as $field) {
-            $enabled = $usingDefaults || array_key_exists($field->name, $state);
-            $options[] = [
-                'name' => $field->name,
-                'label' => $field->label,
-                'type' => $field->type,
-                'enabled' => $enabled,
-                'required' => $enabled ? ($state[$field->name] ?? $field->required) : false,
+        $state = [];
+        foreach ($config ?? [] as $item) {
+            $state[(string) $item['name']] = [
+                'required' => (bool) $item['required'],
+                'enabled' => (bool) ($item['enabled'] ?? true),
             ];
         }
 
+        $options = [];
+        foreach ($defaults as $field) {
+            $enabled = $usingDefaults || array_key_exists($field->name, $state);
+            $options[] = self::optionRow(
+                $field,
+                $enabled,
+                $state[$field->name]['required'] ?? $field->required,
+                false,
+            );
+        }
+        foreach (self::customFieldsOf($config ?? []) as $field) {
+            $options[] = self::optionRow(
+                $field,
+                $state[$field->name]['enabled'] ?? false,
+                $state[$field->name]['required'] ?? $field->required,
+                true,
+            );
+        }
+
         return $options;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $config
+     * @return ServiceField[]
+     */
+    private static function customFieldsOf(array $config): array
+    {
+        $customs = [];
+        foreach ($config as $item) {
+            $field = ServiceField::fromConfig($item);
+            if ($field !== null) {
+                $customs[] = $field;
+            }
+        }
+
+        return $customs;
+    }
+
+    /**
+     * @param ServiceField[] $fields
+     */
+    private static function findField(array $fields, string $name): ?ServiceField
+    {
+        foreach ($fields as $field) {
+            if ($field->name === $name) {
+                return $field;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{name: string, label: string, type: string, enabled: bool, required: bool, custom: bool, placeholder: string, help: string}
+     */
+    private static function optionRow(ServiceField $field, bool $enabled, bool $required, bool $custom): array
+    {
+        return [
+            'name' => $field->name,
+            'label' => $field->label,
+            'type' => $field->type,
+            'enabled' => $enabled,
+            'required' => $enabled && $required,
+            'custom' => $custom,
+            'placeholder' => $field->placeholder,
+            'help' => $field->help,
+        ];
+    }
+
+    /**
+     * Reads the "নতুন ফিল্ড" repeater rows. A row the admin never touched is
+     * skipped rather than reported as an error, so the spare blank row at the
+     * end of the form costs nothing.
+     *
+     * @return array{0: ServiceField[], 1: string[]}
+     */
+    private static function newCustomFields(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [[], []];
+        }
+
+        $fields = [];
+        $errors = [];
+        foreach ($value as $spec) {
+            if (!is_array($spec)) {
+                continue;
+            }
+            $name = trim((string) ($spec['name'] ?? ''));
+            $label = self::text($spec['label'] ?? null, 120);
+            if ($name === '' && $label === '') {
+                continue;
+            }
+            if (!ServiceField::isValidName($name)) {
+                $errors[] = "নতুন ফিল্ডের নাম '{$name}' সঠিক নয় — ছোট ইংরেজি অক্ষর দিয়ে শুরু, তারপর ছোট অক্ষর/সংখ্যা/আন্ডারস্কোর (যেমন: 'mobile_number')। 'do', 'id', 'csrf' নামগুলো সংরক্ষিত।";
+                continue;
+            }
+            if ($label === '') {
+                $errors[] = "'{$name}' ফিল্ডের লেবেল দিন।";
+                continue;
+            }
+            $fields[] = new ServiceField(
+                $name,
+                $label,
+                ServiceField::normaliseType($spec['type'] ?? null),
+                self::flag($spec['required'] ?? null),
+                self::text($spec['placeholder'] ?? null, 120),
+                self::text($spec['help'] ?? null, 190),
+            );
+        }
+
+        return [$fields, $errors];
+    }
+
+    /**
+     * A keyed sub-form such as `custom_label[<name>]`, read as a plain map.
+     *
+     * @return array<string, mixed>
+     */
+    private static function namedList(array $input, string $key): array
+    {
+        $value = $input[$key] ?? null;
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($value as $name => $item) {
+            $map[(string) $name] = $item;
+        }
+
+        return $map;
+    }
+
+    /**
+     * A trimmed, length-capped plain string. Non-scalars (a nested array posted
+     * under a text input's name) collapse to an empty string rather than
+     * throwing or producing "Array".
+     */
+    private static function text(mixed $value, int $max): string
+    {
+        if (!is_scalar($value)) {
+            return '';
+        }
+
+        return mb_substr(trim((string) $value), 0, $max);
+    }
+
+    /**
+     * Reads a checkbox value, treating the usual off-spellings as "off".
+     */
+    private static function flag(mixed $value): bool
+    {
+        if (!is_scalar($value)) {
+            return false;
+        }
+
+        return !in_array(strtolower(trim((string) $value)), ['', '0', 'off', 'false', 'no'], true);
     }
 
     /**

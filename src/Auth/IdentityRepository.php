@@ -109,6 +109,10 @@ final class IdentityRepository
             'password_hash' => $data['password_hash'],
             'role' => 'user',
             'status' => 'active',
+            // Set by AuthService when the signup carried a valid ?ref= code;
+            // the pending referral row itself is written by ReferralService,
+            // which owns that lifecycle.
+            'referred_by' => $data['referred_by'] ?? null,
         ]);
         $this->logs->create([
             'user_id' => $id,

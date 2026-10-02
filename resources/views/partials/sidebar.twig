@@ -17,7 +17,9 @@
             icon: 'user',
             items: [
                 { label: 'প্রোফাইল', href: '/profile', icon: 'user-circle', match: 'profile' },
+                { label: 'রিচার্জ', href: '/recharge', icon: 'wallet', match: 'recharge' },
                 { label: 'লেনদেন', href: '/transactions', icon: 'receipt', match: 'transactions' },
+                { label: 'রেফারেল', href: '/referrals', icon: 'gift', match: 'referrals' },
                 { label: 'নোটিফিকেশন', href: '/notifications', icon: 'bell', match: 'notifications' },
             ],
         },
@@ -26,14 +28,16 @@
     {% if identity.canAccessAdmin() %}
         {% set groups = groups|merge([{ label: 'অ্যাডমিন', icon: 'shield', items: [
             { label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge', match: 'admin' },
-            { label: 'টপ-আপ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' },
+            { label: 'রিচার্জ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' },
+            { label: 'রেফারেল', href: '/admin/referrals', icon: 'gift', match: 'admin-referrals' },
+            { label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring', match: 'admin-notifications' },
             { label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' },
         ] }]) %}
     {% endif %}
 
     {% for group in groups %}
         <div class="mb-1" x-data="{ open: true }">
-            <button @click="open = !open" class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50" aria-expanded="true">
+            <button @click="open = !open" class="tap-target flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50" aria-expanded="true">
                 <span class="flex items-center gap-2.5">{{ icon(group.icon, 'w-4 h-4 text-primary-600') }} {{ group.label }}</span>
                 <svg class="h-4 w-4 text-neutral-400 transition" :class="open && 'rotate-180'" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-down"></use></svg>
             </button>

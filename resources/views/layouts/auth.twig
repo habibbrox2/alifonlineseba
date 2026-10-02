@@ -3,9 +3,14 @@
 {% block body %}
 <div class="flex min-h-screen flex-col bg-gradient-to-br from-primary-900 via-primary-800 to-primary-600">
     <header class="flex items-center justify-between px-4 py-4 sm:px-8">
-        <a href="/" class="flex items-center gap-2.5 font-bold text-white">
-            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-500 text-sm font-extrabold text-primary-900">TH</span>
-            <span class="text-lg tracking-tight">TH Tools</span>
+        {# Full horizontal lockup instead of the bare mark + text: the wordmark
+           is drawn type, so it stays crisp at any DPI and the login screen
+           reads as the same brand as the app icon. The light variant is
+           required here — the default lockup is near-black green and vanishes
+           on this gradient. #}
+        <a href="/" class="flex items-center" aria-label="Alif Tools — হোম">
+            <img src="/assets/brand/logo-horizontal-light.svg" alt="Alif Tools"
+                 class="h-11 w-auto" width="165" height="44">
         </a>
         {% if site.telegram_url|default('') %}
             <a href="{{ site.telegram_url }}" target="_blank" rel="noopener noreferrer"
@@ -22,7 +27,7 @@
     </main>
 
     <footer class="px-4 py-6 text-center text-xs text-white/50 sm:px-8">
-        &copy; {{ 'now'|date('Y') }} TH Tools (Demo). সকল ডাটা কাল্পনিক।
+        &copy; {{ 'now'|date('Y') }} Alif Group (Demo). সকল ডাটা কাল্পনিক।
     </footer>
 </div>
 

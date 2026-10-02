@@ -1,0 +1,215 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}রিচার্জ #{{ topup.id }} — যাচাই — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    {% include 'components/status-badge.twig' with { status: topup.status } %}
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'রিচার্জ অনুরোধ #' ~ topup.id,
+    description: 'জমার সময়: ' ~ (topup.created_at|bndate) ~
+        (topup.claimed_at
+            ? ' · যাচাই ধরা হয়েছে ' ~ (topup.claimed_at|bndate) ~ (claimer ? ' (' ~ claimer.username ~ ')' : '')
+            : ''),
+    backUrl: '/admin/topups',
+    backLabel: 'রিচার্জ তালিকায় ফিরে যান',
+    actions: headActions,
+} %}
+
+<div class="grid gap-6 lg:grid-cols-2">
+    <!-- Submitted details -->
+    <div class="space-y-6">
+        <section class="card p-6">
+            <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('user-circle', 'w-5 h-5 text-primary-600') }} ইউজার ও বিবরণ
+            </h2>
+
+            <dl class="space-y-3.5">
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">ইউজার</dt>
+                    <dd class="text-right text-sm font-semibold text-neutral-800">
+                        {{ user.username ?? '—' }}
+                        <span class="block text-xs font-normal text-neutral-400">{{ user.phone ?? '' }}</span>
+                    </dd>
+                </div>
+
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">পরিমাণ</dt>
+                    <dd class="text-right text-lg font-extrabold text-primary-700">{{ topup.amount|money }}</dd>
+                </div>
+
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">মেথড</dt>
+                    <dd class="text-right text-sm font-semibold text-neutral-800">{{ method }}</dd>
+                </div>
+
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">সেন্ডার ওয়ালেট</dt>
+                    <dd class="text-right text-sm font-semibold text-neutral-800">
+                        {{ topup.sender_number ?? '—' }}
+                        {% if topup.sender_name %}
+                            <span class="block text-xs font-normal text-neutral-400">{{ topup.sender_name }}</span>
+                        {% endif %}
+                    </dd>
+                </div>
+
+                {# The two fields that must be read off the receipt and matched. #}
+                <div class="rounded-lg bg-primary-50 px-3.5 py-3">
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-primary-600">লেনদেন আইডি (TrxID)</dt>
+                    <dd class="mt-1 select-all font-mono text-lg font-bold tracking-wider text-primary-900">
+                        {{ topup.reference ?? '—' }}
+                    </dd>
+                </div>
+
+                {% if topup.note %}
+                    <div>
+                        <dt class="text-sm text-neutral-500">ইউজারের নোট</dt>
+                        <dd class="mt-1 rounded-lg bg-neutral-50 px-3 py-2 text-sm text-neutral-700">{{ topup.note }}</dd>
+                    </div>
+                {% endif %}
+            </dl>
+        </section>
+
+        {% if topup.status == 'review' %}
+            {# In progress, not decided — shown above the receipt so the next admin
+               knows who has it before duplicating the work. #}
+            <section class="card border-l-4 border-l-info-500 p-6">
+                <h2 class="mb-2 flex items-center gap-2 text-base font-bold text-neutral-800">
+                    {{ icon('eye', 'w-4 h-4 text-info-600') }} যাচাই চলছে
+                </h2>
+                <p class="text-sm text-neutral-600">
+                    {% if isClaimedByMe %}
+                        আপনিই এই অনুরোধটি ধরেছেন — নিচের ফর্ম থেকে সিদ্ধান্ত দিন।
+                    {% elseif claimer %}
+                        <span class="font-semibold">{{ claimer.username }}</span> এই অনুরোধটি ধরে আছেন
+                        ({{ topup.claimed_at|bndate }})। দ্বিতীয়বার যাচাই না করে নিচে “ফেরত পাঠান” চাপলে অন্য কেউ নিতে পারবেন।
+                    {% else %}
+                        কেউ এই অনুরোধটি ধরে আছেন।
+                    {% endif %}
+                </p>
+                {% if not isClaimedByMe %}
+                    <form method="post" action="/admin/recharges/{{ topup.id }}" class="mt-3">
+                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                        <button type="submit" name="do" value="release" class="btn btn-ghost btn-sm">
+                            {{ icon('arrow-left', 'w-3.5 h-3.5') }} তালিকায় ফেরত পাঠান
+                        </button>
+                    </form>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        {% if topup.status in ['approved', 'rejected'] %}
+            <section class="card p-6">
+                <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+                    {{ icon('file-check', 'w-4 h-4 text-neutral-500') }} রিভিউ ফলাফল
+                </h2>
+                <dl class="space-y-3 text-sm">
+                    <div class="flex justify-between gap-4">
+                        <dt class="text-neutral-500">রিভিউ করেছেন</dt>
+                        <dd class="font-semibold text-neutral-800">{{ reviewer.username ?? '—' }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-4">
+                        <dt class="text-neutral-500">সময়</dt>
+                        <dd class="text-neutral-700">{{ topup.reviewed_at|bndate }}</dd>
+                    </div>
+                    {% if topup.transaction_id %}
+                        <div class="flex justify-between gap-4">
+                            <dt class="text-neutral-500">ট্রানজেকশন</dt>
+                            <dd class="font-mono text-xs text-neutral-700">#{{ topup.transaction_id }}</dd>
+                        </div>
+                    {% endif %}
+                    {% if topup.reject_reason %}
+                        <div>
+                            <dt class="text-neutral-500">বাতিলের কারণ (ইউজার দেখেছেন)</dt>
+                            <dd class="mt-1 rounded-lg bg-danger-50 px-3 py-2 text-danger-700">{{ topup.reject_reason }}</dd>
+                        </div>
+                    {% endif %}
+                </dl>
+            </section>
+        {% endif %}
+    </div>
+
+    <!-- Receipt + decision -->
+    <div class="space-y-6">
+        <section class="card p-6">
+            <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('receipt', 'w-5 h-5 text-primary-600') }} পেমেন্ট রশিদ
+            </h2>
+
+            {% if not topup.receipt_path %}
+                <p class="rounded-lg bg-warning-50 px-3.5 py-3 text-sm text-warning-800">
+                    এই অনুরোধে কোনো রশিদ আপলোড করা হয়নি। TrxID ও পরিমাণ অন্যভাবে যাচাই করতে হবে।
+                </p>
+            {% elseif not hasReceipt %}
+                <p class="rounded-lg bg-danger-50 px-3.5 py-3 text-sm text-danger-700">
+                    রশিদ ফাইলটি সার্ভারে পাওয়া যাচ্ছে না — এটি আলাদা করে ইউজারের কাছ থেকে নিতে হবে।
+                </p>
+            {% elseif isImage %}
+                {# Click to open full size — the thumbnail is deliberately not zoomable. #}
+                <a href="/recharge/receipt/{{ topup.id }}" target="_blank" rel="noopener" class="block">
+                    <img src="/recharge/receipt/{{ topup.id }}" alt="পেমেন্ট রশিদ"
+                         class="w-full rounded-xl border border-neutral-200 object-contain" loading="lazy">
+                </a>
+                <p class="mt-2.5 text-center text-xs text-neutral-400">বড় করে দেখতে ছবিতে ক্লিক করুন</p>
+                <p class="mt-1 text-center text-[11px] text-neutral-300">
+                    {{ icon('shield', 'w-3 h-3 inline') }} ছবিটিতে অ্যাডমিন কপির ওয়াটারমার্ক আছে — আপলোড করা আসল ফাইল অক্ষত থাকে
+                </p>
+            {% else %}
+                <div class="rounded-xl border border-neutral-200 bg-neutral-50 p-6 text-center">
+                    <p class="text-sm text-neutral-600">PDF রশিদ</p>
+                    <a href="/recharge/receipt/{{ topup.id }}" class="btn btn-primary btn-sm mt-3" target="_blank" rel="noopener">
+                        {{ icon('arrow-down', 'w-4 h-4') }} ডাউনলোড করে দেখুন
+                    </a>
+                </div>
+            {% endif %}
+
+            {% if topup.receipt_name %}
+                <p class="mt-3 truncate text-xs text-neutral-400">
+                    {{ topup.receipt_name }}{% if receiptSize %} · {{ receiptSize }}{% endif %}
+                </p>
+            {% endif %}
+        </section>
+
+        {# Both open states reach this form: the GET above has already claimed a
+           pending request, so an admin only ever sees the decision box for work
+           that is genuinely theirs to decide. #}
+        {% if topup.status in ['pending', 'review'] %}
+            <section class="card p-6">
+                <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('shield-check', 'w-5 h-5 text-primary-600') }} সিদ্ধান্ত
+                </h2>
+
+                <form method="post" action="/admin/recharges/{{ topup.id }}" class="space-y-4">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                    <div>
+                        <label for="ar_note" class="form-label">অ্যাডমিন নোট (শুধু আপনার জন্য)</label>
+                        <textarea id="ar_note" name="admin_note" rows="2" class="form-input" maxlength="500"
+                                  placeholder="যেমন: bKash ড্যাশবোর্ডে TrxID মিলেছে">{{ topup.admin_note ?? '' }}</textarea>
+                    </div>
+
+                    <div>
+                        <label for="ar_reason" class="form-label">
+                            বাতিলের কারণ <span class="text-danger-600">*</span>
+                        </label>
+                        <textarea id="ar_reason" name="reason" rows="2" class="form-input" maxlength="500"
+                                  placeholder="যেমন: রশিদে পরিমাণ ৫০০ দেখাচ্ছে, অনুরোধে ১০০০ দেওয়া আছে"></textarea>
+                        <p class="form-help">ইউজার এই কারণটি দেখতে পাবেন — তাই স্পষ্ট লিখুন।</p>
+                    </div>
+
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <button type="submit" name="do" value="approve" class="btn btn-primary flex-1"
+                                onclick="return confirm('অনুরোধটি অনুমোদন করে {{ topup.amount|money }} ব্যালেন্সে যোগ করবেন?');">
+                            {{ icon('check', 'w-4 h-4') }} অনুমোদন করুন
+                        </button>
+                        <button type="submit" name="do" value="reject" class="btn btn-ghost flex-1 text-danger-600">
+                            {{ icon('alert-circle', 'w-4 h-4') }} বাতিল করুন
+                        </button>
+                    </div>
+                </form>
+            </section>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

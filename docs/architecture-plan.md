@@ -7,7 +7,7 @@ Target: shared hosting — compiled static assets, file cache, file session, no 
 ## 1. Directory layout (within the Yii app)
 
 ```
-th-tools/
+alif-tools/
 ├── composer.json
 ├── .env / .env.example           # never commit .env
 ├── config/
@@ -46,7 +46,7 @@ th-tools/
 ```
 
 Note: shared hosting maps the docroot to `public_html/`. For local XAMPP dev the app lives at
-`C:\xampp\htdocs\th-tools` with `public/` used as docroot by `php yii serve`; deployment uses
+`C:\xampp\htdocs\alif-tools` with `public/` used as docroot by `php yii serve`; deployment uses
 `public_html/` (we build in `public/` and rename on deploy, or symlink; see deployment doc).
 
 ## 2. Database plan

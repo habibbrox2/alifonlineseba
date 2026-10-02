@@ -8,7 +8,7 @@ use App\Auth\Identity;
 use App\Repository\TransactionRepository;
 use App\Service\Api;
 use App\Service\ServiceManager;
-use App\Service\StatusPresenter;
+use App\Service\RequestRowPresenter;
 use App\ServiceProvider\ServiceResult;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -27,6 +27,7 @@ final readonly class ServiceRequestApiAction
     public function __construct(
         private ServiceManager $manager,
         private TransactionRepository $transactions,
+        private RequestRowPresenter $presenter,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
@@ -73,26 +74,16 @@ final readonly class ServiceRequestApiAction
      * The row as the client needs it: new status, its Bengali label, the badge
      * class, the buttons valid from here on, plus the result when it completed.
      *
+     * Delegated to the shared presenter and then extended, rather than rebuilt.
+     * This endpoint and the poller answer the same Alpine component with the same
+     * row; if they each assembled their own copy, an action button could appear
+     * after a user-initiated change but not after an admin-initiated one.
+     *
      * @return array<string, mixed>
      */
     private function present(array $row, ServiceResult $result): array
     {
-        $metadata = TransactionRepository::metadata($row);
-        $status = (string) $row['status'];
-
-        return [
-            'id' => (int) $row['id'],
-            'reference' => (string) $row['reference'],
-            'status' => $status,
-            'status_label' => StatusPresenter::label($status),
-            'status_badge' => StatusPresenter::badge($status),
-            'actions' => StatusPresenter::requestActions($status),
-            'updated_at' => (string) $row['updated_at'],
-            'result' => is_array($metadata['result'] ?? null) ? $metadata['result'] : null,
-            'result_entries' => StatusPresenter::resultEntries(
-                is_array($metadata['result'] ?? null) ? $metadata['result'] : null
-            ),
-            'error' => isset($metadata['error']) ? (string) $metadata['error'] : null,
+        return $this->presenter->present($row) + [
             'provider_data' => $result->success ? array_filter(
                 $result->data,
                 static fn ($value, $key): bool => !str_starts_with((string) $key, '_'),

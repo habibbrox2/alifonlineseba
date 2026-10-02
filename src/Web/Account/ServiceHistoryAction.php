@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Web\Account;
 
 use App\Auth\Identity;
+use App\Repository\ServiceRepository;
 use App\Repository\TransactionRepository;
+use App\Service\RequestRowPresenter;
 use App\Service\StatusPresenter;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -23,6 +25,8 @@ final readonly class ServiceHistoryAction
     public function __construct(
         private WebViewRenderer $view,
         private TransactionRepository $transactions,
+        private ServiceRepository $services,
+        private RequestRowPresenter $presenter,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
@@ -36,14 +40,32 @@ final readonly class ServiceHistoryAction
             $status = '';
         }
 
-        $data = $this->transactions->forUser($identity->id, $page, self::PER_PAGE, $status);
+        // Order-type chip (ফুল NID / লোকেশন / …) — a service-category slug.
+        $category = (string) ($request->getQueryParams()['type'] ?? '');
+
+        if ($category !== '') {
+            $data = $this->transactions->forUserByCategory($identity->id, $page, self::PER_PAGE, $category);
+            // An unknown slug returns 0 rows; that is the correct empty state,
+            // same as a status filter that matches nothing.
+        } else {
+            $data = $this->transactions->forUser($identity->id, $page, self::PER_PAGE, $status);
+        }
+
+        $rows = $this->present($data['rows']);
 
         return $this->view->render('site/account/service-history.twig', [
-            'requests' => $this->decorate($data['rows']),
+            'requests' => $rows,
+            // The ids the poller asks about. Seeded server-side rather than read
+            // back out of the DOM so the client never has to scrape the table to
+            // find out what it is supposed to be watching.
+            'watchIds' => array_column($rows, 'id'),
             'total' => $data['total'],
             'page' => $page,
             'perPage' => self::PER_PAGE,
             'status' => $status,
+            'category' => $category,
+            'categories' => $this->services->allCategories(),
+            'categoryCounts' => $this->transactions->categoryCounts($identity->id),
             'counts' => $this->counts($identity->id),
             'identity' => $identity,
         ]);
@@ -51,38 +73,19 @@ final readonly class ServiceHistoryAction
 
     /**
      * Attach the presentation data each row needs so the template stays dumb and
-     * the JSON API can reuse the exact same payload after an AJAX status change.
+     * the poller reuses the exact same payload when a row changes underneath it.
      *
      * @param array<int, array<string, mixed>> $rows
      * @return array<int, array<string, mixed>>
      */
-    private function decorate(array $rows): array
+    private function present(array $rows): array
     {
-        $decorated = [];
+        $presented = [];
         foreach ($rows as $row) {
-            $metadata = TransactionRepository::metadata($row);
-            $status = (string) $row['status'];
-
-            $decorated[] = [
-                'id' => (int) $row['id'],
-                'reference' => (string) $row['reference'],
-                'service_name' => (string) ($row['service_name'] ?? ($metadata['service_name'] ?? 'সার্ভিস')),
-                'amount' => (float) $row['amount'],
-                'status' => $status,
-                'status_label' => StatusPresenter::label($status),
-                'status_badge' => StatusPresenter::badge($status),
-                'actions' => StatusPresenter::requestActions($status),
-                'created_at' => (string) $row['created_at'],
-                'updated_at' => (string) $row['updated_at'],
-                'result' => is_array($metadata['result'] ?? null) ? $metadata['result'] : null,
-                'result_entries' => StatusPresenter::resultEntries(
-                    is_array($metadata['result'] ?? null) ? $metadata['result'] : null
-                ),
-                'error' => isset($metadata['error']) ? (string) $metadata['error'] : null,
-            ];
+            $presented[] = $this->presenter->present($row);
         }
 
-        return $decorated;
+        return $presented;
     }
 
     /**

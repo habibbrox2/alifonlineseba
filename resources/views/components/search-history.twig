@@ -1,0 +1,55 @@
+{# Recent searches panel — the last few queries the user ran, each re-runnable. #}
+{# A "search" is a service request: the dashboard links back to the service   #}
+{# form with the previous value prefilled, so re-running is one click.        #}
+{# @var searches array<int, {id, reference, service_name, service_slug, field, value, status, created_at}> #}
+
+<section class="mt-6" aria-labelledby="search-history-heading">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 id="search-history-heading" class="text-lg font-extrabold text-neutral-900">
+            {{ icon('history', 'w-5 h-5 inline-block align-text-bottom mr-1') }} সাম্প্রতিক সার্চ
+        </h2>
+        {% if searches|length > 0 %}
+            <a href="/service-history" class="text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline">
+                সব দেখুন →
+            </a>
+        {% endif %}
+    </div>
+
+    {% if searches is empty %}
+        {# Empty state lives outside any table: a <table> with no rows collapses #}
+        {# to a sliver and the border still paints, which looks broken.          #}
+        <div class="card px-5 py-8 text-center">
+            <span class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('search', 'w-5 h-5') }}
+            </span>
+            <p class="mt-3 text-sm font-semibold text-neutral-700">এখনো কোনো সার্চ করেননি</p>
+            <p class="mt-1 text-sm text-neutral-500">
+                উপরের সার্ভিস হাব থেকে যেকোনো সার্ভিস সিলেক্ট করে সার্চ করলে সেটি এখানে দেখা যাবে।
+            </p>
+        </div>
+    {% else %}
+        <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {% for s in searches %}
+                {% set rerun = '/services/view/' ~ s.service_slug ~ '?' ~ s.field ~ '=' ~ s.value|url_encode %}
+                <li class="card card-hover flex flex-col gap-3 p-4">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <p class="truncate text-sm font-bold text-neutral-800">{{ s.service_name }}</p>
+                            <p class="mt-0.5 truncate font-mono text-sm text-neutral-600" title="{{ s.field }}: {{ s.value }}">
+                                {{ s.value }}
+                            </p>
+                        </div>
+                        {{ s.status|statusbadge }}
+                    </div>
+
+                    <div class="mt-auto flex items-center justify-between gap-2">
+                        <time class="text-xs text-neutral-500" datetime="{{ s.created_at }}">{{ s.created_at|bndate }}</time>
+                        <a href="{{ rerun }}" class="btn btn-sm btn-ghost shrink-0">
+                            {{ icon('rotate-ccw', 'w-4 h-4') }} আবার চালান
+                        </a>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</section>

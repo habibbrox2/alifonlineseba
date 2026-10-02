@@ -20,7 +20,7 @@ return [
                 // The Secure flag is decided per request by SecureCookieSession, because
                 // the loopback origin is plain HTTP while the tunnel terminates HTTPS.
                 'cookie_secure' => '0',
-                'name' => (string) Env::get('SESSION_NAME', 'TH_SESSION'),
+                'name' => (string) Env::get('SESSION_NAME', 'ALIF_SESSION'),
                 'use_strict_mode' => '1',
             ],
             null,

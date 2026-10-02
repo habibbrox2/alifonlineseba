@@ -13,10 +13,15 @@
 {% set fvIcon = fv.icon|default(editService.icon|default('zap')) %}
 {% set fvBadge = fv.badge|default(editService.badge|default('')) %}
 {% set fvDescription = fv.description|default(editService.description|default('')) %}
+{% set fvRules = fv.rules|default(editService.rules|default('')) %}
+{% set fvVariants = fv.variants|default([]) %}
 {% set fvStatus = fv.status|default(editService.status|default('active')) %}
 {% set fvSortOrder = fv.sort_order|default(editService.sort_order|default(0)) %}
 
-<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">সার্ভিস ম্যানেজমেন্ট</h1>
+{% include 'components/page-header.twig' with {
+    title: 'সার্ভিস ম্যানেজমেন্ট',
+    description: 'নতুন সার্ভিস যোগ করুন, ফিল্ড ও ভ্যারিয়েন্ট কনফিগার করুন, পুরোনো সার্ভিস নিষ্ক্রিয় করুন',
+} %}
 
 <div class="grid gap-6 lg:grid-cols-3">
     <!-- Create / Edit form -->
@@ -72,6 +77,30 @@
                 <label for="description" class="form-label">বর্ণনা</label>
                 <textarea id="description" name="description" rows="2" class="form-input">{{ fvDescription }}</textarea>
             </div>
+            <div>
+                <label for="rules" class="form-label">অর্ডারের নিয়মাবলি (প্রতি লাইন একটি নিয়ম)</label>
+                <textarea id="rules" name="rules" rows="3" class="form-input" placeholder="যেমন: সঠিক নম্বর দিন — ভুল হলে টাকা ফেরতযোগ্য নয়">{{ fvRules }}</textarea>
+                <p class="form-help">অর্ডার পেজে "নিয়মাবলি" কার্ড হিসেবে দেখানো হবে — প্রতিটি নতুন লাইন আলাদা বুলেট।</p>
+            </div>
+            {% set fvVariantsJson = fvVariants|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT')) %}
+            <div x-data='{ rows: {{ fvVariantsJson }} }'>
+                <label class="form-label">ভ্যারিয়েন্ট (ঐচ্ছিক)</label>
+                <p class="form-help mb-2">ভিন্ন মূল্যের অপশন — যেমন "অরিজিনাল কপি" বনাম "স্মার্ট কার্ড কপি"। লেবেল ফাঁকা রাখলে সেই সারি বাদ যাবে; সব ফাঁকা হলে ভ্যারিয়েন্ট সিলেক্টর দেখাবে না।</p>
+                <div class="space-y-2">
+                    <template x-for="(row, index) in rows" :key="index">
+                        <div class="flex items-center gap-2">
+                            <input type="text" name="variant_label[]" class="form-input" placeholder="ভ্যারিয়েন্ট লেবেল (যেমন: স্মার্ট কার্ড কপি)" x-model="row.label" maxlength="120">
+                            <input type="number" step="0.01" min="0" name="variant_price[]" class="form-input w-32" placeholder="মূল্য" x-model="row.price">
+                            <button type="button" class="btn btn-ghost btn-sm text-danger-600" @click="rows.splice(index, 1)" aria-label="সারি মুছুন">
+                                {{ icon('trash-2', 'w-4 h-4') }}
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm mt-2" @click="rows.push({ label: '', price: '' })">
+                    {{ icon('plus', 'w-4 h-4') }} ভ্যারিয়েন্ট যোগ করুন
+                </button>
+            </div>
             {% if isEdit %}
                 <div>
                     <label for="status" class="form-label">স্ট্যাটাস</label>
@@ -97,33 +126,187 @@
                     {{ icon('settings', 'w-5 h-5 text-primary-600') }} ফর্ম ফিল্ড কনফিগারেশন
                 </h2>
                 <p class="mb-4 text-xs text-neutral-500">
-                    ইউজার ফর্মে কোন ফিল্ড দেখাবে এবং কোনগুলো আবশ্যক, তা এখান থেকে ঠিক করুন।
+                    ইউজার ফর্মে কোন ফিল্ড দেখাবে, কোনগুলো আবশ্যক, এবং চাইলে নিজে নতুন ফিল্ড যোগ বা বাতিল করুন।
                 </p>
-                {% if fieldOptions|default([]) is empty %}
-                    <p class="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
-                        এই সার্ভিসের জন্য কোনো ফর্ম ফিল্ড নেই।
+                <p class="mb-4 rounded-lg bg-neutral-50 px-3 py-2 text-[11px] text-neutral-500">
+                    টিক তুলে বন্ধ করলে ফিল্ডটি ইউজার ফর্মে আর দেখাবে না, কিন্তু সেটিং মুছে যাবে না — পরে আবার চালু করা যাবে। স্থায়ীভাবে মুছতে নিচের
+                    <strong>এই কাস্টম ফিল্ডটি স্থায়ীভাবে মুছে ফেলুন</strong> ব্যবহার করুন।
+                </p>
+                {% if not usingFieldDefaults|default(true) %}
+                    <p class="mb-4 rounded-lg bg-info-50 px-3 py-2 text-xs text-info-700">
+                        এই সার্ভিসে সাধারণ ডিফল্ট ছাড়াই ফর্ম ফিল্ড কনফিগার করা আছে।
                     </p>
-                {% else %}
-                    <form method="post" action="/admin/services" class="space-y-3">
-                        <input type="hidden" name="_csrf" value="{{ csrf }}">
-                        <input type="hidden" name="do" value="fields">
-                        <input type="hidden" name="id" value="{{ editService.id }}">
-                        {% for option in fieldOptions|default([]) %}
+                {% endif %}
+                <form method="post" action="/admin/services" class="space-y-3">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+                    <input type="hidden" name="do" value="fields">
+                    <input type="hidden" name="id" value="{{ editService.id }}">
+
+                    {% if fieldOptions|default([]) is empty %}
+                        <p class="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+                            এই সার্ভিসের জন্য কোনো ডিফল্ট ফর্ম ফিল্ড নেই — নিচে নিজে যোগ করতে পারেন।
+                        </p>
+                    {% endif %}
+
+                    {# ---- বর্তমান ফিল্ডগুলো ---- #}
+                    {% for option in fieldOptions|default([]) %}
+                        {% if option.custom %}
+                            <div x-data="{ drop: false }" class="rounded-lg border p-4"
+                                 :class="drop ? 'border-danger-300 bg-danger-50/40' : 'border-primary-200 bg-primary-50/30'">
+                                <label class="flex flex-wrap items-center gap-2 text-sm font-medium text-neutral-800">
+                                    <input type="checkbox" name="fields[]" value="{{ option.name }}" class="rounded border-neutral-300" {% if option.enabled %}checked{% endif %}>
+                                    {{ icon('sparkles', 'w-4 h-4 text-primary-600') }}
+                                    {{ option.label }}
+                                    <code class="text-xs text-neutral-400">{{ option.name }}</code>
+                                    <span class="text-xs text-neutral-400">({{ option.type }})</span>
+                                    <span class="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold text-primary-700">কাস্টম</span>
+                                </label>
+                                <fieldset class="mt-3 space-y-2 pl-6" :disabled="drop">
+                                    <div class="grid gap-3">
+                                        <div>
+                                            <label class="form-label" for="cl-{{ option.name }}">লেবেল</label>
+                                            <input id="cl-{{ option.name }}" type="text" name="custom_label[{{ option.name }}]" class="form-input" maxlength="120" value="{{ option.label }}">
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="ct-{{ option.name }}">টাইপ</label>
+                                            <select id="ct-{{ option.name }}" name="custom_type[{{ option.name }}]" class="form-input">
+                                                {% for type in fieldTypes|default(['text']) %}
+                                                    <option value="{{ type }}" {% if option.type == type %}selected{% endif %}>{{ type }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="cp-{{ option.name }}">প্লেসহোল্ডার</label>
+                                            <input id="cp-{{ option.name }}" type="text" name="custom_placeholder[{{ option.name }}]" class="form-input" maxlength="120" value="{{ option.placeholder }}">
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="ch-{{ option.name }}">সহায়ক লেখা</label>
+                                            <input id="ch-{{ option.name }}" type="text" name="custom_help[{{ option.name }}]" class="form-input" maxlength="190" value="{{ option.help }}">
+                                        </div>
+                                    </div>
+                                    <label class="flex items-center gap-2 text-xs text-neutral-500">
+                                        <input type="checkbox" name="required_fields[]" value="{{ option.name }}" class="rounded border-neutral-300" {% if option.required %}checked{% endif %}>
+                                        এটি আবশ্যক
+                                    </label>
+                                </fieldset>
+                                <label class="mt-3 flex items-center gap-2 border-t border-dashed border-neutral-200 pt-3 text-xs text-danger-600">
+                                    <input type="checkbox" name="remove_custom[]" value="{{ option.name }}" class="rounded border-neutral-300" x-model="drop">
+                                    এই কাস্টম ফিল্ডটি স্থায়ীভাবে মুছে ফেলুন
+                                </label>
+                            </div>
+                        {% else %}
                             <div class="rounded-lg border border-neutral-200 p-4">
-                                <label class="flex items-center gap-2 text-sm font-medium text-neutral-800">
+                                <label class="flex flex-wrap items-center gap-2 text-sm font-medium text-neutral-800">
                                     <input type="checkbox" name="fields[]" value="{{ option.name }}" class="rounded border-neutral-300" {% if option.enabled %}checked{% endif %}>
                                     {{ option.label }}
                                     <code class="text-xs text-neutral-400">{{ option.name }}</code>
                                     <span class="text-xs text-neutral-400">({{ option.type }})</span>
                                 </label>
-                                <label class="mt-2 flex items-center gap-2 pl-6 text-xs text-neutral-500">
+                                <label class="mt-2 flex flex-wrap items-center gap-2 pl-6 text-xs text-neutral-500">
                                     <input type="checkbox" name="required_fields[]" value="{{ option.name }}" class="rounded border-neutral-300" {% if option.required and option.enabled %}checked{% endif %}>
                                     এটি আবশ্যক
                                 </label>
                             </div>
-                        {% endfor %}
-                        <button type="submit" class="btn btn-ghost btn-block">
-                            {{ icon('save', 'w-4 h-4') }} ফর্ম ফিল্ড সংরক্ষণ করুন
+                        {% endif %}
+                    {% endfor %}
+
+                    {# ---- নতুন ফিল্ড যোগ করা ---- #}
+                    <div class="rounded-lg border border-dashed border-neutral-300 bg-neutral-50/60 p-4">
+                        <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-neutral-800">
+                            {{ icon('plus', 'w-4 h-4 text-primary-600') }} নতুন ফিল্ড যোগ করুন
+                        </h3>
+                        {# The first row is plain HTML so adding a field still works without JavaScript;
+                           the Alpine template below appends further rows. #}
+                        <div x-data="{ rows: [] }" class="space-y-3">
+                            {% set row = 0 %}
+                                <div class="space-y-2 rounded-lg border border-neutral-200 bg-white p-3">
+                                    <div class="grid gap-3">
+                                        <div>
+                                            <label class="form-label" for="new-name-{{ row }}">নাম (ইংরেজি) <span class="text-danger-600">*</span></label>
+                                            <input id="new-name-{{ row }}" type="text" name="custom_new[{{ row }}][name]" class="form-input" maxlength="32" placeholder="mobile_number">
+                                            <p class="form-help">ছোট ইংরেজি অক্ষর দিয়ে শুরু, তারপর ছোট অক্ষর/সংখ্যা/আন্ডারস্কোর। 'do', 'id', 'csrf' নামগুলো সংরক্ষিত।</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="new-label-{{ row }}">লেবেল <span class="text-danger-600">*</span></label>
+                                            <input id="new-label-{{ row }}" type="text" name="custom_new[{{ row }}][label]" class="form-input" maxlength="120" placeholder="মোবাইল নম্বর">
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="new-type-{{ row }}">টাইপ</label>
+                                            <select id="new-type-{{ row }}" name="custom_new[{{ row }}][type]" class="form-input">
+                                                {% for type in fieldTypes|default(['text']) %}
+                                                    <option value="{{ type }}">{{ type }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="new-ph-{{ row }}">প্লেসহোল্ডার</label>
+                                            <input id="new-ph-{{ row }}" type="text" name="custom_new[{{ row }}][placeholder]" class="form-input" maxlength="120" placeholder="যেমন: 01XXXXXXXXX">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="form-label" for="new-help-{{ row }}">সহায়ক লেখা</label>
+                                        <input id="new-help-{{ row }}" type="text" name="custom_new[{{ row }}][help]" class="form-input" maxlength="190" placeholder="ইউজারকে কী লিখতে হবে সেটা ছোট করে লিখুন">
+                                    </div>
+                                    <label class="flex items-center gap-2 text-xs text-neutral-500">
+                                        <input type="checkbox" name="custom_new[{{ row }}][required]" value="1" class="rounded border-neutral-300" checked>
+                                        এটি আবশ্যক
+                                    </label>
+                                </div>
+
+                            <template x-for="(row, i) in rows" :key="i">
+                                <div class="space-y-2 rounded-lg border border-neutral-200 bg-white p-3">
+                                    <div class="grid gap-3">
+                                        <div>
+                                            <label class="form-label">নাম (ইংরেজি) <span class="text-danger-600">*</span></label>
+                                            <input type="text" class="form-input" maxlength="32" placeholder="mobile_number" :name="'custom_new[' + (i + 1) + '][name]'">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">লেবেল <span class="text-danger-600">*</span></label>
+                                            <input type="text" class="form-input" maxlength="120" placeholder="মোবাইল নম্বর" :name="'custom_new[' + (i + 1) + '][label]'">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">টাইপ</label>
+                                            <select class="form-input" :name="'custom_new[' + (i + 1) + '][type]'">
+                                                {% for type in fieldTypes|default(['text']) %}
+                                                    <option value="{{ type }}">{{ type }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">প্লেসহোল্ডার</label>
+                                            <input type="text" class="form-input" maxlength="120" :name="'custom_new[' + (i + 1) + '][placeholder]'">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">সহায়ক লেখা</label>
+                                        <input type="text" class="form-input" maxlength="190" :name="'custom_new[' + (i + 1) + '][help]'">
+                                    </div>
+                                    <label class="flex items-center gap-2 text-xs text-neutral-500">
+                                        <input type="checkbox" value="1" class="rounded border-neutral-300" checked :name="'custom_new[' + (i + 1) + '][required]'">
+                                        এটি আবশ্যক
+                                    </label>
+                                </div>
+                            </template>
+
+                            <button type="button" @click="rows.push({})" class="btn btn-sm btn-ghost">
+                                {{ icon('plus', 'w-4 h-4') }} আরেকটি ফিল্ড যোগ করুন
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-ghost btn-block">
+                        {{ icon('save', 'w-4 h-4') }} ফর্ম ফিল্ড সংরক্ষণ করুন
+                    </button>
+                </form>
+
+                {% if not usingFieldDefaults|default(true) %}
+                    <form method="post" action="/admin/services" class="mt-3"
+                          onsubmit="return confirm('সব ফর্ম ফিল্ড কনফিগারেশন ডিফল্টে ফেরাবেন? সব কাস্টম ফিল্ড মুছে যাবে।')">
+                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                        <input type="hidden" name="do" value="fields_reset">
+                        <input type="hidden" name="id" value="{{ editService.id }}">
+                        <button type="submit" class="btn btn-sm btn-ghost btn-block">
+                            {{ icon('history', 'w-4 h-4') }} ডিফল্টে ফিরিয়ে আনুন
                         </button>
                     </form>
                 {% endif %}
@@ -135,8 +318,8 @@
         {% endif %}
     </section>
 
-    <!-- List -->
-    <section class="lg:col-span-2">
+    <!-- List. min-w-0 keeps the 640px table from stretching the grid track on phones. -->
+    <section class="min-w-0 lg:col-span-2">
         <div class="card overflow-hidden">
             {% if trashedCount|default(0) > 0 %}
                 {# Trash bar: soft-deleted services stay here until restored or purged. #}
@@ -154,6 +337,16 @@
                     </form>
                 </div>
             {% endif %}
+            {# Empty state lives outside the <table>: .table-base carries a 640px
+               min-width, so a centred message inside it would sit off-screen on a phone. #}
+            {% if services is empty %}
+                <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                    <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                        {{ icon('inbox', 'w-6 h-6') }}
+                    </span>
+                    <p class="text-sm text-neutral-500">কোনো সার্ভিস নেই।</p>
+                </div>
+            {% else %}
             <div class="overflow-x-auto">
                 <table class="table-base">
                     <thead>
@@ -221,12 +414,11 @@
                                     </div>
                                 </td>
                             </tr>
-                        {% else %}
-                            <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো সার্ভিস নেই।</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            {% endif %}
         </div>
     </section>
 </div>

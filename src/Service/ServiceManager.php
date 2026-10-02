@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Auth\Identity;
+use App\Notification\NotificationEvent;
+use App\Notification\NotificationManager;
 use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceRepository;
@@ -31,6 +33,7 @@ final class ServiceManager
         private readonly UserRepository $users,
         private readonly ActivityLogRepository $logs,
         private readonly NotificationRepository $notifications,
+        private readonly NotificationManager $notify,
     ) {
         $mocks = [new MockNidService(), new MockVoterService(), new MockTinService()];
         $this->providers = [];
@@ -70,6 +73,16 @@ final class ServiceManager
      * Effective form fields for a service: the provider defaults, narrowed and
      * re-flagged by the admin-configured `form_fields` list when one is stored.
      *
+     * A configured entry that matches no provider default is kept as a custom
+     * field, provided it carries its own label — that label is what makes an
+     * entry a definition rather than a stale name, and it is why an entry like
+     * `{"name":"nope"}` is still discarded.
+     *
+     * Presence in the list means "shown" for a provider field, but a custom
+     * field carries an explicit `enabled` flag: its definition has to survive
+     * being switched off, otherwise unticking it would silently destroy it and
+     * the admin could never bring it back.
+     *
      * @return ServiceField[]
      */
     public function fieldsFor(array $service): array
@@ -87,9 +100,13 @@ final class ServiceManager
 
         $fields = [];
         foreach ($config as $item) {
-            $name = (string) ($item['name'] ?? '');
+            $name = is_array($item) ? (string) ($item['name'] ?? '') : '';
             $definition = $byName[$name] ?? null;
             if ($definition === null) {
+                $custom = ServiceField::fromConfig($item);
+                if ($custom !== null && self::isEntryEnabled($item)) {
+                    $fields[] = $custom;
+                }
                 continue;
             }
             $fields[] = new ServiceField(
@@ -109,7 +126,10 @@ final class ServiceManager
      * Form field configuration as stored, normalised against the known fields.
      * Returns null when nothing is stored, i.e. provider defaults apply.
      *
-     * @return array<int, array{name: string, required: bool}>|null
+     * Provider fields come back as `{name, required}`; custom fields carry their
+     * full definition so the admin UI can show them for editing.
+     *
+     * @return array<int, array<string, mixed>>|null
      */
     public function formFieldConfig(array $service): ?array
     {
@@ -125,14 +145,18 @@ final class ServiceManager
 
         $normalized = [];
         foreach ($config as $item) {
-            $name = (string) ($item['name'] ?? '');
-            if (!isset($known[$name])) {
+            $name = is_array($item) ? (string) ($item['name'] ?? '') : '';
+            if (isset($known[$name])) {
+                $normalized[] = [
+                    'name' => $name,
+                    'required' => (bool) ($item['required'] ?? $known[$name]->required),
+                ];
                 continue;
             }
-            $normalized[] = [
-                'name' => $name,
-                'required' => (bool) ($item['required'] ?? $known[$name]->required),
-            ];
+            $custom = ServiceField::fromConfig($item);
+            if ($custom !== null) {
+                $normalized[] = $custom->toArray() + ['enabled' => self::isEntryEnabled($item)];
+            }
         }
 
         return $normalized;
@@ -146,6 +170,33 @@ final class ServiceManager
     public function defaultFieldsFor(array $service): array
     {
         return $this->providerFor($service)?->fields() ?? [];
+    }
+
+    /**
+     * Admin-defined fields currently stored for a service, in stored order.
+     *
+     * @return ServiceField[]
+     */
+    public function customFieldsFor(array $service): array
+    {
+        $customs = [];
+        foreach ($this->formFieldConfig($service) ?? [] as $item) {
+            $field = ServiceField::fromConfig($item);
+            if ($field !== null) {
+                $customs[] = $field;
+            }
+        }
+
+        return $customs;
+    }
+
+    /**
+     * An entry without an explicit flag is shown, so configs written before
+     * custom fields existed keep working.
+     */
+    private static function isEntryEnabled(mixed $item): bool
+    {
+        return !is_array($item) || !array_key_exists('enabled', $item) || (bool) $item['enabled'];
     }
 
     /**
@@ -165,6 +216,81 @@ final class ServiceManager
     }
 
     /**
+    /**
+     * The purchasable variants of a service, sanitised: label (non-empty) and
+     * price (>= 0) only. Empty list = the service has no variants and the base
+     * price applies — the UI hides the selector in that case.
+     *
+     * @return array<int, array{label: string, price: float}>
+     */
+    public static function variantsFor(array $service): array
+    {
+        $raw = $service['variants'] ?? null;
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        $decoded = is_string($raw)
+            ? json_decode((string) $raw, true)
+            : $raw;
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $variants = [];
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $label = trim((string) ($item['label'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+            $price = (float) ($item['price'] ?? 0);
+            if ($price < 0) {
+                continue;
+            }
+            $variants[] = ['label' => $label, 'price' => $price];
+        }
+
+        return $variants;
+    }
+
+    /**
+     * The variant matching a submitted "vN" id, or null when the service has
+     * no variants or the id does not resolve (base price then applies).
+     *
+     * @return array{label: string, price: float}|null
+     */
+    public static function resolveVariant(array $service, string $variantId): ?array
+    {
+        if ($variantId === '' || !preg_match('/^v(\d+)$/', $variantId, $m)) {
+            return null;
+        }
+        $variants = self::variantsFor($service);
+        return $variants[(int) $m[1]] ?? null;
+    }
+
+    /**
+     * Per-service ordering rules/instructions, split into lines for the UI.
+     *
+     * @return string[]
+     */
+    public static function rulesFor(array $service): array
+    {
+        $raw = trim((string) ($service['rules'] ?? ''));
+        if ($raw === '') {
+            return [];
+        }
+        return array_values(array_filter(
+            array_map(static fn (string $line): string => trim($line), explode("\n", $raw)),
+            static fn (string $line): bool => $line !== '',
+        ));
+    }
+
+    /**
+     * Form field configuration as stored, normalised against the known fields.
+     * Returns null when nothing is stored, i.e. provider defaults apply.
+     *
      * @return array<int, array{name: string, required: bool}>|null
      */
     private static function decodeFormFields(array $service): ?array
@@ -192,9 +318,20 @@ final class ServiceManager
             return ServiceResult::fail('This service is not available for automated execution.');
         }
 
-        $price = (float) $service['price'];
-        if (!$this->hasBalance($user->id, $price)) {
+        // Variant pricing: a variant id ("v0", "v1", …) picks a configured
+        // variant's price; a missing/unknown one falls back to the base price.
+        $variant = self::resolveVariant($service, (string) ($input['variant'] ?? ''));
+        $price = $variant !== null ? (float) $variant['price'] : (float) $service['price'];
+
+        // The one-time freebie: a user with free searches left runs this request
+        // without paying. consumeFreeSearch() is atomic, so two simultaneous
+        // submits can never both ride the same free search.
+        $usedFreeSearch = $this->users->freeSearches($user->id) > 0 && $this->users->consumeFreeSearch($user->id);
+        if (!$usedFreeSearch && !$this->hasBalance($user->id, $price)) {
             return ServiceResult::fail('পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজনীয়: ৳' . number_format($price, 2));
+        }
+        if ($usedFreeSearch) {
+            $price = 0.0;
         }
 
         // Only the configured fields are accepted, and the required ones must be filled in.
@@ -226,14 +363,17 @@ final class ServiceManager
                 // Kept so a retry can re-run the provider without the form again.
                 'input' => $input,
                 'service_name' => (string) ($service['name'] ?? 'Service'),
+                'variant' => $variant['label'] ?? null,
+                'free_search' => $usedFreeSearch,
             ],
         ]);
 
-        $this->notifications->create(
+        $this->notify->dispatch(
+            NotificationEvent::SERVICE_REQUEST_CREATED,
             $user->id,
-            'অনুরোধ গৃহীত হয়েছে',
-            ($service['name'] ?? 'Service') . ' — রেফারেন্স: ' . $reference,
-            'info'
+            ['service' => (string) ($service['name'] ?? 'Service'), 'reference' => $reference, 'user_id' => $user->id],
+            '/service-history',
+            ['reference' => $reference, 'tx_id' => $txId],
         );
         $this->log($user, 'service.submit', ($service['name'] ?? 'Service') . ' requested', $ip, $userAgent, $service, $reference);
 
@@ -280,11 +420,12 @@ final class ServiceManager
 
         $reference = (string) $request['reference'];
         $serviceName = (string) ($metadata['service_name'] ?? 'Service');
-        $this->notifications->create(
+        $this->notify->dispatch(
+            NotificationEvent::SERVICE_REQUEST_COMPLETED,
             $user->id,
-            'সার্ভিস সম্পন্ন হয়েছে',
-            $serviceName . ' — রেফারেন্স: ' . $reference,
-            'success'
+            ['service' => $serviceName, 'reference' => $reference],
+            '/service-history',
+            ['reference' => $reference, 'tx_id' => $id],
         );
         $this->log($user, 'service.complete', $serviceName . ' completed', $ip, $userAgent, null, $reference);
 
@@ -313,11 +454,12 @@ final class ServiceManager
         $this->refund($request);
 
         $reference = (string) $request['reference'];
-        $this->notifications->create(
+        $this->notify->dispatch(
+            NotificationEvent::SERVICE_REQUEST_CANCELLED,
             $user->id,
-            'অনুরোধ বাতিল হয়েছে',
-            'রেফারেন্স: ' . $reference . ' — ৳' . number_format((float) $request['amount'], 2) . ' ফেরত দেওয়া হয়েছে।',
-            'warning'
+            ['reference' => $reference, 'amount' => number_format((float) $request['amount'], 2)],
+            '/service-history',
+            ['reference' => $reference, 'tx_id' => $id],
         );
         $this->log($user, 'service.cancel', 'Request cancelled', $ip, $userAgent, null, $reference);
 
@@ -381,11 +523,12 @@ final class ServiceManager
         $this->refund($request);
 
         $reference = (string) $request['reference'];
-        $this->notifications->create(
+        $this->notify->dispatch(
+            NotificationEvent::SERVICE_REQUEST_FAILED,
             $user->id,
-            'সার্ভিস ব্যর্থ হয়েছে',
-            'রেফারেন্স: ' . $reference . ' — ' . $reason,
-            'danger'
+            ['reference' => $reference, 'reason' => $reason],
+            '/service-history',
+            ['reference' => $reference, 'tx_id' => $id],
         );
         $this->log($user, 'service.failed', $reason, $ip, $userAgent, null, $reference);
     }
@@ -414,6 +557,6 @@ final class ServiceManager
 
     private static function newReference(): string
     {
-        return 'TH' . strtoupper(dechex(time())) . random_int(1000, 9999);
+        return 'AL' . strtoupper(dechex(time())) . random_int(1000, 9999);
     }
 }

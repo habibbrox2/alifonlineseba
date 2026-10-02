@@ -1,0 +1,237 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}রেফারেল — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    {% if enabled %}
+        <a href="{{ settingsUrl }}" class="btn btn-ghost btn-sm">
+            {{ icon('settings', 'w-4 h-4') }} প্রোগ্রাম সেটিংস
+        </a>
+    {% else %}
+        <span class="badge badge-warning">{{ icon('alert-triangle', 'w-3.5 h-3.5') }} প্রোগ্রাম বন্ধ</span>
+    {% endif %}
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'রেফারেল প্রোগ্রাম',
+    description: 'বন্ধুর প্রথম রিচার্জ অনুমোদিত হলেই স্বয়ংক্রিয়ভাবে বোনাস পরিশোধ হয়
+        — রেফারকারী ' ~ (referrerBonus|money) ~ ', নতুন ইউজার ' ~ (refereeBonus|money) ~
+        (minRecharge > 0 ? ', সর্বনিম্ন প্রথম রিচার্জ ' ~ (minRecharge|money) : ''),
+    actions: headActions,
+} %}
+
+{# Amounts are frozen onto each row when the referral is created, so a settings
+   change today never retroactively re-prices a bonus that was already promised. #}
+{% if not enabled %}
+    <p class="mb-5 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-800">
+        {{ icon('alert-triangle', 'w-4 h-4 inline') }}
+        রেফারেল প্রোগ্রাম বন্ধ আছে — নতুন রেফারেল কোড কাজ করবে না, তবে নিচের সব পেন্ডিং রেফারেলের বোনাস এখনো পরিশোধ করা যাবে।
+    </p>
+{% endif %}
+
+<!-- Stat cards -->
+<div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% include 'components/stat-card.twig' with { label: 'মোট রেফার', value: stats.total, icon: 'users', tone: 'info' } %}
+    {% include 'components/stat-card.twig' with { label: 'অপেক্ষমাণ', value: stats.pending, icon: 'history', tone: 'accent' } %}
+    {% include 'components/stat-card.twig' with { label: 'পরিশোধিত', value: stats.paid, icon: 'check-circle', tone: 'success' } %}
+    {% include 'components/stat-card.twig' with {
+        label: 'মোট বোনাস দেওয়া',
+        value: (stats.referrer_paid + stats.referee_paid)|money,
+        icon: 'wallet',
+        tone: 'primary',
+    } %}
+</div>
+
+{# Filter chips keep the current search box and sort, so narrowing the ledger by
+   state never silently discards what the admin was looking at. #}
+{% set filterBase = (query ? 'q=' ~ query|url_encode ~ '&' : '') ~ (sort != 'created_at' or dir != 'desc' ? 'sort=' ~ sort ~ '&dir=' ~ dir ~ '&' : '') %}
+<div class="mb-4 flex flex-wrap items-center gap-2">
+    <span class="text-sm font-medium text-neutral-500">ফিল্টার:</span>
+    <a href="/admin/referrals?{{ filterBase }}" class="btn btn-sm {{ status == '' ? 'btn-primary' : 'btn-ghost' }}">সব</a>
+    {% for st in statuses %}
+        <a href="/admin/referrals?{{ filterBase }}status={{ st }}" class="btn btn-sm {{ status == st ? 'btn-primary' : 'btn-ghost' }}">
+            {{ st|statusbadge|raw }}
+            <span class="ml-1 rounded-full bg-black/5 px-1.5 text-[11px]">{{ statusCounts[st] ?? 0 }}</span>
+        </a>
+    {% endfor %}
+</div>
+
+<form method="get" action="/admin/referrals" class="mb-5 flex flex-wrap items-end gap-2">
+    <div class="min-w-52 flex-1">
+        <label for="f-q" class="sr-only">খুঁজুন</label>
+        <input id="f-q" type="search" name="q" value="{{ query }}" class="form-input"
+               placeholder="কোড, রেফারকারী বা বন্ধুর নাম/ফোন খুঁজুন…">
+    </div>
+
+    <select name="status" class="form-input sm:w-44" onchange="this.form.submit()">
+        <option value="">সব স্ট্যাটাস</option>
+        {% for st in statuses %}
+            <option value="{{ st }}" {{ status == st ? 'selected' }}>{{ st|statusbadge }}</option>
+        {% endfor %}
+    </select>
+
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button type="submit" class="btn btn-primary">{{ icon('search', 'w-4 h-4') }} খুঁজুন</button>
+    {% if query or status %}
+        <a href="/admin/referrals" class="btn btn-ghost">ফিল্টার মুছুন</a>
+    {% endif %}
+</form>
+
+<div class="card overflow-hidden">
+    {# Empty state lives outside the <table>: .table-base carries a 640px min-width,
+       so a centred message inside it would sit off-screen on a phone. #}
+    {% if rows is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('handshake', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">
+                {% if query or status %}এই ফিল্টারে কোনো রেফারেল পাওয়া যায়নি।
+                {% else %}এখনো কোনো রেফারেল হয়নি।{% endif %}
+            </p>
+        </div>
+    {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
+                    <tr>
+                        <th>রেফারকারী</th>
+                        <th>বন্ধু</th>
+                        <th>কোড</th>
+                        {% include 'components/sortable-header.twig' with {
+                            label: 'ট্রিগার রিচার্জ', column: 'trigger_amount', sort: sort, dir: dir, right: true,
+                            base: '/admin/referrals?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ (query ? 'q=' ~ query|url_encode ~ '&' : ''),
+                        } %}
+                        <th class="text-right">রেফারকারী</th>
+                        <th class="text-right">বন্ধু</th>
+                        <th>অবস্থা</th>
+                        {% include 'components/sortable-header.twig' with {
+                            label: 'তারিখ', column: 'created_at', sort: sort, dir: dir,
+                            base: '/admin/referrals?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ (query ? 'q=' ~ query|url_encode ~ '&' : ''),
+                        } %}
+                        <th class="text-right">অ্যাকশন</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr>
+                            <td>
+                                <a href="/admin/users?q={{ r.referrer_name|url_encode }}" class="font-medium text-primary-700 hover:underline">
+                                    {{ r.referrer_name ?? '—' }}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="/admin/users?q={{ r.referee_name|url_encode }}" class="font-medium text-neutral-800 hover:underline">
+                                    {{ r.referee_name ?? '—' }}
+                                </a>
+                            </td>
+                            <td class="font-mono text-xs text-neutral-500">{{ r.code }}</td>
+                            <td class="whitespace-nowrap text-right text-neutral-600">
+                                {% if r.trigger_amount %}{{ r.trigger_amount|money }}{% else %}<span class="text-xs text-neutral-300">—</span>{% endif %}
+                            </td>
+                            <td class="whitespace-nowrap text-right font-semibold text-primary-700">{{ r.referrer_amount|money }}</td>
+                            <td class="whitespace-nowrap text-right font-semibold text-accent-600">{{ r.referee_amount|money }}</td>
+                            <td>
+                                {% include 'components/status-badge.twig' with { status: r.status } %}
+                                {% if r.admin_note %}
+                                    <p class="mt-1 max-w-40 truncate text-[11px] text-neutral-400" title="{{ r.admin_note }}">{{ r.admin_note }}</p>
+                                {% endif %}
+                            </td>
+                            <td class="whitespace-nowrap text-neutral-500">{{ r.created_at|bndate }}</td>
+                            <td>
+                                <div class="flex flex-wrap justify-end gap-1.5">
+                                    {# Each action is its own <form> so a per-row button can
+                                       never carry another row's id. Re-posting is safe:
+                                       ReferralService re-checks the state and the
+                                       conditional UPDATE stops a double payout. #}
+                                    {% if r.status == 'pending' %}
+                                        <form method="post" action="/admin/referrals"
+                                              onsubmit="return confirm('{{ r.referee_name }} এর রেফারেল বোনাস {{ r.referrer_amount|money }} + {{ r.referee_amount|money }} এখনই পরিশোধ করবেন?');">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="pay">
+                                            <input type="hidden" name="referral_id" value="{{ r.id }}">
+                                            <input type="hidden" name="status" value="{{ status }}">
+                                            <input type="hidden" name="q" value="{{ query }}">
+                                            <input type="hidden" name="sort" value="{{ sort }}">
+                                            <input type="hidden" name="dir" value="{{ dir }}">
+                                            <input type="hidden" name="page" value="{{ page }}">
+                                            <button type="submit" class="btn btn-primary btn-sm">
+                                                {{ icon('wallet', 'w-3.5 h-3.5') }} পরিশোধ
+                                            </button>
+                                        </form>
+
+                                        <form method="post" action="/admin/referrals" class="reject-form"
+                                              onsubmit="return rejectConfirm(this);">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="reject">
+                                            <input type="hidden" name="referral_id" value="{{ r.id }}">
+                                            <input type="hidden" name="reason" value="">
+                                            <input type="hidden" name="status" value="{{ status }}">
+                                            <input type="hidden" name="q" value="{{ query }}">
+                                            <input type="hidden" name="sort" value="{{ sort }}">
+                                            <input type="hidden" name="dir" value="{{ dir }}">
+                                            <input type="hidden" name="page" value="{{ page }}">
+                                            <button type="submit" class="btn btn-ghost btn-sm">
+                                                {{ icon('x-circle', 'w-3.5 h-3.5') }} বাতিল
+                                            </button>
+                                        </form>
+                                    {% elseif r.status == 'rejected' %}
+                                        <form method="post" action="/admin/referrals"
+                                              onsubmit="return confirm('বাতিলকৃত রেফারেলটি অপেক্ষমাণ অবস্থায় ফেরাবেন? কোনো টাকা দেওয়া হবে না।');">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="reset">
+                                            <input type="hidden" name="referral_id" value="{{ r.id }}">
+                                            <input type="hidden" name="status" value="{{ status }}">
+                                            <input type="hidden" name="q" value="{{ query }}">
+                                            <input type="hidden" name="sort" value="{{ sort }}">
+                                            <input type="hidden" name="dir" value="{{ dir }}">
+                                            <input type="hidden" name="page" value="{{ page }}">
+                                            <button type="submit" class="btn btn-ghost btn-sm">
+                                                {{ icon('rotate-ccw', 'w-3.5 h-3.5') }} ফেরানো
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span class="text-xs text-neutral-400">
+                                            {{ r.reviewed_at ? r.reviewed_at|bndate : 'স্বয়ংক্রিয়' }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total,
+    baseUrl: '/admin/referrals?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ (query ? 'q=' ~ query|url_encode ~ '&' : '') ~ 'page=',
+    sort: sort, dir: dir,
+} %}
+{% endblock %}
+
+{% block scripts %}
+    {{ parent() }}
+    <script>
+    (function () {
+        'use strict';
+        // A rejection reason is mandatory — the user is told why their bonus was
+        // voided — so ask for it before the form posts rather than bouncing back
+        // with a validation error.
+        window.rejectConfirm = function (form) {
+            var reason = window.prompt('বাতিলের কারণ লিখুন (বন্ধু এটি দেখতে পাবেন):');
+            if (reason === null) { return false; }
+            reason = reason.trim();
+            if (reason === '') {
+                window.alert('কারণ ছাড়া রেফারেল বাতিল করা যাবে না।');
+                return false;
+            }
+            form.querySelector('[name="reason"]').value = reason;
+            return true;
+        };
+    })();
+    </script>
+{% endblock %}

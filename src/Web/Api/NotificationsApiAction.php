@@ -20,11 +20,22 @@ final readonly class NotificationsApiAction
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
 
+        // POST /api/notifications/read-all — the header dropdown has no page to
+        // redirect to, so it needs the same operation as JSON. markAllRead()
+        // only touches unread rows, so repeating it is harmless.
+        if ($request->getMethod() === 'POST') {
+            $this->notifications->markAllRead($identity->id);
+            return Api::ok(['unread' => 0], 'সব নোটিফিকেশন পড়া হয়েছে।');
+        }
+
         // PATCH /api/notifications/{id}/read
         $id = $route->getArgument('id');
         if ($id !== null && $request->getMethod() === 'PATCH') {
             $this->notifications->markRead((int) $id, $identity->id);
-            return Api::ok(null, 'Notification marked as read.');
+            return Api::ok([
+                'id' => (int) $id,
+                'unread' => $this->notifications->unreadCount($identity->id),
+            ], 'Notification marked as read.');
         }
 
         $page = max(1, (int) ($request->getQueryParams()['page'] ?? '1'));
@@ -34,6 +45,6 @@ final readonly class NotificationsApiAction
             'notifications' => $data['rows'],
             'total' => $data['total'],
             'unread' => $this->notifications->unreadCount($identity->id),
-        ]);
+        ], $data['rows'] === [] ? 'কোনো নোটিফিকেশন নেই।' : '');
     }
 }

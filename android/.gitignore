@@ -1,0 +1,9 @@
+# Local Gradle/Android build output
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+
+# Firebase config is per-developer, never committed (see README).
+app/google-services.json

@@ -1,14 +1,14 @@
 {% extends 'layouts/auth.twig' %}
 
-{% block description %}TH Tools-এ লগইন করুন — ডেমো অ্যাকাউন্ট দিয়ে সকল ডিজিটাল সেবার অভিজ্ঞতা নিন।{% endblock %}
+{% block description %}Alif Tools-এ লগইন করুন — ডেমো অ্যাকাউন্ট দিয়ে সকল ডিজিটাল সেবার অভিজ্ঞতা নিন।{% endblock %}
 {% block robots %}index, follow{% endblock %}
-{% block title %}লগইন — TH Tools{% endblock %}
+{% block title %}লগইন — Alif Tools{% endblock %}
 
 {% block auth_content %}
 <div class="rounded-2xl bg-white p-6 shadow-lg sm:p-8" x-data="{ showPw: false }">
     <div class="mb-6 text-center">
         <h1 class="text-2xl font-extrabold text-neutral-900">লগইন করুন</h1>
-        <p class="mt-1.5 text-sm text-neutral-500">TH Tools ডেমো প্ল্যাটফর্মে প্রবেশ করুন</p>
+        <p class="mt-1.5 text-sm text-neutral-500">Alif Tools ডেমো প্ল্যাটফর্মে প্রবেশ করুন</p>
     </div>
 
     {% if message %}
@@ -34,7 +34,7 @@
                 <input id="password" :type="showPw ? 'text' : 'password'" name="password" class="form-input pr-11"
                        placeholder="••••••••" autocomplete="current-password" required>
                 <button type="button" @click="showPw = !showPw"
-                        class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-600"
+                        class="tap-target absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-600"
                         aria-label="পাসওয়ার্ড দেখান/লুকান">
                     {{ icon(showPw ? 'eye-off' : 'eye', 'w-5 h-5') }}
                 </button>
@@ -43,11 +43,11 @@
         </div>
 
         <div class="flex items-center justify-between">
-            <label class="flex items-center gap-2 text-sm text-neutral-600">
+            <label class="tap-row text-sm text-neutral-600">
                 <input type="checkbox" name="remember" value="1" checked class="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500">
                 মনে রাখুন (৩০ দিন)
             </label>
-            <a href="/login" class="text-sm font-medium text-primary-600 hover:underline">পাসওয়ার্ড রিসেট?</a>
+            <a href="/login" class="tap-target text-sm font-medium text-primary-600 hover:underline">পাসওয়ার্ড রিসেট?</a>
         </div>
 
         <button type="submit" class="btn btn-primary btn-block">
@@ -57,7 +57,7 @@
 
     <p class="mt-6 text-center text-sm text-neutral-500">
         অ্যাকাউন্ট নেই?
-        <a href="/register" class="font-semibold text-primary-600 hover:underline">নিবন্ধন করুন</a>
+        <a href="/register" class="tap-target font-semibold text-primary-600 hover:underline">নিবন্ধন করুন</a>
     </p>
 
     {# Demo credentials are for local development only — never expose them on a public deployment. #}
@@ -71,7 +71,7 @@
 </div>
 
 <div class="mt-5 text-center">
-    <a href="/" class="inline-flex items-center gap-1.5 text-sm font-medium text-white/80 transition hover:text-white">
+    <a href="/" class="tap-target inline-flex items-center gap-1.5 text-sm font-medium text-white/80 transition hover:text-white">
         {{ icon('arrow-left', 'w-4 h-4') }} হোমপেজে ফিরে যান
     </a>
 </div>

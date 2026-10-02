@@ -3,8 +3,10 @@
 {% block title %}ইউজার ম্যানেজমেন্ট — Admin{% endblock %}
 
 {% block dashboard_content %}
-<h1 class="mb-2 text-2xl font-extrabold text-neutral-900">ইউজার ম্যানেজমেন্ট</h1>
-<p class="mb-6 text-sm text-neutral-500">মোট {{ total }} জন</p>
+{% include 'components/page-header.twig' with {
+    title: 'ইউজার ম্যানেজমেন্ট',
+    description: 'মোট ' ~ total ~ ' জন সক্রিয় ইউজার — খুঁজুন, এডিট করুন বা ট্র্যাশে পাঠান',
+} %}
 
 {# Trash / live filter — trashed users are hidden from the site and from login until restored. #}
 {% set currentFilter = deletedFilter|default('exclude') %}
@@ -28,7 +30,8 @@
 
 <!-- Create user -->
 <details class="card mb-6 p-5" {{ flash_error is defined and flash_error ? 'open' }}>
-    <summary class="flex cursor-pointer items-center gap-2 text-base font-bold text-neutral-800 select-none">
+    {# tap-row only kicks in under 640px, where a 24px summary line is too small to hit reliably. #}
+    <summary class="tap-row cursor-pointer text-base font-bold text-neutral-800 select-none">
         {{ icon('user-plus', 'w-5 h-5 text-primary-600') }} নতুন ইউজার যোগ করুন
     </summary>
     <form method="post" action="/admin/users" class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -77,100 +80,110 @@
 {% set usersQuery = '/admin/users?' ~ (q ? ('q=' ~ q|url_encode) ~ '&' : '') ~ trashedQuery %}
 
 <div class="card overflow-hidden">
-    <div class="overflow-x-auto">
-        <table class="table-base">
-            <thead>
-                <tr>
-                    {% include 'components/sortable-header.twig' with { label: 'ইউজার', column: 'username', sort: sort, dir: dir, base: usersQuery } %}
-                    {% include 'components/sortable-header.twig' with { label: 'ব্যালেন্স', column: 'balance', sort: sort, dir: dir, base: usersQuery } %}
-                    {% include 'components/sortable-header.twig' with { label: 'রোল', column: 'role', sort: sort, dir: dir, base: usersQuery } %}
-                    {% include 'components/sortable-header.twig' with { label: 'স্ট্যাটাস', column: 'status', sort: sort, dir: dir, base: usersQuery } %}
-                    {% include 'components/sortable-header.twig' with { label: 'শেষ লগইন', column: 'last_login_at', sort: sort, dir: dir, base: usersQuery } %}
-                    <th class="text-right">অ্যাকশন</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in rows %}
-                    {% set isTrashed = user.deleted_at is not empty %}
-                    <tr class="{{ isTrashed ? 'bg-neutral-50' }}">
-                        <td>
-                            <p class="font-semibold {{ isTrashed ? 'text-neutral-400 line-through' : 'text-neutral-800' }}">{{ user.username }}</p>
-                            <p class="text-xs text-neutral-400">{{ user.phone }}{% if user.email %} · {{ user.email }}{% endif %}</p>
-                            {% if isTrashed %}
-                                <p class="text-xs text-danger-600">মুছে ফেলা: {{ user.deleted_at|bndate }}</p>
-                            {% endif %}
-                        </td>
-                        <td class="font-semibold {{ isTrashed ? 'text-neutral-400' : 'text-primary-700' }}">{{ user.balance|money }}</td>
-                        <td>
-                            {% if isTrashed %}
-                                <span class="text-xs text-neutral-400">{{ user.role }}</span>
-                            {% else %}
-                                <form method="post" action="/admin/users" class="flex items-center gap-1.5">
-                                    <input type="hidden" name="_csrf" value="{{ csrf }}">
-                                    <input type="hidden" name="do" value="role">
-                                    <input type="hidden" name="user_id" value="{{ user.id }}">
-                                    <select name="role" onchange="this.form.submit()" class="form-input px-2 py-1 text-xs">
-                                        {% for role in ['user', 'staff', 'admin'] %}
-                                            <option value="{{ role }}" {{ user.role == role ? 'selected' }}>{{ role }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </form>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if isTrashed %}
-                                {% include 'components/status-badge.twig' with { status: 'deleted' } %}
-                            {% else %}
-                                {% include 'components/status-badge.twig' with { status: user.status } %}
-                            {% endif %}
-                        </td>
-                        <td class="whitespace-nowrap text-xs text-neutral-500">{{ user.last_login_at ? user.last_login_at|bndate : '—' }}</td>
-                        <td>
-                            <div class="flex justify-end gap-2">
-                                {% if isTrashed %}
-                                    <form method="post" action="/admin/users">
-                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
-                                        <input type="hidden" name="do" value="restore">
-                                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                                        <button type="submit" class="btn btn-primary btn-sm">
-                                            {{ icon('history', 'w-4 h-4') }} রিস্টোর
-                                        </button>
-                                    </form>
-                                {% else %}
-                                    <form method="post" action="/admin/users">
-                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
-                                        <input type="hidden" name="do" value="toggle">
-                                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                                        <button type="submit" class="btn btn-ghost btn-sm {{ user.status == 'active' ? 'text-danger-600' : 'text-success-600' }}">
-                                            {{ user.status == 'active' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}
-                                        </button>
-                                    </form>
-                                    <form method="post" action="/admin/users" onsubmit="return confirm('পাসওয়ার্ড রিসেট করবেন? (Demo1234!)')">
-                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
-                                        <input type="hidden" name="do" value="reset">
-                                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                                        <button type="submit" class="btn btn-ghost btn-sm">রিসেট</button>
-                                    </form>
-                                    {% if user.id != identity.id and user.role != 'admin' %}
-                                    <form method="post" action="/admin/users" onsubmit="return confirm('&quot;{{ user.username }}&quot; ট্র্যাশে পাঠাবেন? ইউজার লগইন করতে পারবে না, তবে চাইলে রিস্টোর করা যাবে।')">
-                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
-                                        <input type="hidden" name="do" value="delete">
-                                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                                        <button type="submit" class="btn btn-danger btn-sm" aria-label="{{ user.username }} মুছুন">মুছুন</button>
-                                    </form>
-                                    {% endif %}
-                                {% endif %}
-                            </div>
-                        </td>
+        {# Outside the <table> so the message is not stranded in a 640px-wide scroll area. #}
+        {% if rows is empty %}
+            <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                    {{ icon('users', 'w-6 h-6') }}
+                </span>
+                <p class="text-sm text-neutral-500">
+                    {% if currentFilter == 'only' %}ট্র্যাশে কোনো ইউজার নেই।
+                    {% elseif q %}“{{ q }}” অনুসন্ধানে কোনো ইউজার পাওয়া যায়নি।
+                    {% else %}কোনো ইউজার পাওয়া যায়নি।{% endif %}
+                </p>
+            </div>
+        {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
+                    <tr>
+                        {% include 'components/sortable-header.twig' with { label: 'ইউজার', column: 'username', sort: sort, dir: dir, base: usersQuery } %}
+                        {% include 'components/sortable-header.twig' with { label: 'ব্যালেন্স', column: 'balance', sort: sort, dir: dir, base: usersQuery } %}
+                        {% include 'components/sortable-header.twig' with { label: 'রোল', column: 'role', sort: sort, dir: dir, base: usersQuery } %}
+                        {% include 'components/sortable-header.twig' with { label: 'স্ট্যাটাস', column: 'status', sort: sort, dir: dir, base: usersQuery } %}
+                        {% include 'components/sortable-header.twig' with { label: 'শেষ লগইন', column: 'last_login_at', sort: sort, dir: dir, base: usersQuery } %}
+                        <th class="text-right">অ্যাকশন</th>
                     </tr>
-                {% else %}
-                    <tr><td colspan="6" class="px-4 py-10 text-center text-sm text-neutral-500">
-                        {% if currentFilter == 'only' %}ট্র্যাশে কোনো ইউজার নেই।{% else %}কোনো ইউজার পাওয়া যায়নি।{% endif %}
-                    </td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    {% for user in rows %}
+                        {% set isTrashed = user.deleted_at is not empty %}
+                        <tr class="{{ isTrashed ? 'bg-neutral-50' }}">
+                            <td>
+                                <p class="font-semibold {{ isTrashed ? 'text-neutral-400 line-through' : 'text-neutral-800' }}">{{ user.username }}</p>
+                                <p class="text-xs text-neutral-400">{{ user.phone }}{% if user.email %} · {{ user.email }}{% endif %}</p>
+                                {% if isTrashed %}
+                                    <p class="text-xs text-danger-600">মুছে ফেলা: {{ user.deleted_at|bndate }}</p>
+                                {% endif %}
+                            </td>
+                            <td class="font-semibold {{ isTrashed ? 'text-neutral-400' : 'text-primary-700' }}">{{ user.balance|money }}</td>
+                            <td>
+                                {% if isTrashed %}
+                                    <span class="text-xs text-neutral-400">{{ user.role }}</span>
+                                {% else %}
+                                    <form method="post" action="/admin/users" class="flex items-center gap-1.5">
+                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                        <input type="hidden" name="do" value="role">
+                                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                                        <select name="role" onchange="this.form.submit()" class="form-input px-2 py-1 text-xs">
+                                            {% for role in ['user', 'staff', 'admin'] %}
+                                                <option value="{{ role }}" {{ user.role == role ? 'selected' }}>{{ role }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </form>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if isTrashed %}
+                                    {% include 'components/status-badge.twig' with { status: 'deleted' } %}
+                                {% else %}
+                                    {% include 'components/status-badge.twig' with { status: user.status } %}
+                                {% endif %}
+                            </td>
+                            <td class="whitespace-nowrap text-xs text-neutral-500">{{ user.last_login_at ? user.last_login_at|bndate : '—' }}</td>
+                            <td>
+                                <div class="flex justify-end gap-2">
+                                    {% if isTrashed %}
+                                        <form method="post" action="/admin/users">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="restore">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <button type="submit" class="btn btn-primary btn-sm">
+                                                {{ icon('history', 'w-4 h-4') }} রিস্টোর
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <form method="post" action="/admin/users">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="toggle">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <button type="submit" class="btn btn-ghost btn-sm {{ user.status == 'active' ? 'text-danger-600' : 'text-success-600' }}">
+                                                {{ user.status == 'active' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}
+                                            </button>
+                                        </form>
+                                        <form method="post" action="/admin/users" onsubmit="return confirm('পাসওয়ার্ড রিসেট করবেন? (Demo1234!)')">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="reset">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <button type="submit" class="btn btn-ghost btn-sm">রিসেট</button>
+                                        </form>
+                                        {% if user.id != identity.id and user.role != 'admin' %}
+                                        <form method="post" action="/admin/users" onsubmit="return confirm('&quot;{{ user.username }}&quot; ট্র্যাশে পাঠাবেন? ইউজার লগইন করতে পারবে না, তবে চাইলে রিস্টোর করা যাবে।')">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="delete">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <button type="submit" class="btn btn-danger btn-sm" aria-label="{{ user.username }} মুছুন">মুছুন</button>
+                                        </form>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 </div>
 
 {% include 'components/pagination.twig' with {

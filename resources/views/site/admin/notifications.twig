@@ -1,0 +1,111 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}নোটিফিকেশন কিউ — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% include 'components/page-header.twig' with {
+    title: 'নোটিফিকেশন কিউ',
+    description: 'চ্যানেল ডেলিভারির অবস্থা — FCM পুশ ও টেলিগ্রাম ক্রন ওয়ার্কার দ্বারা প্রসেস হয়।',
+} %}
+
+<!-- Health cards -->
+<div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="card p-4">
+        <p class="text-xs font-medium text-neutral-400">কিউ ডেপথ</p>
+        <p class="mt-1 text-2xl font-extrabold text-primary-700">{{ stats.depth }}</p>
+        <p class="text-[11px] text-neutral-400">{{ stats.queued }} queued · {{ stats.processing }} processing</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs font-medium text-neutral-400">পাঠানো হয়েছে</p>
+        <p class="mt-1 text-2xl font-extrabold text-success-600">{{ stats.sent }}</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs font-medium text-neutral-400">ডেড-লেটার</p>
+        <p class="mt-1 text-2xl font-extrabold text-danger-600">{{ stats.dead }}</p>
+        <p class="text-[11px] text-neutral-400">ম্যানুয়ালি রিট্রাই করা যাবে</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs font-medium text-neutral-400">ওয়ার্কার</p>
+        <p class="mt-1 text-sm font-bold text-neutral-700">php yii app:notification:work</p>
+        <p class="text-[11px] text-neutral-400">cron: প্রতি মিনিটে</p>
+    </div>
+</div>
+
+<!-- Status filter chips -->
+<div class="mb-4 flex flex-wrap gap-2">
+    {% set chips = [ ['', 'সব'], ['queued', 'Queued'], ['processing', 'Processing'], ['sent', 'Sent'], ['dead', 'Dead'] ] %}
+    {% for chip in chips %}
+        <a href="/admin/notifications{% if chip[0] %}?status={{ chip[0] }}{% endif %}"
+           class="chip {{ status == chip[0] ? 'chip-active' }}">{{ chip[1] }}</a>
+    {% endfor %}
+</div>
+
+<div class="card overflow-hidden">
+    {# Empty state lives outside the <table>: the 640px min-width on .table-base
+       would otherwise centre it off-screen on a phone. #}
+    {% if rows is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('bell-off', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">কিউ খালি।</p>
+        </div>
+    {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>ইভেন্ট</th>
+                        <th>চ্যানেল</th>
+                        <th>ইউজার</th>
+                        <th>অবস্থা</th>
+                        <th>চেষ্টা</th>
+                        <th>পরবর্তী চেষ্টা</th>
+                        <th class="text-right">অ্যাকশন</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td class="font-mono text-xs">#{{ row.id }}</td>
+                            <td class="font-medium text-neutral-700">{{ row.event }}</td>
+                            <td>
+                                <span class="badge {{ row.channel == 'fcm' ? 'badge-info' : 'badge-primary' }}">{{ row.channel|upper }}</span>
+                            </td>
+                            <td class="text-neutral-500">{{ row.user_id ? '#' ~ row.user_id : '—' }}</td>
+                            <td>
+                                {% if row.status == 'sent' %}
+                                    <span class="badge bg-success-50 text-success-700">{{ row.status }}</span>
+                                {% elseif row.status == 'dead' %}
+                                    <span class="badge bg-danger-50 text-danger-700">{{ row.status }}</span>
+                                {% elseif row.status == 'processing' %}
+                                    <span class="badge bg-info-50 text-info-700">{{ row.status }}</span>
+                                {% else %}
+                                    <span class="badge bg-warning-50 text-warning-700">{{ row.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-neutral-500">{{ row.attempts }}/{{ row.max_attempts }}</td>
+                            <td class="whitespace-nowrap text-xs text-neutral-400">{{ row.available_at|bndate }}</td>
+                            <td class="text-right">
+                                {% if row.status == 'dead' %}
+                                    <form method="post" action="/admin/notifications/{{ row.id }}/retry">
+                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                        <button type="submit" class="btn btn-ghost btn-sm text-primary-600">
+                                            {{ icon('rotate-ccw', 'w-3.5 h-3.5') }} রিট্রাই
+                                        </button>
+                                    </form>
+                                {% elseif row.last_error %}
+                                    <span class="text-[11px] text-danger-500" title="{{ row.last_error }}">{{ row.last_error|slice(0, 40) }}…</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

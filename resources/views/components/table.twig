@@ -4,38 +4,37 @@
 {# @var emptyText string #}
 {# @var renderCell(template context) — use block override in parent #}
 <div class="card overflow-hidden">
-    <div class="overflow-x-auto">
-        <table class="table-base">
-            <thead>
-                <tr>
-                    {% for column in columns %}
-                        <th scope="col" class="{{ column.sortable|default(false) ? 'cursor-pointer select-none' }}">
-                            <span class="inline-flex items-center gap-1">
-                                {{ column.label }}
-                                {% if column.sortable|default(false) %}
-                                    <svg class="h-3.5 w-3.5 text-neutral-400" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevrons-up-down"></use></svg>
-                                {% endif %}
-                            </span>
-                        </th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% if rows is empty %}
+    {% if rows is empty %}
+        {# Rendered outside the <table> on purpose: .table-base carries a 640px
+           min-width so real columns stay legible, and even the whitespace-nowrap
+           header row alone would push this centred message off a phone screen. #}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon(emptyIcon|default('inbox'), 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">{{ emptyText|default('কোনো তথ্য পাওয়া যায়নি।') }}</p>
+        </div>
+    {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
                     <tr>
-                        <td colspan="{{ columns|length }}" class="px-4 py-12 text-center">
-                            <div class="mx-auto flex max-w-xs flex-col items-center gap-2">
-                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
-                                    {{ icon(emptyIcon|default('inbox'), 'w-6 h-6') }}
+                        {% for column in columns %}
+                            <th scope="col" class="{{ column.sortable|default(false) ? 'cursor-pointer select-none' }}">
+                                <span class="inline-flex items-center gap-1">
+                                    {{ column.label }}
+                                    {% if column.sortable|default(false) %}
+                                        <svg class="h-3.5 w-3.5 text-neutral-400" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevrons-up-down"></use></svg>
+                                    {% endif %}
                                 </span>
-                                <p class="text-sm text-neutral-500">{{ emptyText|default('কোনো তথ্য পাওয়া যায়নি।') }}</p>
-                            </div>
-                        </td>
+                            </th>
+                        {% endfor %}
                     </tr>
-                {% else %}
+                </thead>
+                <tbody>
                     {% block table_rows %}{% endblock %}
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
 </div>

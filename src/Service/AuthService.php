@@ -16,6 +16,7 @@ final class AuthService
     public function __construct(
         private readonly IdentityRepository $identities,
         private readonly AuthThrottle $throttle,
+        private readonly ReferralService $referrals,
     ) {}
 
     /**
@@ -52,12 +53,28 @@ final class AuthService
             return ['errors' => $errors, 'userId' => null];
         }
 
+        // `?ref=` from the share link. Unvalidated on purpose here — the
+        // service decides what a code means and silently ignores the rest.
+        $referrer = $this->referrals->resolveCode((string) ($input['referral_code'] ?? ''));
+
         $userId = $this->identities->register([
             'username' => $username,
             'phone' => $phone,
             'email' => $email ?: null,
             'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+            // Resolved BEFORE insert: the code names an account that already
+            // exists, so it can be checked (and the new user stamped with it)
+            // in the same statement. A bad code resolves to null and the
+            // signup proceeds normally — never block a registration over a
+            // bonus.
+            'referred_by' => $referrer['id'] ?? null,
         ], $ip, $userAgent);
+
+        // Attached after the insert: the referral row has a foreign key to the
+        // new account, so it cannot be written first.
+        if ($referrer !== null) {
+            $this->referrals->attach($userId, (int) $referrer['id'], (string) $referrer['referral_code']);
+        }
 
         return ['errors' => [], 'userId' => $userId];
     }

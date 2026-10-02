@@ -1,16 +1,16 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}{{ category.name }} — TH Tools{% endblock %}
+{% block title %}{{ category.name }} — Alif Tools{% endblock %}
 
 {% block dashboard_content %}
 <nav class="mb-5 flex items-center gap-2 text-sm text-neutral-500" aria-label="ব্রেডকাম্ব">
-    <a href="/dashboard" class="hover:text-primary-600">ড্যাশবোর্ড</a>
+    <a href="/dashboard" class="tap-target hover:text-primary-600">ড্যাশবোর্ড</a>
     <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-right"></use></svg>
     <span class="font-medium text-neutral-700">{{ category.name }}</span>
 </nav>
 
-<header class="mb-6 flex items-center gap-4">
-    <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600">
+<header class="mb-6 flex items-center gap-4 {{ accent(category) }}">
+    <span class="accent-tile h-14 w-14 rounded-2xl">
         {{ icon(category.icon ?? 'grid', 'w-7 h-7') }}
     </span>
     <div>

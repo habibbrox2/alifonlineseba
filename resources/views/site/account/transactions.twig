@@ -1,6 +1,6 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}লেনদেন — TH Tools{% endblock %}
+{% block title %}লেনদেন — Alif Tools{% endblock %}
 
 {% block dashboard_content %}
 <h1 class="mb-6 text-2xl font-extrabold text-neutral-900">আমার লেনদেন</h1>
@@ -21,31 +21,29 @@
 </div>
 
 <div class="card overflow-hidden">
-    <div class="overflow-x-auto">
-        <table class="table-base">
-            <thead>
-                <tr>
-                    <th>রেফারেন্স</th>
-                    <th>সার্ভিস</th>
-                    <th>পরিমাণ</th>
-                    <th>স্ট্যাটাস</th>
-                    <th>তারিখ</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if rows is empty %}
+    {# Empty state lives outside the <table>: the 640px min-width on .table-base
+       would otherwise centre it off-screen on a phone. #}
+    {% if rows is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('inbox', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">কোনো লেনদেন পাওয়া যায়নি।</p>
+            <a href="/services" class="btn btn-primary btn-sm mt-2">সার্ভিস দেখুন</a>
+        </div>
+    {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
                     <tr>
-                        <td colspan="5" class="px-4 py-12 text-center">
-                            <div class="mx-auto flex max-w-xs flex-col items-center gap-2">
-                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
-                                    {{ icon('inbox', 'w-6 h-6') }}
-                                </span>
-                                <p class="text-sm text-neutral-500">কোনো লেনদেন পাওয়া যায়নি।</p>
-                                <a href="/services" class="btn btn-primary btn-sm mt-2">সার্ভিস দেখুন</a>
-                            </div>
-                        </td>
+                        <th>রেফারেন্স</th>
+                        <th>সার্ভিস</th>
+                        <th>পরিমাণ</th>
+                        <th>স্ট্যাটাস</th>
+                        <th>তারিখ</th>
                     </tr>
-                {% else %}
+                </thead>
+                <tbody>
                     {% for tx in rows %}
                         <tr>
                             <td class="font-mono text-xs">{{ tx.reference }}</td>
@@ -55,10 +53,10 @@
                             <td class="whitespace-nowrap text-neutral-500">{{ tx.created_at|bndate }}</td>
                         </tr>
                     {% endfor %}
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
 </div>
 
 {% include 'components/pagination.twig' with {

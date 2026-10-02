@@ -13,38 +13,94 @@
                 <button @click="sidebarOpen = true" class="btn btn-ghost-dark btn-sm lg:hidden" aria-label="সাইডবার খুলুন">
                     {{ icon('menu', 'w-5 h-5') }}
                 </button>
-                <a href="/dashboard" class="flex items-center gap-2.5 font-bold text-white">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-500 text-sm font-extrabold text-primary-900">TH</span>
-                    <span class="hidden text-lg tracking-tight sm:block">TH Tools</span>
+                <a href="/dashboard" class="flex items-center gap-2.5 font-bold text-white tap-target">
+                    <img src="/assets/brand/logo-mark.svg" alt="" class="h-9 w-9" width="36" height="36">
+                    <span class="hidden text-lg tracking-tight sm:block">Alif Tools</span>
                 </a>
             </div>
 
-            <div class="flex items-center gap-2 sm:gap-3">
-                <a href="/profile" class="hidden items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-white/15 sm:inline-flex">
-                    {{ icon('wallet', 'w-4 h-4') }}
-                    <span>{{ identity.balance|money }}</span>
+            <div class="flex min-w-0 items-center gap-2 sm:gap-3">
+                {# Live balance. Rendered from the fresh DB identity on every request,
+                   then kept in sync by app.js (see initHeaderBalance). Sits right
+                   before the bell so the amount is always one glance away. #}
+                <a href="/profile" id="header-balance" data-balance="{{ identity.balance }}"
+                   class="tap-target flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-sm font-semibold tabular-nums text-white transition hover:bg-white/15 sm:gap-2 sm:px-3.5"
+                   title="আপনার বর্তমান ব্যালেন্স">
+                    {{ icon('wallet', 'w-4 h-4 hidden shrink-0 sm:block') }}
+                    <span data-balance-text class="truncate">{{ identity.balance|money }}</span>
                 </a>
 
                 <!-- Notifications -->
-                <div x-data="{ open: false }" class="relative">
-                    <button @click="open = !open" class="relative rounded-full p-2 text-white/90 transition hover:bg-white/10" aria-label="নোটিফিকেশন" aria-expanded="false">
+                <div x-data="thNotifications({{ unread }})" @keydown.escape.window="open = false" class="relative">
+                    <button @click="toggle()" class="tap-target relative rounded-full p-2 text-white/90 transition hover:bg-white/10" aria-label="নোটিফিকেশন" :aria-expanded="open.toString()">
                         {{ icon('bell', 'w-5 h-5') }}
-                        {% if unread > 0 %}
-                            <span class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-bold text-primary-900">{{ unread > 9 ? '9+' : unread }}</span>
-                        {% endif %}
+                        <span x-show="unread > 0" x-cloak
+                              class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-bold text-primary-900"
+                              x-text="badge">{{ unread > 0 ? (unread > 9 ? '9+' : unread) : '' }}</span>
                     </button>
                     <div x-show="open" x-cloak @click.outside="open = false" x-transition
-                         class="absolute right-0 mt-2 w-80 rounded-xl border border-neutral-200 bg-white shadow-lg">
+                         class="fixed left-4 right-4 top-16 z-50 mt-2 rounded-xl border border-neutral-200 bg-white shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:z-auto sm:mt-2 sm:w-80">
                         <div class="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
                             <p class="text-sm font-semibold text-neutral-800">নোটিফিকেশন</p>
-                            <form method="post" action="/notifications/read-all">
+                            {# Still works without JS: the plain form post lands back on /notifications. #}
+                            <form method="post" action="/notifications/read-all" @submit.prevent="markAllRead()">
                                 <input type="hidden" name="_csrf" value="{{ csrf }}">
-                                <button type="submit" class="text-xs font-medium text-primary-600 hover:underline">সব পড়া হয়েছে</button>
+                                <button type="submit" class="tap-target text-xs font-medium text-primary-600 hover:underline disabled:cursor-default disabled:opacity-40"
+                                        :disabled="unread === 0">সব পড়া হয়েছে</button>
                             </form>
                         </div>
                         <div class="max-h-80 overflow-y-auto" id="notification-dropdown-body">
-                            <p class="px-4 py-6 text-center text-sm text-neutral-500">লোড হচ্ছে…</p>
+                            <!-- Safety net only: the poller has usually filled the
+                                 list before the bell is ever clicked. -->
+                            <div x-show="loading && !loaded" class="space-y-3 p-4">
+                                <template x-for="n in 3" :key="n">
+                                    <div class="flex gap-3">
+                                        <span class="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-neutral-100"></span>
+                                        <span class="flex-1 space-y-2 py-1">
+                                            <span class="block h-3 w-2/3 animate-pulse rounded bg-neutral-100"></span>
+                                            <span class="block h-2.5 w-full animate-pulse rounded bg-neutral-100"></span>
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Failed -->
+                            <div x-show="error" class="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                                <p class="text-sm text-danger-600" x-text="error"></p>
+                                <button type="button" @click="load(true)" class="btn btn-ghost btn-sm">আবার চেষ্টা করুন</button>
+                            </div>
+
+                            <!-- Empty -->
+                            <div x-show="isEmpty" class="flex flex-col items-center gap-2 px-4 py-10 text-center">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                                    {{ icon('bell-off', 'w-6 h-6') }}
+                                </span>
+                                <p class="text-sm text-neutral-500">কোনো নোটিফিকেশন নেই।</p>
+                            </div>
+
+                            <!-- Rows -->
+                            <template x-for="item in items" :key="item.id">
+                                <a href="/notifications" @click.prevent="markRead(item)"
+                                   class="flex gap-3 border-b border-neutral-100 px-4 py-3 transition last:border-b-0 hover:bg-neutral-50"
+                                   :class="item.read_at ? 'opacity-60' : 'bg-primary-50/40'">
+                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" :class="toneClass(item.type)">
+                                        <svg class="h-4 w-4" aria-hidden="true"><use :href="iconHref(item.type)"></use></svg>
+                                    </span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="flex items-center gap-2">
+                                            <span class="truncate text-sm font-semibold text-neutral-800" x-text="item.title"></span>
+                                            <span class="badge badge-primary shrink-0 bg-primary-50 text-primary-700" x-show="!item.read_at">নতুন</span>
+                                        </span>
+                                        <span class="mt-0.5 block text-xs leading-relaxed text-neutral-500" x-text="item.message"></span>
+                                        <span class="mt-1 block text-[11px] text-neutral-400" x-text="time(item.created_at)"></span>
+                                    </span>
+                                </a>
+                            </template>
                         </div>
+
+                        <a href="/notifications" class="block border-t border-neutral-100 px-4 py-2.5 text-center text-xs font-semibold text-primary-600 transition hover:bg-neutral-50">
+                            সব নোটিফিকেশন দেখুন
+                        </a>
                     </div>
                 </div>
 
@@ -52,7 +108,9 @@
                 <div x-data="{ open: false }" class="relative">
                     <button @click="open = !open" class="flex items-center gap-2 rounded-full p-1 pr-2 transition hover:bg-white/10" aria-label="ইউজার মেনু" aria-expanded="false">
                         <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent-500 text-sm font-bold text-primary-900">{{ identity.username|first|upper }}</span>
-                        {{ icon('chevron-down', 'w-4 h-4 text-white/70') }}
+                        {# The chevron is the first thing to go on narrow phones —
+                           the balance chip in the topbar is more useful. #}
+                        {{ icon('chevron-down', 'hidden w-4 h-4 text-white/70 sm:block') }}
                     </button>
                     <div x-show="open" x-cloak @click.outside="open = false" x-transition
                          class="absolute right-0 mt-2 w-52 rounded-xl border border-neutral-200 bg-white py-1.5 shadow-lg">
@@ -89,7 +147,7 @@
             <aside x-show="sidebarOpen" x-transition class="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
                     <span class="font-bold text-neutral-800">মেনু</span>
-                    <button @click="sidebarOpen = false" class="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100" aria-label="বন্ধ করুন">
+                    <button @click="sidebarOpen = false" class="tap-target rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100" aria-label="বন্ধ করুন">
                         {{ icon('x', 'w-5 h-5') }}
                     </button>
                 </div>

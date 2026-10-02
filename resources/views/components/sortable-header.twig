@@ -9,7 +9,9 @@
 {% set nextDir = isActive and dir == 'asc' ? 'desc' : 'asc' %}
 <th {{ right ? 'class="text-right"' }} scope="col">
     <a href="{{ base }}sort={{ column }}&dir={{ nextDir }}"
-       class="inline-flex items-center gap-1 transition {{ isActive ? 'font-semibold text-primary-700' : 'text-neutral-500 hover:text-neutral-800' }}"
+       {# tap-target only applies under 640px, where these links sit in a horizontally
+          scrolled table and a 16px-tall hit area is awkward to reach. #}
+       class="tap-target inline-flex items-center gap-1 transition {{ isActive ? 'font-semibold text-primary-700' : 'text-neutral-500 hover:text-neutral-800' }}"
        aria-label="{{ label }} অনুযায়ী সাজান">
         {{ label }}
         {% if isActive %}

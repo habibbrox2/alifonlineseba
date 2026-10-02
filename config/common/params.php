@@ -11,11 +11,11 @@ return [
     'application' => [
         'charset' => 'UTF-8',
         'locale' => 'bn',
-        'name' => 'TH Tools',
+        'name' => 'Alif Tools',
     ],
 
     'app' => [
-        'name' => 'TH Tools',
+        'name' => 'Alif Tools',
         'tagline' => 'ডিজিটাল সেবা হাব',
         'telegram' => 'https://t.me/example_demo_channel',
         'support' => 'https://t.me/example_demo_support',

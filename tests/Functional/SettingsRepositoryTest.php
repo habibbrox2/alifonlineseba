@@ -40,8 +40,8 @@ final class SettingsRepositoryTest extends \Codeception\Test\Unit
 
         assertSame('ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম', $values['site_tagline']);
         assertSame('', $values['facebook_url']);
-        // No unknown keys may leak through.
-        assertSame(8, count($values));
+        // Exactly the whitelisted keys — no unknown keys may leak through.
+        assertSame(array_keys(SettingsRepository::KEYS), array_keys($values));
     }
 
     public function testPutManyWritesAndAllReadsBack(): void

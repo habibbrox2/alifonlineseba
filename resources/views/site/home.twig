@@ -1,16 +1,14 @@
 {% extends 'layouts/public.twig' %}
 
-{% block title %}TH Tools — এনআইডি সার্ভার কপি ও ডিজিটাল সেবা হাব (ডেমো){% endblock %}
-{% block description %}TH Tools-এ পাবেন ইনস্ট্যান্ট NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ সকল ডিজিটাল সেবার ডেমো অভিজ্ঞতা — দ্রুত, নিরাপদ ও সহজ। (সব ডাটা কাল্পনিক){% endblock %}
-
-{% block og_image %}<meta property="og:image" content="{{ siteUrl }}/assets/img/og-cover.png">{% endblock %}
+{% block title %}Alif Tools — এনআইডি সার্ভার কপি ও ডিজিটাল সেবা হাব (ডেমো){% endblock %}
+{% block description %}Alif Tools-এ পাবেন ইনস্ট্যান্ট NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ সকল ডিজিটাল সেবার ডেমো অভিজ্ঞতা — দ্রুত, নিরাপদ ও সহজ। (সব ডাটা কাল্পনিক){% endblock %}
 
 {% block structured_data %}
 <script type="application/ld+json">
 {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": "TH Tools",
+    "name": "Alif Tools",
     "url": "{{ siteUrl }}/",
     "description": "ডেমো ডিজিটাল সার্ভিস প্ল্যাটফর্ম — NID কপি, ভোটার সার্চ, টিন সার্টিফিকেট (সব ডাটা কাল্পনিক)",
     "areaServed": "BD",
@@ -27,13 +25,13 @@
 
     <div class="container-app relative">
         <p class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wide">
-            {{ icon('sparkles', 'w-4 h-4') }} TH Tools, A TotthoHub-style প্ল্যাটফর্ম ২০২৬
+            {{ icon('sparkles', 'w-4 h-4') }} Alif Tools, A TotthoHub-style প্ল্যাটফর্ম ২০২৬
         </p>
         <h1 class="mx-auto max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
             ডিজিটাল সেবা এক ক্লিকে!
         </h1>
         <p class="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
-            TH Tools ডেমো প্ল্যাটফর্মে পাবেন সকল ধরনের ডিজিটাল ও অফিশিয়াল সেবার ডেমো অভিজ্ঞতা —
+            Alif Tools ডেমো প্ল্যাটফর্মে পাবেন সকল ধরনের ডিজিটাল ও অফিশিয়াল সেবার ডেমো অভিজ্ঞতা —
             NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ (সব ডাটা কাল্পনিক)।
         </p>
 
@@ -54,13 +52,13 @@
 <section class="container-app -mt-14 pb-4">
     <div class="grid gap-5 sm:grid-cols-3">
         {% set features = [
-            { icon: 'shield-check', title: '১০০% সুরক্ষিত', desc: 'CSRF, সেশন সিকিউরিটি ও এনক্রিপ্টেড পাসওয়ার্ডসহ আধুনিক নিরাপত্তা।' },
-            { icon: 'zap', title: 'ইনস্ট্যান্ট ডেলিভারি', desc: 'সার্ভিস অর্ডারের সাথে সাথেই ডেমো ফলাফল প্রদর্শন।' },
-            { icon: 'headphones', title: '২৪/৭ সাপোর্ট', desc: 'যেকোনো সময় সাপোর্ট সেন্টারে মেসেজ করুন (ডেমো)।' },
+            { icon: 'shield-check', title: '১০০% সুরক্ষিত', desc: 'CSRF, সেশন সিকিউরিটি ও এনক্রিপ্টেড পাসওয়ার্ডসহ আধুনিক নিরাপত্তা।', accent: 'sky' },
+            { icon: 'zap', title: 'ইনস্ট্যান্ট ডেলিভারি', desc: 'সার্ভিস অর্ডারের সাথে সাথেই ডেমো ফলাফল প্রদর্শন।', accent: 'amber' },
+            { icon: 'headphones', title: '২৪/৭ সাপোর্ট', desc: 'যেকোনো সময় সাপোর্ট সেন্টারে মেসেজ করুন (ডেমো)।', accent: 'violet' },
         ] %}
         {% for feature in features %}
-            <div class="card card-hover p-6">
-                <span class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+            <div class="card card-hover card-accent p-6 accent-{{ feature.accent }}">
+                <span class="accent-tile mb-4 h-12 w-12">
                     {{ icon(feature.icon, 'w-6 h-6') }}
                 </span>
                 <h2 class="text-lg font-bold text-neutral-800">{{ feature.title }}</h2>

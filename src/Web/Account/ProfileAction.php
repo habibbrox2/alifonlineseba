@@ -9,7 +9,6 @@ use App\Repository\ActivityLogRepository;
 use App\Repository\TopupRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
-use App\Service\TopupService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\UrlGeneratorInterface;
@@ -25,7 +24,6 @@ final readonly class ProfileAction
         private TransactionRepository $transactions,
         private UrlGeneratorInterface $url,
         private SessionInterface $session,
-        private TopupService $topups,
         private TopupRepository $topupRepo,
     ) {}
 
@@ -35,17 +33,18 @@ final readonly class ProfileAction
         $identity = $request->getAttribute('identity');
         $errors = [];
 
+        $row = $this->users->findById($identity->id);
+
         if ($request->getMethod() === 'POST') {
             $input = (array) $request->getParsedBody();
             $action = (string) ($input['do'] ?? 'profile');
-            $row = $this->users->findById($identity->id);
 
             if ($action === 'password') {
                 $current = (string) ($input['current_password'] ?? '');
                 $new = (string) ($input['new_password'] ?? '');
                 $confirm = (string) ($input['confirm_password'] ?? '');
 
-                if (!password_verify($current, (string) $row['password_hash'])) {
+                if ($row === null || !password_verify($current, (string) $row['password_hash'])) {
                     $errors['current_password'] = 'বর্তমান পাসওয়ার্ড সঠিক নয়।';
                 } elseif (strlen($new) < 6) {
                     $errors['new_password'] = 'নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষর।';
@@ -70,32 +69,23 @@ final readonly class ProfileAction
                 }
             }
 
-            if ($action === 'topup') {
-                [$ok, $message, $topupErrors] = $this->topups->request($identity->id, $input);
-                if ($ok) {
-                    $this->session->set('flash_success', $message);
-                    return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('profile')]);
-                }
-                $errors = $topupErrors;
-                $this->session->set('flash_error', $message);
-            } elseif ($errors === []) {
+            if ($errors === []) {
                 return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('profile')]);
             }
         }
 
-        $row = $this->users->findById($identity->id);
         $activity = $this->logs->forUser($identity->id, 1, 8);
         $stats = $this->transactions->statsForUser($identity->id);
         $topupData = $this->topupRepo->forUser($identity->id, 1, 5);
 
         return $this->view->render('site/account/profile.twig', [
-            'user' => $row,
+            'user' => $row ?? [],
+            'apiKey' => $row !== null ? $this->users->ensureApiKey($identity->id) : null,
             'activity' => $activity['rows'],
             'stats' => $stats,
             'errors' => $errors,
             'identity' => $identity,
             'topups' => $topupData['rows'],
-            'topupMethods' => TopupRepository::METHODS,
         ]);
     }
 }

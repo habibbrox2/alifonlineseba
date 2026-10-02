@@ -39,6 +39,7 @@ final class ServiceRepository
             'slug' => $row['slug'],
             'icon' => $row['icon'] ?? null,
             'description' => $row['description'] ?? null,
+            'accent' => $row['accent'] ?? 'auto',
             'sort_order' => (int) ($row['sort_order'] ?? 0),
             'status' => $row['status'] ?? 'active',
             'created_at' => $now,
@@ -151,12 +152,29 @@ final class ServiceRepository
                 ? (is_string($row['form_fields']) ? $row['form_fields'] : json_encode($row['form_fields'], JSON_THROW_ON_ERROR))
                 : null,
             'price' => $row['price'] ?? 0,
+            'variants' => isset($row['variants']) && $row['variants'] !== null
+                ? (is_string($row['variants']) ? $row['variants'] : json_encode($row['variants'], JSON_THROW_ON_ERROR))
+                : null,
+            'rules' => $row['rules'] ?? null,
             'status' => $row['status'] ?? 'active',
             'sort_order' => (int) ($row['sort_order'] ?? 0),
             'created_at' => $now,
             'updated_at' => $now,
         ])->execute();
         return (int) $this->db->getLastInsertID();
+    }
+
+    /**
+     * Store the per-service purchasable variants (JSON list of {label, price})
+     * and ordering rules/instructions text. Pass null for either to clear it.
+     */
+    public function updateVariantsAndRules(int $id, ?array $variants, ?string $rules): void
+    {
+        $this->db->createCommand()->update('{{%service}}', [
+            'variants' => $variants === null ? null : json_encode($variants, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+            'rules' => $rules === null ? null : $rules,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ], ['id' => $id])->execute();
     }
 
     public function updateService(int $id, array $values): void

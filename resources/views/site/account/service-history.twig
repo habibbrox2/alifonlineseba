@@ -1,12 +1,32 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}সার্ভিস হিস্ট্রি — TH Tools{% endblock %}
+{% block title %}সার্ভিস হিস্ট্রি — Alif Tools{% endblock %}
 
 {% block dashboard_content %}
-<h1 class="mb-1 text-2xl font-extrabold text-neutral-900">সার্ভিস হিস্ট্রি</h1>
-<p class="mb-6 text-sm text-neutral-500">আপনার সব সার্ভিস অনুরোধের বর্তমান অবস্থা ও কার্যক্রম।</p>
+<div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div>
+        <h1 class="mb-1 text-2xl font-extrabold text-neutral-900">আপনার সকল অর্ডার ও ফলাফল</h1>
+        <p class="text-sm text-neutral-500">যেকোনো সেবার অর্ডারের সর্বশেষ অবস্থা, ডেলিভারি ফাইল ও রেজাল্ট বিস্তারিত দেখুন</p>
+    </div>
+    <a href="/services" class="btn btn-primary btn-sm">+ নতুন সেবা অর্ডার করুন</a>
+</div>
 
-<!-- Status filter chips, each with its row count -->
+<!-- Order-type chips (service category), like the reference's orders page -->
+<div class="mb-4 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+    <a href="/service-history"
+       class="chip shrink-0 {{ category == '' ? 'chip-active' }}">
+        📦 সকল অর্ডার ({{ counts.all }})
+    </a>
+    {% for cat in categories %}
+        <a href="/service-history?type={{ cat.slug }}"
+           class="chip chip-accent shrink-0 {{ accent(cat) }} {{ category == cat.slug ? 'chip-active' }}">
+            {{ cat.name }} ({{ categoryCounts[cat.slug] ?? 0 }})
+        </a>
+    {% endfor %}
+</div>
+
+<!-- Status filter chips, each with its row count (only meaningful without a type filter) -->
+{% if category == '' %}
 <div class="mb-5 flex flex-wrap gap-2">
     {% set filters = [
         { key: '', label: 'সব' },
@@ -25,35 +45,35 @@
         </a>
     {% endfor %}
 </div>
+{% endif %}
 
-<div class="card overflow-hidden">
-    <div class="overflow-x-auto">
-        <table class="table-base">
-            <thead>
-                <tr>
-                    <th>রেফারেন্স</th>
-                    <th>সার্ভিস</th>
-                    <th>পরিমাণ</th>
-                    <th>অবস্থা</th>
-                    <th>তারিখ</th>
-                    <th class="text-right">কার্যক্রম</th>
-                </tr>
-            </thead>
-            {% if requests is empty %}
-                <tbody>
+{# data-watch-rows tells the poller this page has live rows to refresh. The ids #}
+{# themselves are re-derived from the components Alpine builds, so there is no #}
+{# list to keep in step with the markup here. #}
+<div class="card overflow-hidden" data-watch-rows>
+    {# Empty state lives outside the <table>: the 640px min-width on .table-base
+       would otherwise centre it off-screen on a phone. #}
+    {% if requests is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('inbox', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">কোনো সার্ভিস অনুরোধ পাওয়া যায়নি।</p>
+            <a href="/services" class="btn btn-primary btn-sm mt-2">সার্ভিস দেখুন</a>
+        </div>
+    {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
                     <tr>
-                        <td colspan="6" class="px-4 py-12 text-center">
-                            <div class="mx-auto flex max-w-xs flex-col items-center gap-2">
-                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
-                                    {{ icon('inbox', 'w-6 h-6') }}
-                                </span>
-                                <p class="text-sm text-neutral-500">কোনো সার্ভিস অনুরোধ পাওয়া যায়নি।</p>
-                                <a href="/services" class="btn btn-primary btn-sm mt-2">সার্ভিস দেখুন</a>
-                            </div>
-                        </td>
+                        <th>রেফারেন্স</th>
+                        <th>সার্ভিস</th>
+                        <th>পরিমাণ</th>
+                        <th>অবস্থা</th>
+                        <th>তারিখ</th>
+                        <th class="text-right">কার্যক্রম</th>
                     </tr>
-                </tbody>
-            {% else %}
+                </thead>
                     {# One <tbody> per request: the row and its result panel are siblings, #}
                     {# so the Alpine scope has to be the element that contains both of them. #}
                     {% for request in requests %}
@@ -70,6 +90,10 @@
                             <td class="whitespace-nowrap font-semibold text-primary-700">{{ request.amount|money }}</td>
                             <td>
                                 <span class="badge" :class="badge" x-text="label"></span>
+                                {# Spelled out server-side so the file is named even if the #}
+                                {# download button is scrolled out of view on a phone. #}
+                                <p x-show="hasDeliverable" x-cloak class="mt-1 max-w-[10rem] truncate text-[11px] text-neutral-400"
+                                   x-text="deliverableName"></p>
                             </td>
                             <td class="whitespace-nowrap text-neutral-500">{{ request.created_at|bndate }}</td>
                             <td>
@@ -78,14 +102,29 @@
                                     <div class="flex flex-wrap items-center justify-end gap-1.5">
                                         <template x-for="action in actions" :key="action.key">
                                             <span class="inline-flex items-center gap-1">
-                                                <button type="button" class="btn btn-sm" :class="action.variant"
-                                                        :disabled="loading !== null"
-                                                        @click="run(action)">
-                                                    <svg class="h-3.5 w-3.5" aria-hidden="true">
-                                                        <use :href="'/assets/icons/lucide-sprite.svg#' + action.icon"></use>
-                                                    </svg>
-                                                    <span x-text="confirming === action.key ? 'নিশ্চিত করুন' : action.label"></span>
-                                                </button>
+                                                {# The download is a navigation, so it is a real <a>: the #}
+                                                {# browser streams the bytes and can save them, with no #}
+                                                {# fetch-then-blob dance. An <a download> is also the only #}
+                                                {# control that announces itself as a download to a screen #}
+                                                {# reader and shows a target in the status bar. #}
+                                                <template x-if="action.key === 'download'">
+                                                    <a class="btn btn-sm" :class="action.variant" :href="fileUrl">
+                                                        <svg class="h-3.5 w-3.5" aria-hidden="true">
+                                                            <use :href="'/assets/icons/lucide-sprite.svg#' + action.icon"></use>
+                                                        </svg>
+                                                        <span x-text="action.label"></span>
+                                                    </a>
+                                                </template>
+                                                <template x-if="action.key !== 'download'">
+                                                    <button type="button" class="btn btn-sm" :class="action.variant"
+                                                            :disabled="loading !== null"
+                                                            @click="run(action)">
+                                                        <svg class="h-3.5 w-3.5" aria-hidden="true">
+                                                            <use :href="'/assets/icons/lucide-sprite.svg#' + action.icon"></use>
+                                                        </svg>
+                                                        <span x-text="confirming === action.key ? 'নিশ্চিত করুন' : action.label"></span>
+                                                    </button>
+                                                </template>
                                                 <button type="button" x-show="confirming === action.key" x-cloak
                                                         class="text-[11px] text-neutral-500 hover:underline"
                                                         @click="confirming = null">না</button>
@@ -131,9 +170,9 @@
                         </tr>
                         </tbody>
                     {% endfor %}
-            {% endif %}
-        </table>
-    </div>
+            </table>
+        </div>
+    {% endif %}
 </div>
 
 {% include 'components/pagination.twig' with {

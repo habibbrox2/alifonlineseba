@@ -20,6 +20,9 @@ $icons = ($argv[1] ?? null) !== null ? array_slice($argv, 1) : [
     'alert-triangle', 'info', 'inbox', 'history', 'activity', 'key-round', 'save',
     'trending-up', 'gauge', 'scroll-text', 'plus', 'filter', 'eye', 'eye-off', 'smartphone',
     'settings', 'globe', 'facebook', 'youtube', 'message-circle',
+    // Referral programme: gift for the nav badge, copy/link for sharing a code,
+    // share-2 for the share row, rotate-ccw for "put a rejected one back".
+    'gift', 'copy', 'link', 'share-2', 'rotate-ccw', 'x-circle', 'handshake', 'badge-check',
 ];
 
 $packageDir = __DIR__ . '/../node_modules/lucide-static/icons';

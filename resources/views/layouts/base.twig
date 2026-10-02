@@ -7,8 +7,8 @@
 
     {# ————— SEO core ————— #}
     {% set seoUrl = siteUrl is defined and siteUrl ? siteUrl : 'http://localhost:8099' %}
-    {% set seoTitle = block('title')|default('TH Tools — ডিজিটাল সেবা হাব (ডেমো)')|trim %}
-    {% set seoDesc = block('description') is defined ? block('description')|trim : 'TH Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম (ডেমো)।' %}
+    {% set seoTitle = block('title')|default('Alif Tools — ডিজিটাল সেবা হাব (ডেমো)')|trim %}
+    {% set seoDesc = block('description') is defined ? block('description')|trim : 'Alif Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম (ডেমো)।' %}
     {% set seoRobots = block('robots') is defined ? block('robots')|trim : 'index, follow' %}
     {% set seoCanonical = block('canonical_url') is defined ? block('canonical_url')|trim : seoUrl ~ currentPath %}
 
@@ -17,24 +17,49 @@
     <meta name="robots" content="{{ seoRobots }}">
     <link rel="canonical" href="{{ seoCanonical }}">
 
+    {# ————— Brand icons ————— #}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
+    <link rel="icon" href="/favicon.ico" sizes="48x48">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+
     {# ————— Open Graph / Twitter ————— #}
+    {# Share card. Every page inherits the site-wide cover; a page with its own
+       artwork overrides the og_image block and re-emits the whole set.
+
+       The twitter:image tags live *inside* that block rather than beside it.
+       They used to read a variable set outside the block, so a child that
+       overrode the OG image silently left Twitter pointing at the old
+       site-wide cover — the two networks disagree about what the page is.
+       Same reason width/height are declared here and not hardcoded upstream:
+       crawlers lay the card out from them before the image loads, so a page
+       sharing a 1200x600 variant while claiming 1200x630 shifts the preview.
+       Per-service variants are 1200x600; see scripts/generate-service-og-image.py. #}
     <meta property="og:title" content="{{ seoTitle }}">
     <meta property="og:description" content="{{ seoDesc }}">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
-    <meta property="og:site_name" content="TH Tools">
+    <meta property="og:site_name" content="Alif Tools">
     <meta property="og:url" content="{{ seoCanonical }}">
     <meta property="og:locale" content="bn_BD">
-    {% block og_image %}{% endblock %}
-    <meta name="twitter:card" content="summary">
+    {% block og_image %}
+    <meta property="og:image" content="{{ seoUrl }}/assets/img/og-cover.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Alif Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস হাব">
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ seoTitle }}">
     <meta name="twitter:description" content="{{ seoDesc }}">
+    <meta name="twitter:image" content="{{ seoUrl }}/assets/img/og-cover.png">
+    <meta name="twitter:image:alt" content="Alif Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস হাব">
+    {% endblock %}
 
     {# ————— Structured data (site identity + WebSite) ————— #}
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebSite",
-        "name": "TH Tools",
+        "name": "Alif Tools",
         "url": "{{ seoUrl }}/",
         "description": "ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম (ডেমো)",
         "inLanguage": "bn-BD"
@@ -45,8 +70,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/css/app.css">
-    <script type="module" src="/assets/js/app.js"></script>
+    <link rel="stylesheet" href="{{ asset('/assets/css/app.css') }}">
+    <script type="module" src="{{ asset('/assets/js/app.js') }}"></script>
     {% block page_scripts %}{% endblock %}
     <script defer src="/assets/js/alpine.min.js"></script>
     {% block scripts %}{% endblock %}

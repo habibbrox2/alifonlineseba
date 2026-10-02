@@ -3,7 +3,10 @@
 {% block title %}লেনদেন পরিদর্শন — Admin{% endblock %}
 
 {% block dashboard_content %}
-<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">লেনদেন পরিদর্শন</h1>
+{% include 'components/page-header.twig' with {
+    title: 'লেনদেন পরিদর্শন',
+    description: 'সব লেনদেনের রেকর্ড — ফিল্টার, সাজান ও বিস্তারিত দেখুন',
+} %}
 
 <form method="get" action="/admin/transactions" class="mb-5 flex flex-wrap gap-2">
     <input type="search" name="q" value="{{ q }}" class="form-input sm:w-72" placeholder="রেফারেন্স / ইউজার দিয়ে খুঁজুন…">
@@ -19,37 +22,61 @@
 {% set txQuery = '/admin/transactions?' ~ (q ? ('q=' ~ q|url_encode) ~ '&' : '') ~ (status ? ('status=' ~ status) ~ '&' : '') %}
 
 <div class="card overflow-hidden">
-    <div class="overflow-x-auto">
-        <table class="table-base">
-            <thead>
-                <tr>
-                    {% include 'components/sortable-header.twig' with { label: 'রেফারেন্স', column: 'reference', sort: sort, dir: dir, base: txQuery } %}
-                    {% include 'components/sortable-header.twig' with { label: 'ইউজার', column: 'username', sort: sort, dir: dir, base: txQuery } %}
-                    <th>সার্ভিস</th>
-                    {% include 'components/sortable-header.twig' with { label: 'পরিমাণ', column: 'amount', sort: sort, dir: dir, base: txQuery, right: true } %}
-                    {% include 'components/sortable-header.twig' with { label: 'স্ট্যাটাস', column: 'status', sort: sort, dir: dir, base: txQuery } %}
-                    {% include 'components/sortable-header.twig' with { label: 'তারিখ', column: 'created_at', sort: sort, dir: dir, base: txQuery } %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for tx in rows %}
+        {# Outside the <table> so the message is not stranded in a 640px-wide scroll area. #}
+        {% if rows is empty %}
+            <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                    {{ icon('receipt', 'w-6 h-6') }}
+                </span>
+                <p class="text-sm text-neutral-500">
+                    {% if q or status %}এই ফিল্টারে কোনো লেনদেন পাওয়া যায়নি।{% else %}কোনো লেনদেন পাওয়া যায়নি।{% endif %}
+                </p>
+            </div>
+        {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
                     <tr>
-                        <td class="font-mono text-xs">{{ tx.reference }}</td>
-                        <td>
-                            <p class="font-medium text-neutral-800">{{ tx.username ?? '—' }}</p>
-                            <p class="text-xs text-neutral-400">{{ tx.phone ?? '' }}</p>
-                        </td>
-                        <td>{{ tx.service_name ?? '—' }}</td>
-                        <td class="font-semibold text-primary-700">{{ tx.amount|money }}</td>
-                        <td>{% include 'components/status-badge.twig' with { status: tx.status } %}</td>
-                        <td class="whitespace-nowrap text-neutral-500">{{ tx.created_at|bndate }}</td>
+                        {% include 'components/sortable-header.twig' with { label: 'রেফারেন্স', column: 'reference', sort: sort, dir: dir, base: txQuery } %}
+                        {% include 'components/sortable-header.twig' with { label: 'ইউজার', column: 'username', sort: sort, dir: dir, base: txQuery } %}
+                        <th>সার্ভিস</th>
+                        {% include 'components/sortable-header.twig' with { label: 'পরিমাণ', column: 'amount', sort: sort, dir: dir, base: txQuery, right: true } %}
+                        {% include 'components/sortable-header.twig' with { label: 'স্ট্যাটাস', column: 'status', sort: sort, dir: dir, base: txQuery } %}
+                        {% include 'components/sortable-header.twig' with { label: 'তারিখ', column: 'created_at', sort: sort, dir: dir, base: txQuery } %}
+                        <th class="text-right">অ্যাকশন</th>
                     </tr>
-                {% else %}
-                    <tr><td colspan="6" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো লেনদেন পাওয়া যায়নি।</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    {% for tx in rows %}
+                        <tr>
+                            <td class="font-mono text-xs">{{ tx.reference }}</td>
+                            <td>
+                                <p class="font-medium text-neutral-800">{{ tx.username ?? '—' }}</p>
+                                <p class="text-xs text-neutral-400">{{ tx.phone ?? '' }}</p>
+                            </td>
+                            <td>{{ tx.service_name ?? '—' }}</td>
+                            <td class="font-semibold text-primary-700">{{ tx.amount|money }}</td>
+                            <td>{% include 'components/status-badge.twig' with { status: tx.status } %}</td>
+                            <td class="whitespace-nowrap text-neutral-500">{{ tx.created_at|bndate }}</td>
+                            <td class="text-right">
+                                <div class="flex flex-col items-end gap-1">
+                                    {# The file marker is a separate line from the link: it is the only #}
+                                    {# way an operator can tell, from the list alone, which requests #}
+                                    {# still need their deliverable handed over. #}
+                                    {% if tx.deliverable_path is defined and tx.deliverable_path %}
+                                        <span class="inline-flex items-center gap-1 text-[11px] text-success-600">
+                                            {{ icon('paperclip', 'w-3 h-3') }} ফাইল দেওয়া হয়েছে
+                                        </span>
+                                    {% endif %}
+                                    <a href="/admin/transactions/{{ tx.id }}" class="btn btn-sm btn-ghost">খুলুন</a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 </div>
 
 {% include 'components/pagination.twig' with {

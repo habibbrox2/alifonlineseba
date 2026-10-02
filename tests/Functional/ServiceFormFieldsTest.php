@@ -10,6 +10,7 @@ use App\Repository\ServiceRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
 use App\Service\ServiceManager;
+use App\ServiceProvider\ServiceField;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Definitions\Exception\NotFoundException;
 use Yiisoft\Di\Container;
@@ -28,19 +29,30 @@ use function PHPUnit\Framework\assertTrue;
 final class ServiceFormFieldsTest extends \Codeception\Test\Unit
 {
     private ServiceManager $manager;
+    private ConnectionInterface $db;
 
     protected function _before(): void
     {
         $container = new Container(ContainerConfig::create()->withDefinitions(
             require codecept_root_dir() . 'config/common/di/db.php',
         ));
-        $db = $container->get(ConnectionInterface::class);
+        $this->db = $container->get(ConnectionInterface::class);
         $this->manager = new ServiceManager(
-            new ServiceRepository($db),
-            new TransactionRepository($db),
-            new UserRepository($db),
-            new ActivityLogRepository($db),
-            new NotificationRepository($db),
+            new ServiceRepository($this->db),
+            new TransactionRepository($this->db),
+            new UserRepository($this->db),
+            new ActivityLogRepository($this->db),
+            new NotificationRepository($this->db),
+            new \App\Notification\NotificationManager(
+                new NotificationRepository($this->db),
+                new \App\Notification\QueueRepository($this->db),
+                new \App\Notification\TemplateRenderer(
+                    $this->db,
+                    new \App\Repository\SettingsRepository($this->db),
+                ),
+                new UserRepository($this->db),
+                $this->db,
+            ),
         );
     }
 
@@ -120,5 +132,123 @@ final class ServiceFormFieldsTest extends \Codeception\Test\Unit
         $fields = $this->manager->fieldsFor($service);
         assertCount(1, $fields);
         assertFalse($fields[0]->required);
+    }
+
+    public function testLabelledCustomFieldIsRenderedAlongsideProviderFields(): void
+    {
+        $service = $this->nidService([
+            'form_fields' => json_encode([
+                ['name' => 'nid_number', 'required' => true],
+                [
+                    'name' => 'mobile_number',
+                    'label' => 'মোবাইল নম্বর',
+                    'type' => 'tel',
+                    'required' => false,
+                    'placeholder' => '01XXXXXXXXX',
+                    'help' => 'যেখানে ফলাফল পাঠানো হবে',
+                ],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        $fields = $this->manager->fieldsFor($service);
+        assertSame(['nid_number', 'mobile_number'], array_map(static fn ($f): string => $f->name, $fields));
+        assertSame('মোবাইল নম্বর', $fields[1]->label);
+        assertSame('tel', $fields[1]->type);
+        assertSame('01XXXXXXXXX', $fields[1]->placeholder);
+        assertSame('যেখানে ফলাফল পাঠানো হবে', $fields[1]->help);
+        assertFalse($fields[1]->required);
+
+        $customs = $this->manager->customFieldsFor($service);
+        assertCount(1, $customs);
+        assertSame('mobile_number', $customs[0]->name);
+    }
+
+    public function testCustomFieldWithoutALabelIsDropped(): void
+    {
+        $service = $this->nidService([
+            'form_fields' => json_encode([
+                ['name' => 'nid_number', 'required' => true],
+                ['name' => 'mobile_number', 'label' => '   '],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        assertSame(['nid_number'], array_map(static fn ($f): string => $f->name, $this->manager->fieldsFor($service)));
+        assertSame([], $this->manager->customFieldsFor($service));
+    }
+
+    public function testCustomFieldWithAnUnusableNameIsDropped(): void
+    {
+        $service = $this->nidService([
+            'form_fields' => json_encode([
+                ['name' => '9lives', 'label' => 'নাম'],
+                ['name' => 'has space', 'label' => 'নাম'],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        assertSame([], $this->manager->customFieldsFor($service));
+    }
+
+    public function testCustomFieldWithAReservedNameIsDropped(): void
+    {
+        // `do` and `id` are read from the request body by the handlers, so a
+        // field carrying one of those names would hijack their dispatch keys.
+        foreach (ServiceField::RESERVED_NAMES as $reserved) {
+            $service = $this->nidService([
+                'form_fields' => json_encode([
+                    ['name' => $reserved, 'label' => 'ছাঁদ'],
+                ], JSON_THROW_ON_ERROR),
+            ]);
+
+            assertSame([], $this->manager->customFieldsFor($service), $reserved);
+            assertFalse(ServiceField::isValidName($reserved));
+        }
+
+        assertTrue(ServiceField::isValidName('mobile_number'));
+    }
+
+    public function testCustomFieldWithAnUnknownTypeFallsBackToText(): void
+    {
+        $service = $this->nidService([
+            'form_fields' => json_encode([
+                ['name' => 'memo', 'label' => 'মেমো', 'type' => '<script>'],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        $fields = $this->manager->fieldsFor($service);
+        assertCount(1, $fields);
+        assertSame('text', $fields[0]->type);
+    }
+
+    public function testDisabledCustomFieldIsHiddenButSurvivesTheConfig(): void
+    {
+        $service = $this->nidService([
+            'form_fields' => json_encode([
+                ['name' => 'nid_number', 'required' => true],
+                ['name' => 'mobile_number', 'label' => 'মোবাইল', 'type' => 'tel', 'enabled' => false],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        assertSame(['nid_number'], array_map(static fn ($f): string => $f->name, $this->manager->fieldsFor($service)));
+
+        $config = $this->manager->formFieldConfig($service);
+        assertCount(2, $config);
+        assertSame('mobile_number', $config[1]['name']);
+        assertFalse($config[1]['enabled']);
+        assertSame('মোবাইল', $config[1]['label']);
+
+        // Still editable, so the admin can switch it back on.
+        assertCount(1, $this->manager->customFieldsFor($service));
+    }
+
+    public function testCustomFieldWithoutEnabledFlagStaysVisible(): void
+    {
+        $service = $this->nidService([
+            'form_fields' => json_encode([
+                ['name' => 'mobile_number', 'label' => 'মোবাইল'],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        assertCount(1, $this->manager->fieldsFor($service));
+        assertTrue($this->manager->formFieldConfig($service)[0]['enabled']);
     }
 }

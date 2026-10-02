@@ -3,7 +3,10 @@
 {% block title %}অ্যাক্টিভিটি লগ — Admin{% endblock %}
 
 {% block dashboard_content %}
-<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">অ্যাক্টিভিটি লগ</h1>
+{% include 'components/page-header.twig' with {
+    title: 'অ্যাক্টিভিটি লগ',
+    description: 'সিস্টেমে ইউজার ও অ্যাডমিনের কাজের সময়রেখা',
+} %}
 
 <form method="get" action="/admin/activity-logs" class="mb-5 flex gap-2 sm:max-w-md">
     <input type="search" name="q" value="{{ q }}" class="form-input" placeholder="অ্যাকশন বা IP দিয়ে খুঁজুন…">
@@ -11,26 +14,36 @@
 </form>
 
 <div class="card overflow-hidden">
-    <div class="overflow-x-auto">
-        <table class="table-base">
-            <thead>
-                <tr><th>অ্যাকশন</th><th>বর্ণনা</th><th>ইউজার</th><th>IP</th><th>সময়</th></tr>
-            </thead>
-            <tbody>
-                {% for log in rows %}
-                    <tr>
-                        <td class="font-mono text-xs">{{ log.action }}</td>
-                        <td class="max-w-xs truncate">{{ log.description ?? '—' }}</td>
-                        <td class="text-sm">{{ log.user_id ? '#' ~ log.user_id : '—' }}</td>
-                        <td class="font-mono text-xs">{{ log.ip_address ?? '—' }}</td>
-                        <td class="whitespace-nowrap text-neutral-500">{{ log.created_at|bndate }}</td>
-                    </tr>
-                {% else %}
-                    <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো লগ পাওয়া যায়নি।</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        {# Outside the <table> so the message is not stranded in a 640px-wide scroll area. #}
+        {% if rows is empty %}
+            <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                    {{ icon('activity', 'w-6 h-6') }}
+                </span>
+                <p class="text-sm text-neutral-500">
+                    {% if q %}“{{ q }}” অনুসন্ধানে কোনো লগ পাওয়া যায়নি।{% else %}কোনো লগ পাওয়া যায়নি।{% endif %}
+                </p>
+            </div>
+        {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
+                    <tr><th>অ্যাকশন</th><th>বর্ণনা</th><th>ইউজার</th><th>IP</th><th>সময়</th></tr>
+                </thead>
+                <tbody>
+                    {% for log in rows %}
+                        <tr>
+                            <td class="font-mono text-xs">{{ log.action }}</td>
+                            <td class="max-w-xs truncate">{{ log.description ?? '—' }}</td>
+                            <td class="text-sm">{{ log.user_id ? '#' ~ log.user_id : '—' }}</td>
+                            <td class="font-mono text-xs">{{ log.ip_address ?? '—' }}</td>
+                            <td class="whitespace-nowrap text-neutral-500">{{ log.created_at|bndate }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 </div>
 
 {% include 'components/pagination.twig' with {

@@ -3,8 +3,10 @@
 {% block title %}সাইট সেটিংস — Admin{% endblock %}
 
 {% block dashboard_content %}
-<h1 class="mb-2 text-2xl font-extrabold text-neutral-900">সাইট সেটিংস</h1>
-<p class="mb-6 text-sm text-neutral-500">সাইটের তথ্য, যোগাযোগ ও সোশ্যাল লিংক এখানে আপডেট করুন — পাবলিক পেজের ফুটারে সাথে সাথে দেখা যাবে।</p>
+{% include 'components/page-header.twig' with {
+    title: 'সাইট সেটিংস',
+    description: 'সাইটের তথ্য, যোগাযোগ ও সোশ্যাল লিংক এখানে আপডেট করুন — পাবলিক পেজের ফুটারে সাথে সাথে দেখা যাবে।',
+} %}
 
 <form method="post" action="/admin/settings" class="max-w-2xl space-y-5" novalidate>
     <input type="hidden" name="_csrf" value="{{ csrf }}">
@@ -71,6 +73,172 @@
                 <input type="url" id="f-telegram" name="telegram_url" value="{{ settings.telegram_url }}" class="form-input" maxlength="500" placeholder="https://t.me/yourchannel">
                 {% if errors.telegram_url is defined %}<p class="form-error">{{ errors.telegram_url }}</p>{% endif %}
             </div>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('wallet', 'w-4 h-4 text-primary-600') }} রিচার্জ সেটিংস
+        </h2>
+        <p class="mb-4 text-xs text-neutral-500">ইউজারের রিচার্জ অনুরোধ পেতে যাচাই করার সময় এই নিয়মগুলো মানা হবে।</p>
+        <div class="space-y-4">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="f-topup-min" class="form-label">সর্বনিম্ন পরিমাণ (৳)</label>
+                    <input type="number" id="f-topup-min" name="topup_min_amount" min="1" step="0.01"
+                           value="{{ settings.topup_min_amount }}" class="form-input" placeholder="10">
+                    {% if errors.topup_min_amount is defined %}<p class="form-error">{{ errors.topup_min_amount }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="f-topup-max" class="form-label">সর্বোচ্চ পরিমাণ (৳)</label>
+                    <input type="number" id="f-topup-max" name="topup_max_amount" min="1" step="0.01"
+                           value="{{ settings.topup_max_amount }}" class="form-input" placeholder="100000">
+                    {% if errors.topup_max_amount is defined %}<p class="form-error">{{ errors.topup_max_amount }}</p>{% endif %}
+                </div>
+            </div>
+
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-200 px-4 py-3">
+                <input type="checkbox" name="topup_receipt_required" value="1"
+                       {{ settings.topup_receipt_required == '1' ? 'checked' }}
+                       class="mt-0.5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500">
+                <span>
+                    <span class="block text-sm font-semibold text-neutral-800">রশিদ বাধ্যতামূলক</span>
+                    <span class="block text-xs text-neutral-500">বন্ধ করলে ইউজার রশিদ ছাড়াই অনুরোধ জমা দিতে পারবেন।</span>
+                </span>
+            </label>
+
+            <div>
+                <label for="f-topup-note" class="form-label">রিচার্জ নির্দেশনা</label>
+                <textarea id="f-topup-note" name="topup_note" rows="4" class="form-input" maxlength="1000"
+                          placeholder="যেমন: bKash দিয়ে পাঠিয়ে TrxID ও রশিদ আপলোড করুন। যাচাই সাধারণত ২৪ ঘণ্টার মধ্যে হয়।">{{ settings.topup_note }}</textarea>
+                <p class="mt-1 text-xs text-neutral-400">ইউজারের রিচার্জ পেজের উপরে এই নির্দেশনা দেখানো হবে।</p>
+            </div>
+
+            <div class="border-t border-neutral-100 pt-4">
+                <p class="form-label">পার্সোনাল ওয়ালেট নম্বর</p>
+                <p class="mb-3 text-xs text-neutral-500">রিচার্জের ২য় ধাপে ইউজার যে নম্বরে টাকা পাঠাবেন।</p>
+                <div class="grid gap-4 sm:grid-cols-3">
+                    <div>
+                        <label for="f-wallet-bkash" class="form-label">bKash</label>
+                        <input type="text" id="f-wallet-bkash" name="wallet_bkash" value="{{ settings.wallet_bkash }}"
+                               class="form-input" inputmode="tel" placeholder="013XXXXXXXX">
+                    </div>
+                    <div>
+                        <label for="f-wallet-nagad" class="form-label">Nagad</label>
+                        <input type="text" id="f-wallet-nagad" name="wallet_nagad" value="{{ settings.wallet_nagad }}"
+                               class="form-input" inputmode="tel" placeholder="013XXXXXXXX">
+                    </div>
+                    <div>
+                        <label for="f-wallet-rocket" class="form-label">Rocket</label>
+                        <input type="text" id="f-wallet-rocket" name="wallet_rocket" value="{{ settings.wallet_rocket }}"
+                               class="form-input" inputmode="tel" placeholder="013XXXXXXXX">
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="f-quick-amounts" class="form-label">দ্রুত এমাউন্ট বাটন</label>
+                    <input type="text" id="f-quick-amounts" name="topup_quick_amounts" value="{{ settings.topup_quick_amounts }}"
+                           class="form-input" placeholder="50,100,300,500,2000">
+                    <p class="mt-1 text-xs text-neutral-400">কমা দিয়ে আলাদা করুন।</p>
+                </div>
+                <div>
+                    <label for="f-offer-text" class="form-label">রিচার্জ অফার ব্যানার</label>
+                    <input type="text" id="f-offer-text" name="topup_offer_text" value="{{ settings.topup_offer_text }}"
+                           class="form-input" maxlength="300" placeholder="🔥 বিশেষ অফার…">
+                    <p class="mt-1 text-xs text-neutral-400">রিচার্জ পেজের উপরে ব্যানার হিসেবে দেখাবে।</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('megaphone', 'w-4 h-4 text-primary-600') }} জরুরি নোটিশ (পপ-আপ)
+        </h2>
+        <p class="mb-4 text-xs text-neutral-500">লগইন ও ড্যাশবোর্ডে একবার দেখানো হবে — ইউজার বন্ধ করলে সেশনে মনে থাকে।</p>
+        <div class="space-y-4">
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-200 px-4 py-3">
+                <input type="checkbox" name="notice_enabled" value="1"
+                       {{ settings.notice_enabled == '1' ? 'checked' }}
+                       class="mt-0.5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500">
+                <span>
+                    <span class="block text-sm font-semibold text-neutral-800">নোটিশ চালু</span>
+                    <span class="block text-xs text-neutral-500">বন্ধ থাকলে কোথাও দেখানো হবে না।</span>
+                </span>
+            </label>
+            <div>
+                <label for="f-notice-title" class="form-label">শিরোনাম</label>
+                <input type="text" id="f-notice-title" name="notice_title" value="{{ settings.notice_title }}"
+                       class="form-input" maxlength="120" placeholder="জরুরি নোটিশ">
+            </div>
+            <div>
+                <label for="f-notice-body" class="form-label">বিবরণ</label>
+                <textarea id="f-notice-body" name="notice_body" rows="3" class="form-input" maxlength="1000"
+                          placeholder="আমাদের সকল সম্মানিত রেগুলার কাস্টমারদের…">{{ settings.notice_body }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('gift', 'w-4 h-4 text-primary-600') }} রেফারেল প্রোগ্রাম (বন্ধুকে রেফার করুন)
+        </h2>
+        <p class="mb-4 text-xs text-neutral-500">
+            ইউজার নিবন্ধনের সময় <code class="rounded bg-neutral-100 px-1 py-0.5 text-[11px]">?ref=কোড</code> লিংক থেকে আসে।
+            বন্ধুর <strong>প্রথম অনুমোদিত রিচার্জের</strong> পর দুই পাশেই বোনাস ব্যালেন্সে যোগ হয় — নিবন্ধনের সময় নয়।
+            <a href="/admin/referrals" class="font-semibold text-primary-600 hover:underline">রেফারেল তালিকা দেখুন →</a>
+        </p>
+        <div class="space-y-4">
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-200 px-4 py-3">
+                <input type="checkbox" name="referral_enabled" value="1"
+                       {{ settings.referral_enabled == '1' ? 'checked' }}
+                       class="mt-0.5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500">
+                <span>
+                    <span class="block text-sm font-semibold text-neutral-800">রেফারেল সিস্টেম চালু</span>
+                    <span class="block text-xs text-neutral-500">
+                        বন্ধ করলে নতুন কোড কাজ করবে না। ইতিমধ্যে অপেক্ষমাণ থাকা রেফারেল আগের শর্তে পরিশোধ হবে।
+                    </span>
+                </span>
+            </label>
+
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <label for="f-ref-referrer" class="form-label">রেফারকারীর বোনাস (৳)</label>
+                    <input type="number" id="f-ref-referrer" name="referrer_bonus_amount" min="0" max="100000" step="0.01"
+                           value="{{ settings.referrer_bonus_amount }}" class="form-input" placeholder="50">
+                    <p class="mt-1 text-xs text-neutral-400">যিনি বন্ধুকে রেফার করেছেন তাঁর ব্যালেন্সে যাবে।</p>
+                    {% if errors.referrer_bonus_amount is defined %}<p class="form-error">{{ errors.referrer_bonus_amount }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="f-ref-referee" class="form-label">নতুন ইউজারের বোনাস (৳)</label>
+                    <input type="number" id="f-ref-referee" name="referee_bonus_amount" min="0" max="100000" step="0.01"
+                           value="{{ settings.referee_bonus_amount }}" class="form-input" placeholder="20">
+                    <p class="mt-1 text-xs text-neutral-400">বন্ধুর প্রথমবার ঢুকলে তাঁর ব্যালেন্সে যাবে।</p>
+                    {% if errors.referee_bonus_amount is defined %}<p class="form-error">{{ errors.referee_bonus_amount }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="f-ref-min" class="form-label">প্রথম রিচার্জ সর্বনিম্ন (৳)</label>
+                    <input type="number" id="f-ref-min" name="referral_min_first_recharge" min="0" max="1000000" step="0.01"
+                           value="{{ settings.referral_min_first_recharge }}" class="form-input" placeholder="100">
+                    <p class="mt-1 text-xs text-neutral-400">০ দিলে যেকোনো অনুমোদিত রিচার্জই গোনা হবে।</p>
+                    {% if errors.referral_min_first_recharge is defined %}<p class="form-error">{{ errors.referral_min_first_recharge }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div>
+                <label for="f-ref-terms" class="form-label">শর্তাবলী</label>
+                <textarea id="f-ref-terms" name="referral_terms" rows="3" class="form-input" maxlength="1000"
+                          placeholder="বন্ধুকে রেফার করে বোনাস পান — শর্তাবলী">{{ settings.referral_terms }}</textarea>
+                <p class="mt-1 text-xs text-neutral-400">ইউজারের রেফারেল পেজে এই লেখাটি দেখানো হবে।</p>
+                {% if errors.referral_terms is defined %}<p class="form-error">{{ errors.referral_terms }}</p>{% endif %}
+            </div>
+
+            <p class="rounded-lg bg-info-50 px-3 py-2 text-xs text-info-800">
+                {{ icon('info', 'w-3.5 h-3.5 inline-block align-text-bottom') }}
+                বোনাসের পরিমাণ নিবন্ধনের সময়ই ফ্রিজ হয়ে যায় — অপেক্ষমাণ থাকা রেফারেলে আগের পরিমাণই পরিশোধ হবে।
+            </p>
         </div>
     </div>
 

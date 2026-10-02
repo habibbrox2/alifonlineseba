@@ -5,22 +5,35 @@ declare(strict_types=1);
 use App\Auth\AdminMiddleware;
 use App\Auth\ApiAuthMiddleware;
 use App\Auth\AuthMiddleware;
+use App\Web\Account\DeliverableAction;
 use App\Web\Account\NotificationsAction;
 use App\Web\Account\ProfileAction;
+use App\Web\Account\ReceiptAction;
+use App\Web\Account\RechargeAction;
+use App\Web\Account\RechargeCancelAction;
+use App\Web\Account\ReferralsAction;
 use App\Web\Account\ServiceHistoryAction;
 use App\Web\Account\TransactionsAction;
 use App\Web\Admin\AdminCategoriesAction;
 use App\Web\Admin\AdminDashboardAction;
 use App\Web\Admin\AdminLogsAction;
+use App\Web\Admin\AdminNotificationsAction;
+use App\Web\Admin\AdminRechargeAction;
+use App\Web\Admin\AdminReferralsAction;
 use App\Web\Admin\AdminServicesAction;
 use App\Web\Admin\AdminSettingsAction;
 use App\Web\Admin\AdminTopupsAction;
+use App\Web\Admin\AdminTransactionAction;
 use App\Web\Admin\AdminTransactionsAction;
 use App\Web\Admin\AdminUsersAction;
+use App\Web\Api\AuthApiAction;
 use App\Web\Api\DashboardApiAction;
+use App\Web\Api\DeviceApiAction;
 use App\Web\Api\NotificationsApiAction;
 use App\Web\Api\ProfileApiAction;
 use App\Web\Api\ServiceRequestApiAction;
+use App\Web\Api\ServiceRequestDetailApiAction;
+use App\Web\Api\ServiceRequestsWatchApiAction;
 use App\Web\Api\ServicesApiAction;
 use App\Web\Api\TransactionsApiAction;
 use App\Web\Auth\LoginAction;
@@ -60,23 +73,42 @@ return [
         Route::get('/services')->action(CategoryAction::class)->name('services'),
         Route::get('/services/category/{slug}')->action(CategoryAction::class)->name('service-category'),
         Route::methods(['GET', 'POST'], '/services/view/{slug}')->action(ServiceDetailAction::class)->name('service-detail'),
-        Route::post('/profile/topup')->action(ProfileAction::class)->name('profile-topup'),
+        Route::methods(['GET', 'POST'], '/recharge')->action(RechargeAction::class)->name('recharge'),
+        Route::get('/recharge/receipt/{id}')->action(ReceiptAction::class)->name('recharge-receipt'),
+        Route::post('/recharge/cancel')->action(RechargeCancelAction::class)->name('recharge-cancel'),
         Route::get('/transactions')->action(TransactionsAction::class)->name('transactions'),
         Route::get('/service-history')->action(ServiceHistoryAction::class)->name('service-history'),
+        // Streams the deliverable an admin attached. Deliberately a plain GET
+        // link rather than an API call: a <a download> is the only way to hand
+        // bytes to the browser without a fetch-then-blob dance, and the action
+        // re-checks ownership on every hit.
+        Route::get('/service-requests/{id}/file')->action(DeliverableAction::class)->name('service-request-file'),
+        Route::get('/referrals')->action(ReferralsAction::class)->name('referrals'),
         Route::get('/notifications')->action(NotificationsAction::class)->name('notifications'),
         Route::post('/notifications/read-all')->action(NotificationsAction::class)->name('notifications-read-all'),
         Route::methods(['GET', 'POST'], '/profile')->action(ProfileAction::class)->name('profile'),
     ),
 
-    // JSON API (auth required)
+    // Machine auth (Phase 1.5) — public, no session needed; the throttle for
+    // credential abuse lives inside the login flow.
+    Route::methods(['POST'], '/api/auth/{action}')->action(AuthApiAction::class)->name('api-auth'),
+
+    // JSON API (auth required — bearer token OR session)
     Group::create('/api')->middleware(ApiAuthMiddleware::class)->routes(
         Route::get('/dashboard')->action(DashboardApiAction::class)->name('api-dashboard'),
         Route::get('/services')->action(ServicesApiAction::class)->name('api-services'),
         Route::get('/services/{slug}')->action(ServicesApiAction::class)->name('api-service'),
         Route::get('/transactions')->action(TransactionsApiAction::class)->name('api-transactions'),
+        Route::get('/service-requests/{id}')->action(ServiceRequestDetailApiAction::class)->name('api-service-request-detail'),
+        // The history page polls this for the rows it is currently showing.
+        Route::post('/service-requests/watch')->action(ServiceRequestsWatchApiAction::class)->name('api-service-requests-watch'),
         Route::post('/service-requests/{id}/{action}')->action(ServiceRequestApiAction::class)->name('api-service-request'),
+        Route::post('/devices')->action(DeviceApiAction::class)->name('api-devices'),
+        Route::get('/devices')->action(DeviceApiAction::class)->name('api-devices-list'),
+        Route::delete('/devices/{id}')->action(DeviceApiAction::class)->name('api-device-delete'),
         Route::get('/notifications')->action(NotificationsApiAction::class)->name('api-notifications'),
         Route::patch('/notifications/{id}/read')->action(NotificationsApiAction::class)->name('api-notification-read'),
+        Route::post('/notifications/read-all')->action(NotificationsApiAction::class)->name('api-notifications-read-all'),
         Route::get('/profile')->action(ProfileApiAction::class)->name('api-profile'),
     ),
 
@@ -95,8 +127,13 @@ return [
             Route::get('/services')->action(AdminServicesAction::class)->name('admin-services'),
             Route::post('/services')->action(AdminServicesAction::class)->name('admin-services-post'),
             Route::get('/transactions')->action(AdminTransactionsAction::class)->name('admin-transactions'),
+            Route::methods(['GET', 'POST'], '/transactions/{id}')->action(AdminTransactionAction::class)->name('admin-transaction'),
             Route::methods(['GET', 'POST'], '/topups')->action(AdminTopupsAction::class)->name('admin-topups'),
+            Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargeAction::class)->name('admin-recharge'),
+            Route::methods(['GET', 'POST'], '/referrals')->action(AdminReferralsAction::class)->name('admin-referrals'),
             Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsAction::class)->name('admin-settings'),
+            Route::get('/notifications')->action(AdminNotificationsAction::class)->name('admin-notifications'),
+            Route::post('/notifications/{id}/retry')->action(AdminNotificationsAction::class)->name('admin-notification-retry'),
             Route::get('/activity-logs')->action(AdminLogsAction::class)->name('admin-logs'),
         ),
 ];

@@ -1,6 +1,6 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}প্রোফাইল — TH Tools{% endblock %}
+{% block title %}প্রোফাইল — Alif Tools{% endblock %}
 
 {% block dashboard_content %}
 <h1 class="mb-6 text-2xl font-extrabold text-neutral-900">প্রোফাইল</h1>
@@ -12,6 +12,27 @@
             <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
                 {{ icon('user-circle', 'w-5 h-5 text-primary-600') }} অ্যাকাউন্ট তথ্য
             </h2>
+
+            {# API user key — the reference shows this prominently with a copy button. #}
+            <div class="mb-6" x-data="{ copied: false }">
+                <div class="mb-2 flex items-center justify-between">
+                    <p class="text-xs font-bold uppercase tracking-wider text-neutral-400">API User Key</p>
+                    <button type="button"
+                            class="tap-target inline-flex items-center gap-1 text-xs font-semibold text-danger-600 hover:underline"
+                            @click="navigator.clipboard && navigator.clipboard.writeText('{{ user.api_key ?? '' }}'); copied = true; setTimeout(() => copied = false, 1500)">
+                        {{ icon(copied ? 'check' : 'copy', 'w-3.5 h-3.5') }} কপি
+                    </button>
+                </div>
+                <p class="rounded-lg bg-danger-50 px-4 py-2.5 font-mono text-sm font-bold text-danger-700">
+                    {{ user.api_key ?? '—' }}
+                </p>
+                <p class="mt-1.5 text-xs text-neutral-400">নিবন্ধন তারিখ: {{ user.created_at|bndate }}</p>
+            </div>
+
+            <div class="mb-6 border-t border-neutral-100 pt-5">
+                <p class="form-label">রেফার আইডি (ঐচ্ছিক)</p>
+                <p class="text-xs text-neutral-400">{{ user.username }} — বন্ধুকে রেফার করে বোনাস পান (ডেমো)।</p>
+            </div>
             <form method="post" action="/profile" class="space-y-4">
                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                 <input type="hidden" name="do" value="profile">
@@ -37,60 +58,41 @@
             </form>
         </section>
 
-        <!-- Balance top-up (mock payment) -->
+        <!-- Balance top-up: the real flow lives on /recharge (receipt + admin review) -->
         <section class="card p-6">
             <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
-                {{ icon('wallet', 'w-5 h-5 text-primary-600') }} ব্যালেন্স টপ-আপ
-                <span class="badge badge-info ml-1">মক পেমেন্ট</span>
+                {{ icon('wallet', 'w-5 h-5 text-primary-600') }} ব্যালেন্স
             </h2>
-            <form method="post" action="/profile/topup" class="space-y-4" x-data="{ method: 'bkash' }">
-                <input type="hidden" name="_csrf" value="{{ csrf }}">
-                <input type="hidden" name="do" value="topup">
 
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label for="topup_amount" class="form-label">পরিমাণ (৳)</label>
-                        <input id="topup_amount" type="number" name="amount" min="10" max="10000" step="0.01" class="form-input" placeholder="যেমন: 500" required>
-                        {% if errors.amount is defined %}<p class="form-error" role="alert">{{ errors.amount }}</p>{% endif %}
-                    </div>
-                    <div>
-                        <label for="topup_method" class="form-label">পেমেন্ট মেথড</label>
-                        <select id="topup_method" name="method" class="form-input" x-model="method">
-                            {% for m in topupMethods %}
-                                <option value="{{ m }}">{{ m|upper }}</option>
-                            {% endfor %}
-                        </select>
-                        {% if errors.method is defined %}<p class="form-error" role="alert">{{ errors.method }}</p>{% endif %}
-                    </div>
-                </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label for="topup_sender" class="form-label">সেন্ডার নম্বর</label>
-                        <input id="topup_sender" type="text" name="sender_number" class="form-input" placeholder="01XXXXXXXXX">
-                        {% if errors.sender_number is defined %}<p class="form-error" role="alert">{{ errors.sender_number }}</p>{% endif %}
-                    </div>
-                    <div>
-                        <label for="topup_reference" class="form-label">ট্রানজেকশন আইডি (ঐচ্ছিক)</label>
-                        <input id="topup_reference" type="text" name="reference" class="form-input" placeholder="TrxID">
-                    </div>
-                </div>
-
+            <!-- Free searches, like the reference's "ফ্রি সার্চ বাকি" card -->
+            <div class="mb-6 flex items-center justify-between gap-4 rounded-xl border border-info-200 bg-info-50 px-5 py-4">
                 <div>
-                    <label for="topup_note" class="form-label">নোট (ঐচ্ছিক)</label>
-                    <input id="topup_note" type="text" name="note" class="form-input" maxlength="500">
+                    <p class="text-xs font-medium uppercase tracking-wide text-info-700">ফ্রি সার্চ বাকি</p>
+                    <p class="mt-0.5 text-2xl font-extrabold text-info-700">{{ user.free_searches }} / 1 টি</p>
                 </div>
+                <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-info-100 text-info-600">{{ icon('gift', 'w-6 h-6') }}</span>
+            </div>
 
-                <p class="rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">
-                    💡 ডেমো মোড: পেমেন্ট আসল নয় — অনুরোধ জমা দিলে অ্যাডমিন প্যানেল থেকে অনুমোদনের পর ব্যালেন্স যোগ হবে।
-                </p>
+            <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-primary-50 px-5 py-4">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-wide text-primary-700">বর্তমান ব্যালেন্স</p>
+                    <p class="mt-1 text-3xl font-extrabold text-primary-800">{{ user.balance|money }}</p>
+                </div>
+                <a href="/recharge" class="btn btn-primary">
+                    {{ icon('wallet', 'w-4 h-4') }} রিচার্জ করুন
+                </a>
+            </div>
 
-                <button type="submit" class="btn btn-primary">{{ icon('plus', 'w-4 h-4') }} টপ-আপ অনুরোধ জমা দিন</button>
-            </form>
+            <p class="mt-3 text-xs text-neutral-500">
+                পেমেন্টের রশিদ আপলোড করে অনুরোধ জমা দিন — অ্যাডমিন যাচাই করে অনুমোদন করলে ব্যালেন্স যোগ হবে।
+            </p>
 
             {% if topups is not empty %}
                 <div class="mt-6 border-t border-neutral-100 pt-5">
-                    <h3 class="mb-3 text-sm font-bold text-neutral-700">আমার টপ-আপ অনুরোধ</h3>
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <h3 class="text-sm font-bold text-neutral-700">আমার রিচার্জ অনুরোধ</h3>
+                        <a href="/recharge#history" class="tap-target text-xs font-semibold text-primary-700 hover:underline">সব দেখুন</a>
+                    </div>
                     <ul class="space-y-2.5">
                         {% for t in topups %}
                             <li class="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 px-3.5 py-2.5">

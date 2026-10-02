@@ -1,0 +1,182 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}রেফারেল — Alif Tools{% endblock %}
+
+{% block dashboard_content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-extrabold text-neutral-900">বন্ধুকে রেফার করে বোনাস পান</h1>
+    <p class="text-sm text-neutral-500">{{ summaryText }}</p>
+</div>
+
+{% if not enabled %}
+    {# The programme can be switched off from the admin panel at any time. Existing
+       referrals stay in the ledger, but saying so plainly beats a page that quietly
+       advertises a deal nobody can claim. #}
+    <div class="card mb-5 border-warning-200 bg-warning-50 p-4">
+        <p class="text-sm font-semibold text-warning-800">
+            {{ icon('alert-triangle', 'w-4 h-4 inline') }} রেফারেল প্রোগ্রামটি এখন সাময়িকভাবে বন্ধ রয়েছে।
+        </p>
+        <p class="mt-1 text-xs text-warning-700">আগের রেফারেলগুলোর তথ্য নিচে দেওয়া আছে। প্রোগ্রাম চালু হলে এই পাতা আবার কাজ করবে।</p>
+    </div>
+{% endif %}
+
+{# The share block. One code, one link, both copyable — a user who has to
+   transcribe a code by hand is a user who never shares. #}
+<div class="card mb-6 p-5">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0">
+            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-400">আপনার রেফারেল কোড</p>
+            <p class="mt-1 font-mono text-3xl font-extrabold tracking-[0.2em] text-primary-700">{{ code }}</p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" data-copy="{{ code }}">
+            {{ icon('copy', 'w-4 h-4') }} কোড কপি
+        </button>
+    </div>
+
+    <div class="mt-4">
+        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-400">শেয়ার লিংক</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+            <code class="min-w-0 flex-1 truncate rounded-lg bg-neutral-50 px-3 py-2 font-mono text-sm text-neutral-700">{{ shareLink }}</code>
+            <button type="button" class="btn btn-ghost btn-sm" data-copy="{{ shareLink }}">
+                {{ icon('link', 'w-4 h-4') }} লিংক কপি
+            </button>
+        </div>
+    </div>
+
+    <ol class="mt-5 space-y-2 border-t border-neutral-100 pt-4 text-sm text-neutral-600">
+        <li class="flex gap-2"><span class="font-bold text-primary-600">১.</span> উপরের লিংকটি বন্ধুকে পাঠান।</li>
+        <li class="flex gap-2">
+            <span class="font-bold text-primary-600">২.</span>
+            বন্ধু লিংক থেকে অ্যাকাউন্ট খুললে তার নাম এখানে দেখা যাবে।
+        </li>
+        <li class="flex gap-2">
+            <span class="flex-none font-bold text-primary-600">৩.</span>
+            <span>
+                বন্ধু {% if minRecharge > 0 %}ন্যূনতম {{ minRecharge|money }} করে{% else %}প্রথমবার{% endif %}
+                রিচার্জ করলে এবং সেটি অনুমোদিত হলে —
+                আপনি <strong class="text-neutral-800">{{ referrerBonus|money }}</strong>,
+                বন্ধু <strong class="text-neutral-800">{{ refereeBonus|money }}</strong> ব্যালেন্স পাবেন।
+            </span>
+        </li>
+    </ol>
+
+    {% if terms %}
+        <details class="mt-4 rounded-lg bg-neutral-50 px-4 py-3">
+            <summary class="cursor-pointer text-sm font-semibold text-neutral-700">শর্তাবলি</summary>
+            <p class="mt-2 whitespace-pre-line text-sm leading-relaxed text-neutral-600">{{ terms }}</p>
+        </details>
+    {% endif %}
+</div>
+
+<!-- Stat cards -->
+<div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% include 'components/stat-card.twig' with { label: 'মোট রেফার', value: summary.total, icon: 'users', tone: 'info' } %}
+    {% include 'components/stat-card.twig' with { label: 'অপেক্ষমাণ', value: summary.pending, icon: 'history', tone: 'accent' } %}
+    {% include 'components/stat-card.twig' with { label: 'পরিশোধিত', value: summary.paid, icon: 'check-circle', tone: 'success' } %}
+    {% include 'components/stat-card.twig' with { label: 'আয়', value: summary.earned|money, icon: 'wallet', tone: 'primary' } %}
+</div>
+
+{% if summary.pending_earned > 0 %}
+    <p class="mb-4 rounded-xl border border-info-200 bg-info-50 px-4 py-3 text-sm text-info-800">
+        {{ icon('info', 'w-4 h-4 inline') }}
+        আরও <strong>{{ summary.pending_earned|money }}</strong> অপেক্ষমাণ আছে — বন্ধুর প্রথম রিচার্জ অনুমোদিত হলে যোগ হবে।
+    </p>
+{% endif %}
+
+<div class="card overflow-hidden">
+    {# Empty state lives outside <table>: .table-base carries a 640px min-width, so a
+       centred message inside it would sit off-screen on a phone. #}
+    {% if rows is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('share-2', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">এখনো কাউকে রেফার করা হয়নি।</p>
+            <p class="max-w-sm text-xs text-neutral-400">উপরের লিংকটি বন্ধুকে পাঠান — সে অ্যাকাউন্ট খোলার সাথে সাথেই এখানে দেখা যাবে।</p>
+        </div>
+    {% else %}
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
+                    <tr>
+                        <th>বন্ধু</th>
+                        <th>যোগদানের তারিখ</th>
+                        <th>ট্রিগার রিচার্জ</th>
+                        <th class="text-right">আপনার বোনাস</th>
+                        <th>অবস্থা</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr>
+                            <td>
+                                <p class="font-medium text-neutral-800">{{ r.referee_name ?? '—' }}</p>
+                                <p class="font-mono text-xs text-neutral-400">{{ r.code }}</p>
+                            </td>
+                            <td class="whitespace-nowrap text-neutral-500">{{ r.created_at|bndate }}</td>
+                            <td class="whitespace-nowrap text-neutral-600">
+                                {% if r.trigger_amount %}
+                                    {{ r.trigger_amount|money }}
+                                {% else %}
+                                    <span class="text-xs text-neutral-300">অপেক্ষমাণ</span>
+                                {% endif %}
+                            </td>
+                            <td class="whitespace-nowrap text-right font-semibold text-primary-700">
+                                {{ r.referrer_amount|money }}
+                            </td>
+                            <td>{% include 'components/status-badge.twig' with { status: r.status } %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total, baseUrl: '/referrals?page=',
+} %}
+{% endblock %}
+
+{% block scripts %}
+    {{ parent() }}
+    <script>
+    (function () {
+        'use strict';
+        // Copy-to-clipboard for the code and the link. navigator.clipboard needs a
+        // secure context, so the execCommand fallback keeps it working on plain
+        // http:// LAN installs too.
+        function copy(text, button) {
+            var done = function () {
+                var label = button.querySelector('svg');
+                button.classList.add('btn-primary');
+                setTimeout(function () { button.classList.remove('btn-primary'); }, 1200);
+                if (label) { label.dataset.ok = '1'; }
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(done, function () { legacy(text, done); });
+            } else {
+                legacy(text, done);
+            }
+        }
+        function legacy(text, done) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) { /* nothing else to try */ }
+            document.body.removeChild(ta);
+            done();
+        }
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest && e.target.closest('[data-copy]');
+            if (!btn) { return; }
+            e.preventDefault();
+            copy(btn.getAttribute('data-copy'), btn);
+        });
+    })();
+    </script>
+{% endblock %}

@@ -1,36 +1,86 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}{{ service.name }} — TH Tools{% endblock %}
+{% block title %}{{ service.name }} — Alif Tools{% endblock %}
+
+{% block og_type %}product{% endblock %}
+
+{# Per-service share card, painted in the category accent. service_og_image()
+   returns the path together with its real pixel size and falls back to the
+   site-wide cover when the banner has not been generated for this service —
+   a 1200x600 file declared as 630 tall shifts the whole preview in Telegram. #}
+{% set ogCard = service_og_image(service) %}
+{% set ogCardAlt = service.name ~ ' — ' ~ category.name ~ ' সেবা, Alif Tools' %}
+{% block og_image %}
+    <meta property="og:image" content="{{ seoUrl }}{{ ogCard.path }}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="{{ ogCard.width }}">
+    <meta property="og:image:height" content="{{ ogCard.height }}">
+    <meta property="og:image:alt" content="{{ ogCardAlt }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ seoTitle }}">
+    <meta name="twitter:description" content="{{ seoDesc }}">
+    <meta name="twitter:image" content="{{ seoUrl }}{{ ogCard.path }}">
+    <meta name="twitter:image:alt" content="{{ ogCardAlt }}">
+{% endblock %}
 
 {% block dashboard_content %}
 <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm text-neutral-500" aria-label="ব্রেডকাম্ব">
-    <a href="/dashboard" class="hover:text-primary-600">ড্যাশবোর্ড</a>
+    <a href="/dashboard" class="tap-target hover:text-primary-600">ড্যাশবোর্ড</a>
     <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-right"></use></svg>
-    <a href="/services/category/{{ category.slug }}" class="hover:text-primary-600">{{ category.name }}</a>
+    <a href="/services/category/{{ category.slug }}" class="tap-target hover:text-primary-600">{{ category.name }}</a>
     <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-right"></use></svg>
     <span class="font-medium text-neutral-700">{{ service.name }}</span>
 </nav>
 
+{% set variantMap = [] %}
+{% for v in variants %}
+    {% set variantMap = variantMap|merge({ ('v' ~ loop.index0): v }) %}
+{% endfor %}
+{% set variantData = variantMap|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT')) %}
+
+{# Per-option tints, resolved once and reused twice: the static class on each
+   picker card, and the Alpine map that re-tints the header when the selection
+   changes. Resolving in one pass is what lets siblings stay distinct. #}
+{% set variantClassList = [] %}
+{% set variantClassMap = {} %}
+{% for v in variants %}
+    {% set vc = variant_accent(v, category, loop.index0, variantClassList) %}
+    {% set variantClassList = variantClassList|merge([vc]) %}
+    {% set variantClassMap = variantClassMap|merge({ ('v' ~ loop.index0): vc }) %}
+{% endfor %}
+{% set variantClassData = variantClassMap|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT')) %}
 <div class="grid gap-6 lg:grid-cols-3">
-    <!-- Main column -->
-    <div class="space-y-6 lg:col-span-2">
-        <!-- Service header -->
-        <header class="card p-6">
+    <!-- Main column (one Alpine scope so the selector updates the price) -->
+    <div class="space-y-6 lg:col-span-2 {{ accent(category) }}"
+         x-data='{ variant: "v0", variants: {{ variantData }}, accents: {{ variantClassData }}, fallback: "{{ service.price|money }}", submitting: false }'>
+        <!-- Service header. The card keeps the category accent; the price below
+             re-tints to the selected option, so the number on screen always
+             matches the variant that will be ordered. Only bound elements carry
+             a dynamic accent class — a static one on the same element would be a
+             second `accent-*` class, and which of the two wins comes down to
+             stylesheet order rather than intent. -->
+        <header class="card card-accent p-6">
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div class="flex items-center gap-4">
-                    <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-primary-600">
+                    <span class="accent-tile h-14 w-14 rounded-2xl">
                         {{ icon(service.icon ?? 'zap', 'w-7 h-7') }}
                     </span>
                     <div>
+                        <p class="accent-label mb-0.5">{{ category.name }}</p>
                         <h1 class="text-xl font-extrabold text-neutral-900">{{ service.name }}</h1>
                         {% if service.badge %}
-                            <span class="badge badge-info mt-1.5">{{ service.badge }}</span>
+                            <span class="badge mt-1.5" style="background-color: var(--accent-soft); color: var(--accent-ink);">{{ service.badge }}</span>
                         {% endif %}
                     </div>
                 </div>
                 <div class="text-right">
                     <p class="text-xs text-neutral-400">মূল্য</p>
-                    <p class="text-2xl font-extrabold text-primary-700">{{ service.price|money }}</p>
+                    {% if variants %}
+                        <p class="accent-value text-2xl" :class="accents[variant] || null"
+                           x-text="variants[variant] ? '৳ ' + Number(variants[variant].price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fallback"></p>
+                    {% else %}
+                        <p class="accent-value text-2xl">{{ service.price|money }}</p>
+                    {% endif %}
                 </div>
             </div>
             {% if service.description %}
@@ -75,7 +125,7 @@
         {% endif %}
 
         <!-- Form -->
-        <section class="card p-6" x-data="{ submitting: false }">
+        <section class="card p-6">
             <h2 class="mb-5 text-lg font-bold text-neutral-900">ফর্ম পূরণ করুন</h2>
 
             {% if errors %}
@@ -88,6 +138,32 @@
             <form method="post" action="/services/view/{{ service.slug }}" @submit="submitting = true" class="space-y-4">
                 <input type="hidden" name="_csrf" value="{{ csrf }}">
 
+                {% if variants %}
+                    <!-- Variant selector: original vs smart-card style options, each with its own price -->
+                    <fieldset>
+                        <legend class="mb-2 text-sm font-semibold text-neutral-700">ভ্যারিয়েন্ট নির্বাচন করুন</legend>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            {# Each option carries its own tint inside the category's
+                               colour family, so "সাধারণ" and "প্রিমিয়াম" are told
+                               apart by colour as well as by price. #}
+                            {% for v in variants %}
+                                {% set vClass = variantClassList[loop.index0] %}
+                                <label class="variant-pick relative flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 {{ vClass }}"
+                                       :class="variant === 'v{{ loop.index0 }}' && 'is-picked'">
+                                    <input type="radio" name="variant" value="v{{ loop.index0 }}" class="mt-1" style="accent-color: var(--accent);"
+                                           x-model="variant" {{ loop.first ? 'checked' : '' }}>
+                                    <span class="min-w-0">
+                                        <span class="block text-sm font-semibold text-neutral-800">{{ v.label }}</span>
+                                        <span class="variant-price mt-0.5 block text-sm">{{ v.price|money }}</span>
+                                    </span>
+                                    <span x-cloak x-show="variant === 'v{{ loop.index0 }}'"
+                                          class="variant-check absolute top-2.5 right-2.5">{{ icon('check-circle', 'w-4 h-4') }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+                {% endif %}
+
                 {% for field in fields %}
                     {% include 'components/form-row.twig' with {
                         field: {
@@ -97,12 +173,13 @@
                             required: field.required,
                             placeholder: field.placeholder,
                             help: field.help,
+                            value: prefill[field.name] ?? '',
                             error: errors[field.name] ?? null,
                         }
                     } %}
                 {% endfor %}
 
-                <button type="submit" class="btn btn-primary btn-block" :disabled="submitting">
+                <button type="submit" class="btn btn-accent-solid btn-block" :disabled="submitting">
                     <svg x-show="submitting" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
@@ -112,10 +189,66 @@
                 </button>
             </form>
         </section>
+        <!-- Per-service order history (reference parity) -->
+        <section class="card overflow-hidden">
+            <div class="flex items-center justify-between gap-3 border-b border-neutral-100 px-6 py-4">
+                <h2 class="flex items-center gap-2 text-base font-bold text-neutral-900">
+                    {{ icon('history', 'w-5 h-5 text-primary-600') }} এই সার্ভিসের আপনার অর্ডার
+                </h2>
+                {% if serviceHistoryTotal > 5 %}
+                    <span class="text-xs text-neutral-400">মোট {{ serviceHistoryTotal }} টি</span>
+                {% endif %}
+            </div>
+            {% if serviceHistory is empty %}
+                <p class="px-6 py-8 text-center text-sm text-neutral-400">এই সার্ভিসে এখনো কোনো অর্ডার করেননি।</p>
+            {% else %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                                <th class="px-6 py-3">রেফারেন্স</th>
+                                <th class="px-6 py-3">ভ্যারিয়েন্ট</th>
+                                <th class="px-6 py-3">মূল্য</th>
+                                <th class="px-6 py-3">সময়</th>
+                                <th class="px-6 py-3">অবস্থা</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-neutral-100">
+                            {% for tx in serviceHistory %}
+                                <tr class="hover:bg-neutral-50/60">
+                                    <td class="px-6 py-3 font-mono text-xs text-neutral-600">{{ tx.reference }}</td>
+                                    <td class="px-6 py-3 text-neutral-700">{{ tx.variant_label ?? '—' }}</td>
+                                    <td class="px-6 py-3 font-medium text-neutral-800">{{ tx.amount|money }}</td>
+                                    <td class="px-6 py-3 whitespace-nowrap text-xs text-neutral-500">{{ tx.created_at|bndate }}</td>
+                                    <td class="px-6 py-3">{% include 'components/status-badge.twig' with { status: tx.status } %}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </section>
     </div>
 
     <!-- Side column -->
     <aside class="space-y-6">
+        <!-- Ordering rules / instructions -->
+        {% if rules %}
+            <section class="card border-amber-200 bg-amber-50/60 p-6">
+                <h2 class="mb-3 flex items-center gap-2 text-base font-bold text-neutral-900">
+                    {{ icon('info', 'w-5 h-5 text-amber-600') }} অর্ডারের নিয়মাবলি
+                </h2>
+                <ul class="space-y-2.5">
+                    {% for rule in rules %}
+                        <li class="flex items-start gap-2.5 text-sm leading-relaxed text-neutral-600">
+                            <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#alert-circle"></use></svg>
+                            {{ rule }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
         <!-- Requirements -->
         <section class="card p-6">
             <h2 class="mb-3 flex items-center gap-2 text-base font-bold text-neutral-900">
@@ -157,7 +290,7 @@
                         </li>
                     {% endfor %}
                 </ul>
-                <a href="/service-history" class="mt-3 block text-center text-xs font-medium text-primary-600 hover:underline">সব দেখুন →</a>
+                <a href="/service-history" class="tap-target mt-3 block text-center text-xs font-medium text-primary-600 hover:underline">সব দেখুন →</a>
             {% endif %}
         </section>
     </aside>

@@ -1,0 +1,180 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}রিচার্জ — Alif Tools{% endblock %}
+
+{% block dashboard_content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-extrabold text-neutral-900">নিরাপদ ও দ্রুত ব্যালেন্স টপ-আপ</h1>
+    <p class="mt-1 text-sm text-neutral-500">পার্সোনাল সেন্ড মানির মাধ্যমে তাৎক্ষণিক ব্যালেন্স রিচার্জ করুন</p>
+</div>
+
+{% if offerText %}
+    <div class="mb-5 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm font-medium text-accent-800" role="status">
+        {{ offerText }}
+    </div>
+{% endif %}
+
+{% if hasPending %}
+    <div class="mb-5 flex items-start gap-3 rounded-xl border border-warning-200 bg-warning-50 p-4 text-sm text-warning-800" role="status">
+        {{ icon('history', 'w-5 h-5 shrink-0') }}
+        <p>আপনার একটি রিচার্জ অনুরোধ ইতিমধ্যে পেন্ডিং আছে — সেটি প্রক্রিয়া হওয়ার পর নতুন করে জমা দিতে পারবেন।</p>
+    </div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+    <!-- Step 1: pick amount + method -->
+    <div class="lg:col-span-2">
+        <section class="card p-6">
+            <!-- Account strip, like the reference's user id / api key row -->
+            <div class="mb-6 grid gap-3 rounded-xl bg-neutral-50 p-4 sm:grid-cols-3">
+                <div>
+                    <p class="text-xs font-medium text-neutral-400">ইউজার আইডি:</p>
+                    <p class="mt-0.5 truncate text-sm font-bold text-neutral-800">{{ identity.username }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-medium text-neutral-400">API User Key:</p>
+                    <p class="mt-0.5 truncate font-mono text-sm font-bold text-primary-700">{{ apiKey }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-medium text-neutral-400">বর্তমান ব্যালেন্স:</p>
+                    <p class="mt-0.5 text-sm font-extrabold text-primary-700">{{ identity.balance|money }}</p>
+                </div>
+            </div>
+
+            <form method="get" action="/recharge" class="space-y-5">
+                <input type="hidden" name="step" value="pay">
+
+                <div>
+                    <span class="form-label">দ্রুত এমাউন্ট সিলেকশন</span>
+                    <div class="mt-1.5 flex flex-wrap gap-2" x-data="{ picked: '{{ form.amount }}' }">
+                        {% for quick in quickAmounts %}
+                            <button type="button"
+                                    class="chip {{ form.amount == quick ? 'chip-active' }}"
+                                    :class="picked == '{{ quick }}' && 'chip-active'"
+                                    @click="picked = '{{ quick }}'; document.getElementById('rc_amount').value = '{{ quick }}'">
+                                ৳ {{ quick|number_format(0) }}
+                            </button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="rc_amount" class="form-label">
+                        রিচার্জ এমাউন্ট (টাকা) <span class="text-danger-600">*</span>
+                    </label>
+                    <input id="rc_amount" type="number" name="amount"
+                           value="{{ form.amount }}" min="{{ minAmount|number_format(2) }}"
+                           max="{{ maxAmount|number_format(2) }}" step="0.01" inputmode="decimal"
+                           class="form-input" placeholder="যেমন: 500" required>
+                    <p class="form-help">সীমা: {{ minAmount|money }} – {{ maxAmount|money }}</p>
+                </div>
+
+                <div>
+                    <span class="form-label">পেমেন্ট মাধ্যম সিলেক্ট করুন <span class="text-danger-600">*</span></span>
+                    <div class="mt-1.5 grid gap-3 sm:grid-cols-3" x-data="{ method: '{{ form.method }}' }">
+                        {% for key, label in methods %}
+                            <label class="flex cursor-pointer items-center gap-3 rounded-xl border-2 px-4 py-3.5 transition"
+                                   :class="method === '{{ key }}' ? 'border-primary-600 bg-primary-50' : 'border-neutral-200 hover:border-neutral-300'">
+                                <input type="radio" name="method" value="{{ key }}" class="sr-only"
+                                       x-model="method" {{ form.method == key ? 'checked' }} required>
+                                <span class="flex h-10 w-10 items-center justify-center rounded-lg text-xs font-extrabold"
+                                      :class="method === '{{ key }}' ? 'bg-primary-600 text-white' : 'bg-neutral-100 text-neutral-500'">
+                                    {{ label|slice(0, 2)|upper }}
+                                </span>
+                                <span class="text-sm font-bold text-neutral-800">{{ label }} Personal</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    {{ icon('arrow-right', 'w-4 h-4') }} পরবর্তী ধাপে যান
+                </button>
+            </form>
+        </section>
+    </div>
+
+    <!-- History -->
+    <div>
+        <section class="card p-5">
+            <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+                {{ icon('history', 'w-4 h-4 text-primary-600') }} আমার অনুরোধ
+            </h2>
+
+            <form method="get" action="/recharge" class="mb-3">
+                <select name="status" class="form-input form-input-sm" onchange="this.form.submit()">
+                    <option value="">সব</option>
+                    {% for st in statuses %}
+                        <option value="{{ st }}" {{ status == st ? 'selected' }}>{{ st|statusbadge|raw }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+
+            {% if rows is not empty %}
+                <ul class="space-y-3">
+                    {% for t in rows %}
+                        <li class="rounded-xl border border-neutral-100 p-3.5">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-bold text-neutral-800">{{ t.amount|money }}</p>
+                                    <p class="text-xs text-neutral-400">
+                                        {{ methods[t.method] ?? t.method|upper }} · {{ t.created_at|bndate }}
+                                    </p>
+                                </div>
+                                {% include 'components/status-badge.twig' with { status: t.status } %}
+                            </div>
+
+                            <dl class="mt-2.5 space-y-1 text-xs text-neutral-500">
+                                {% if t.reference %}
+                                    <div class="flex gap-1.5">
+                                        <dt class="w-20 shrink-0 text-neutral-400">TrxID</dt>
+                                        <dd class="truncate font-mono text-neutral-700">{{ t.reference }}</dd>
+                                    </div>
+                                {% endif %}
+                                {% if t.sender_number %}
+                                    <div class="flex gap-1.5">
+                                        <dt class="w-20 shrink-0 text-neutral-400">ওয়ালেট</dt>
+                                        <dd class="text-neutral-700">{{ t.sender_number }}</dd>
+                                    </div>
+                                {% endif %}
+                            </dl>
+
+                            {% if t.status == 'rejected' and t.reject_reason %}
+                                <p class="mt-2.5 rounded-lg bg-danger-50 px-2.5 py-1.5 text-xs text-danger-700">
+                                    <span class="font-semibold">কারণ:</span> {{ t.reject_reason }}
+                                </p>
+                            {% endif %}
+
+                            <div class="mt-3 flex items-center gap-2">
+                                {% if t.receipt_path %}
+                                    <a href="/recharge/receipt/{{ t.id }}" target="_blank" rel="noopener"
+                                       class="btn btn-ghost btn-sm">
+                                        {{ icon('receipt', 'w-3.5 h-3.5') }} রশিদ দেখুন
+                                    </a>
+                                {% endif %}
+                                {% if t.status == 'pending' %}
+                                    <form method="post" action="/recharge/cancel" class="ml-auto"
+                                          onsubmit="return confirm('সত্যিই অনুরোধটি বাতিল করবেন?');">
+                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                        <input type="hidden" name="id" value="{{ t.id }}">
+                                        <button type="submit" class="btn btn-ghost btn-sm text-danger-600">
+                                            {{ icon('alert-circle', 'w-3.5 h-3.5') }} বাতিল
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+
+                {% include 'components/pagination.twig' with {
+                    page: page, perPage: perPage, total: total,
+                    baseUrl: '/recharge?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ 'page=',
+                } %}
+            {% else %}
+                <p class="py-8 text-center text-sm text-neutral-500">এখনো কোনো রিচার্জ অনুরোধ নেই।</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

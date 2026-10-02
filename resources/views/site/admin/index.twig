@@ -1,15 +1,16 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}অ্যাডমিন — TH Tools{% endblock %}
+{% block title %}অ্যাডমিন — Alif Tools{% endblock %}
 
 {% block dashboard_content %}
-<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-    <div>
-        <h1 class="text-2xl font-extrabold text-neutral-900">অ্যাডমিন প্যানেল</h1>
-        <p class="text-sm text-neutral-500">সিস্টেম ওভারভিউ ও ম্যানেজমেন্ট</p>
-    </div>
+{% set headActions %}
     <span class="badge badge-info">{{ icon('shield', 'w-3.5 h-3.5') }} Staff/Admin</span>
-</div>
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'অ্যাডমিন প্যানেল',
+    description: 'সিস্টেম ওভারভিউ ও ম্যানেজমেন্ট',
+    actions: headActions,
+} %}
 
 <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
     {% include 'components/stat-card.twig' with { label: 'মোট ইউজার', value: userCount, icon: 'users', tone: 'primary' } %}
@@ -18,58 +19,120 @@
     {% include 'components/stat-card.twig' with { label: 'মোট লেনদেন', value: txStats.total, icon: 'receipt', tone: 'success' } %}
 </section>
 
-<div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-    <a href="/admin/topups" class="card card-hover p-5 {{ pendingCount > 0 ? 'ring-2 ring-accent-400' }}">
-        {{ icon('wallet', 'w-6 h-6 text-primary-600') }}
-        <h2 class="mt-2 font-bold text-neutral-800">টপ-আপ অনুরোধ</h2>
-        <p class="mt-1 text-xs text-neutral-500">
-            {% if pendingCount > 0 %}<span class="font-semibold text-accent-600">{{ pendingCount }}টি পেন্ডিং</span>{% else %}কোনো পেন্ডিং নেই{% endif %}
-        </p>
+{# Unresolved recharges get the full row to themselves. It is the one card that
+   is *work* rather than *navigation*, and the operator deciding what to clear
+   first needs the count AND the money, plus the split between "nobody has
+   touched it" and "someone is on it". Full width also stops the quick-action
+   grid below from reflowing around a differently-shaped card. #}
+<a href="/admin/topups"
+   class="card card-hover mt-4 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between {{ unresolvedCount > 0 ? 'ring-2 ring-accent-400' }}">
+    <span class="flex min-w-0 items-center gap-4">
+        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl {{ unresolvedCount > 0 ? 'bg-accent-50 text-accent-600' : 'bg-success-50 text-success-600' }}">
+            {{ icon(unresolvedCount > 0 ? 'bell' : 'check-check', 'w-6 h-6') }}
+        </span>
+        <span class="min-w-0">
+            <span class="block text-sm font-medium text-neutral-500">অপেক্ষমাণ রিচার্জ</span>
+            {% if unresolvedCount > 0 %}
+                <span class="mt-0.5 block text-sm text-neutral-600">
+                    <span class="font-bold text-neutral-900">{{ unresolvedAmount|money }}</span> যাচাইয়ের অপেক্ষায়
+                </span>
+                <span class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-neutral-400">
+                    <span>{{ icon('inbox', 'w-3 h-3 inline') }} অপেক্ষমাণ {{ topupStats.pending }}</span>
+                    <span>{{ icon('eye', 'w-3 h-3 inline') }} যাচাই ধরা {{ topupStats.review }}</span>
+                </span>
+            {% else %}
+                <span class="mt-0.5 block text-sm text-neutral-500">সব অনুরোধ প্রক্রিয়া হয়েছে</span>
+            {% endif %}
+        </span>
+    </span>
+
+    <span class="flex shrink-0 items-center gap-3 sm:justify-end">
+        <span class="text-3xl font-extrabold leading-none tabular-nums {{ unresolvedCount > 0 ? 'text-accent-600' : 'text-neutral-300' }}">
+            {{ unresolvedCount }}
+        </span>
+        <span class="text-neutral-300" aria-hidden="true">{{ icon('chevron-right', 'w-5 h-5') }}</span>
+    </span>
+</a>
+
+{# Quick actions. These are navigation, not status, so they sit in one even
+   grid — 1 / 2 / 4 columns as the viewport allows. #}
+<section class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <a href="/admin/users" class="card card-hover group flex flex-col p-5">
+        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+            {{ icon('users', 'w-6 h-6') }}
+        </span>
+        <span class="mt-3 font-bold text-neutral-800">ইউজার ম্যানেজমেন্ট</span>
+        <span class="mt-1 flex-1 text-xs text-neutral-500">স্ট্যাটাস, রোল ও পাসওয়ার্ড রিসেট</span>
+        <span class="mt-3 text-xs font-semibold text-primary-600 opacity-0 transition group-hover:opacity-100">
+            খুলুন →
+        </span>
     </a>
-    <a href="/admin/users" class="card card-hover p-5">
-        {{ icon('users', 'w-6 h-6 text-primary-600') }}
-        <h2 class="mt-2 font-bold text-neutral-800">ইউজার ম্যানেজমেন্ট</h2>
-        <p class="mt-1 text-xs text-neutral-500">স্ট্যাটাস, রোল ও পাসওয়ার্ড রিসেট</p>
+
+    <a href="/admin/categories" class="card card-hover group flex flex-col p-5">
+        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+            {{ icon('layout-grid', 'w-6 h-6') }}
+        </span>
+        <span class="mt-3 font-bold text-neutral-800">ক্যাটাগরি</span>
+        <span class="mt-1 flex-1 text-xs text-neutral-500">তৈরি, সম্পাদনা, সক্রিয়/নিষ্ক্রিয়</span>
+        <span class="mt-3 text-xs font-semibold text-primary-600 opacity-0 transition group-hover:opacity-100">
+            খুলুন →
+        </span>
     </a>
-    <a href="/admin/categories" class="card card-hover p-5">
-        {{ icon('layout-grid', 'w-6 h-6 text-primary-600') }}
-        <h2 class="mt-2 font-bold text-neutral-800">ক্যাটাগরি</h2>
-        <p class="mt-1 text-xs text-neutral-500">তৈরি, সম্পাদনা, সক্রিয়/নিষ্ক্রিয়</p>
+
+    <a href="/admin/services" class="card card-hover group flex flex-col p-5">
+        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+            {{ icon('layers', 'w-6 h-6') }}
+        </span>
+        <span class="mt-3 font-bold text-neutral-800">সার্ভিস</span>
+        <span class="mt-1 flex-1 text-xs text-neutral-500">মূল্য, ব্যাজ, স্ট্যাটাস</span>
+        <span class="mt-3 text-xs font-semibold text-primary-600 opacity-0 transition group-hover:opacity-100">
+            খুলুন →
+        </span>
     </a>
-    <a href="/admin/services" class="card card-hover p-5">
-        {{ icon('layers', 'w-6 h-6 text-primary-600') }}
-        <h2 class="mt-2 font-bold text-neutral-800">সার্ভিস</h2>
-        <p class="mt-1 text-xs text-neutral-500">মূল্য, ব্যাজ, স্ট্যাটাস</p>
+
+    <a href="/admin/activity-logs" class="card card-hover group flex flex-col p-5">
+        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+            {{ icon('scroll-text', 'w-6 h-6') }}
+        </span>
+        <span class="mt-3 font-bold text-neutral-800">অ্যাক্টিভিটি লগ</span>
+        <span class="mt-1 flex-1 text-xs text-neutral-500">নিরাপত্তা নিরীক্ষা</span>
+        <span class="mt-3 text-xs font-semibold text-primary-600 opacity-0 transition group-hover:opacity-100">
+            খুলুন →
+        </span>
     </a>
-    <a href="/admin/activity-logs" class="card card-hover p-5">
-        {{ icon('scroll-text', 'w-6 h-6 text-primary-600') }}
-        <h2 class="mt-2 font-bold text-neutral-800">অ্যাক্টিভিটি লগ</h2>
-        <p class="mt-1 text-xs text-neutral-500">নিরাপত্তা নিরীক্ষা</p>
-    </a>
-</div>
+</section>
 
 <section class="mt-8">
     <h2 class="mb-4 text-lg font-bold text-neutral-900">সাম্প্রতিক অ্যাক্টিভিটি</h2>
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="table-base">
-                <thead>
-                    <tr><th>অ্যাকশন</th><th>বর্ণনা</th><th>IP</th><th>সময়</th></tr>
-                </thead>
-                <tbody>
-                    {% for log in recentLogs %}
-                        <tr>
-                            <td class="font-mono text-xs">{{ log.action }}</td>
-                            <td class="max-w-xs truncate">{{ log.description ?? '—' }}</td>
-                            <td class="font-mono text-xs">{{ log.ip_address ?? '—' }}</td>
-                            <td class="whitespace-nowrap text-neutral-500">{{ log.created_at|bndate }}</td>
-                        </tr>
-                    {% else %}
-                        <tr><td colspan="4" class="px-4 py-10 text-center text-sm text-neutral-500">কোনো লগ নেই।</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        {# Empty state lives outside the <table>: .table-base carries a 640px
+           min-width, so a centred message inside it would sit off-screen on a phone. #}
+        {% if recentLogs is empty %}
+            <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                    {{ icon('inbox', 'w-6 h-6') }}
+                </span>
+                <p class="text-sm text-neutral-500">কোনো লগ নেই।</p>
+            </div>
+        {% else %}
+            <div class="overflow-x-auto">
+                <table class="table-base">
+                    <thead>
+                        <tr><th>অ্যাকশন</th><th>বর্ণনা</th><th>IP</th><th>সময়</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for log in recentLogs %}
+                            <tr>
+                                <td class="font-mono text-xs">{{ log.action }}</td>
+                                <td class="max-w-xs truncate">{{ log.description ?? '—' }}</td>
+                                <td class="font-mono text-xs">{{ log.ip_address ?? '—' }}</td>
+                                <td class="whitespace-nowrap text-neutral-500">{{ log.created_at|bndate }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

@@ -48,6 +48,7 @@ final class ServiceHistoryTest extends \Codeception\Test\Unit
     private int $serviceId = 0;
     private string $suffix = '';
     private int $categoryId = 0;
+    private string $startedAt = '';
 
     protected function _before(): void
     {
@@ -64,8 +65,12 @@ final class ServiceHistoryTest extends \Codeception\Test\Unit
             $this->users,
             new ActivityLogRepository($this->db),
             new NotificationRepository($this->db),
+            $this->makeNotify(),
         );
 
+        // Fan-out rows land on users outside our own list (the real admin gets
+        // every admin broadcast), so cleanup also sweeps by this time window.
+        $this->startedAt = date('Y-m-d H:i:s', time() - 1);
         $this->suffix = 't' . substr(md5(uniqid('', true)), 0, 10);
         $this->categoryId = (int) $this->db
             ->createCommand("SELECT [[id]] FROM {{%service_category}} ORDER BY [[id]] ASC LIMIT 1")
@@ -85,18 +90,60 @@ final class ServiceHistoryTest extends \Codeception\Test\Unit
 
     protected function _after(): void
     {
+        // Queue rows created during THIS test, wherever they landed — the
+        // deliveries must go first (FK).
+        $this->db
+            ->createCommand('DELETE nd FROM {{%notification_delivery}} nd JOIN {{%notification_queue}} q ON q.id = nd.queue_id WHERE q.created_at >= :from')
+            ->bindValue(':from', $this->startedAt)
+            ->execute();
+        $this->db
+            ->createCommand('DELETE FROM {{%notification_queue}} WHERE created_at >= :from')
+            ->bindValue(':from', $this->startedAt)
+            ->execute();
+
         foreach ($this->userIds as $id) {
             $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%transaction}}', ['user_id' => $id])->execute();
+            // Deliveries reference queue rows (FK), which reference the user —
+            // both must go before the user row or the delete is refused.
+            $this->db
+                ->createCommand('DELETE FROM {{%notification_delivery}} WHERE [[queue_id]] IN (SELECT [[id]] FROM {{%notification_queue}} WHERE [[user_id]] = :u)')
+                ->bindValue(':u', $id)
+                ->execute();
+            $this->db->createCommand()->delete('{{%notification_queue}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%notification}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%user}}', ['id' => $id])->execute();
         }
         $this->db->createCommand()->delete('{{%transaction}}', ['service_id' => $this->serviceId])->execute();
         $this->db->createCommand()->delete('{{%service}}', ['id' => $this->serviceId])->execute();
         $this->userIds = [];
+        // In-app fan-out rows that landed on users outside our list.
+        $this->db
+            ->createCommand('DELETE FROM {{%notification}} WHERE created_at >= :from')
+            ->bindValue(':from', $this->startedAt)
+            ->execute();
     }
 
-    private function makeUser(string $tag = 'a'): Identity
+    /**
+     * The real NotificationManager fans out over the queue table; for these
+     * lifecycle tests a fresh instance on the same connection is fine — the
+     * rows it writes are throwaway like everything else here.
+     */
+    private function makeNotify(): \App\Notification\NotificationManager
+    {
+        return new \App\Notification\NotificationManager(
+            new NotificationRepository($this->db),
+            new \App\Notification\QueueRepository($this->db),
+            new \App\Notification\TemplateRenderer(
+                $this->db,
+                new \App\Repository\SettingsRepository($this->db),
+            ),
+            $this->users,
+            $this->db,
+        );
+    }
+
+    private function makeUser(string $tag = 'a', int $freeSearches = 0): Identity
     {
         $id = $this->users->create([
             'username' => 'hist_' . $tag . '_' . $this->suffix,
@@ -107,6 +154,11 @@ final class ServiceHistoryTest extends \Codeception\Test\Unit
             'role' => 'user',
             'balance' => self::START_BALANCE,
         ]);
+        // The one-time free search is a real feature; the charging lifecycle
+        // tests construct users without it so their arithmetic stays exact.
+        if ($freeSearches !== 1) {
+            $this->users->update($id, ['free_searches' => $freeSearches]);
+        }
         $this->userIds[] = $id;
         return Identity::fromRow((array) $this->users->findById($id));
     }
@@ -166,6 +218,32 @@ final class ServiceHistoryTest extends \Codeception\Test\Unit
         assertFalse($result->success, 'An unaffordable request must be refused.');
         assertEquals(1.0, $this->balance($user), 'A refused request must not touch the balance.');
         assertSame(0, $this->transactions->statusCounts($user->id)['pending'] ?? 0);
+    }
+
+    public function testTheFirstRequestRidesTheFreeSearch(): void
+    {
+        $user = $this->makeUser('freebie', 1);
+        $row = $this->submitRequest($user);
+
+        assertEquals(self::START_BALANCE, $this->balance($user), 'The free search must not touch the balance.');
+        assertEquals(0.0, (float) $row['amount'], 'The request is recorded at zero cost.');
+        assertTrue((bool) TransactionRepository::metadata($row)['free_search'], 'The request remembers it was free.');
+        assertSame(0, $this->users->freeSearches($user->id), 'The allowance is spent.');
+
+        // The second request pays normally.
+        $second = $this->submitRequest($user);
+        assertEquals(self::START_BALANCE - self::PRICE, $this->balance($user));
+        assertFalse((bool) TransactionRepository::metadata($second)['free_search']);
+    }
+
+    public function testFreeSearchIsConsumedEvenWhenTheBalanceWouldCoverIt(): void
+    {
+        // The freebie is use-it-or-lose-it, not balance-conditional.
+        $user = $this->makeUser('rich', 1);
+        $this->submitRequest($user);
+
+        assertSame(0, $this->users->freeSearches($user->id));
+        assertEquals(self::START_BALANCE, $this->balance($user));
     }
 
     // ---- Start ------------------------------------------------------------

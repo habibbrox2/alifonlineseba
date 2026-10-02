@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Service\ReferralCode;
 use Yiisoft\Db\Connection\ConnectionInterface;
 
 /**
@@ -79,10 +80,132 @@ final class UserRepository
             'status' => $row['status'] ?? 'active',
             'role' => $row['role'] ?? 'user',
             'balance' => $row['balance'] ?? 0,
+            // Every account gets its API key on creation; rows predating the
+            // column are covered lazily by ensureApiKey().
+            'api_key' => self::generateApiKey(),
+            // Same deal for the referral code: minted here, and lazily by
+            // ensureReferralCode() for any account created before the column
+            // existed and never opened the referral page.
+            'referral_code' => ReferralCode::generate(),
+            'referred_by' => isset($row['referred_by']) ? (int) $row['referred_by'] : null,
+            'referred_at' => !empty($row['referred_by']) ? date('Y-m-d H:i:s') : null,
             'created_at' => $now,
             'updated_at' => $now,
         ])->execute();
         return (int) $this->db->getLastInsertID();
+    }
+
+    /** AL-prefixed 8-hex key, Alif Tools format (AL_E5B6A404). */
+    public static function generateApiKey(): string
+    {
+        return 'AL_' . strtoupper(bin2hex(random_bytes(4)));
+    }
+
+    /**
+     * Return the user's API key, generating and persisting one on first use.
+     *
+     * Accounts created before the api_key column existed have none; rather
+     * than a one-off backfill migration, the first page that shows the key
+     * mints it. Safe to call repeatedly — only writes when the column is NULL.
+     */
+    public function ensureApiKey(int $id): string
+    {
+        $row = $this->db
+            ->createCommand('SELECT [[api_key]] FROM {{%user}} WHERE [[id]] = :id')
+            ->bindValue(':id', $id)
+            ->queryScalar();
+
+        if (is_string($row) && $row !== '') {
+            return $row;
+        }
+
+        $key = self::generateApiKey();
+        $this->db
+            ->createCommand()
+            ->update('{{%user}}', ['api_key' => $key, 'updated_at' => date('Y-m-d H:i:s')], ['id' => $id])
+            ->execute();
+
+        return $key;
+    }
+
+    /**
+     * The user's referral code, minting and persisting one on first use.
+     *
+     * Mirrors ensureApiKey(): a code is generated on insert, but a lost
+     * INSERT/update race (or a row that predates the column) would leave the
+     * referral page with nothing to show and nothing to share, so the code is
+     * also regenerated lazily here. Only writes when the column is NULL or
+     * blank, so a user who already shared their code never sees it change.
+     */
+    public function ensureReferralCode(int $id): string
+    {
+        $row = $this->db
+            ->createCommand('SELECT [[referral_code]] FROM {{%user}} WHERE [[id]] = :id')
+            ->bindValue(':id', $id)
+            ->queryScalar();
+
+        if (is_string($row) && $row !== '') {
+            return $row;
+        }
+
+        $code = ReferralCode::generate();
+        $this->db
+            ->createCommand()
+            ->update('{{%user}}', ['referral_code' => $code, 'updated_at' => date('Y-m-d H:i:s')], ['id' => $id])
+            ->execute();
+
+        return $code;
+    }
+
+    /**
+     * The active user a referral code belongs to, or null.
+     *
+     * Soft-deleted and disabled accounts are excluded here rather than at
+     * signup: a code that stops resolving the moment the account is suspended
+     * is what you want, and it means one check covers every entry point.
+     */
+    public function findByReferralCode(string $code): ?array
+    {
+        if ($code === '') {
+            return null;
+        }
+        $row = $this->db
+            ->createCommand(
+                'SELECT * FROM {{%user}}'
+                . ' WHERE [[referral_code]] = :code AND [[deleted_at]] IS NULL AND [[status]] = :status'
+                . ' AND [[role]] <> :role LIMIT 1'
+            )
+            ->bindValues([':code' => $code, ':status' => 'active', ':role' => 'admin'])
+            ->queryOne();
+
+        return $row === false ? null : $row;
+    }
+
+    /** The user's remaining free searches (demo freebie allowance). */
+    public function freeSearches(int $id): int
+    {
+        $value = $this->db
+            ->createCommand('SELECT [[free_searches]] FROM {{%user}} WHERE [[id]] = :id')
+            ->bindValue(':id', $id)
+            ->queryScalar();
+
+        return is_numeric($value) ? (int) $value : 0;
+    }
+
+    /** Atomically take one free search. Returns false when none are left. */
+    public function consumeFreeSearch(int $id): bool
+    {
+        // The WHERE guard makes the decrement single-shot even if two requests
+        // race: only one of them can move a row from 1 to 0.
+        $affected = $this->db
+            ->createCommand(
+                'UPDATE {{%user}} SET [[free_searches]] = [[free_searches]] - 1, [[updated_at]] = :now'
+                . ' WHERE [[id]] = :id AND [[free_searches]] > 0'
+            )
+            ->bindValues([':now' => date('Y-m-d H:i:s'), ':id' => $id])
+            ->execute();
+
+        return $affected > 0;
     }
 
     /**

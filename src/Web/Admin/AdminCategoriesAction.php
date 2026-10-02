@@ -6,6 +6,7 @@ namespace App\Web\Admin;
 
 use App\Repository\ActivityLogRepository;
 use App\Repository\ServiceRepository;
+use App\Service\CategoryAccent;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\UrlGeneratorInterface;
@@ -20,6 +21,7 @@ final readonly class AdminCategoriesAction
         private ActivityLogRepository $logs,
         private SessionInterface $session,
         private UrlGeneratorInterface $url,
+        private CategoryAccent $accents,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -39,6 +41,7 @@ final readonly class AdminCategoriesAction
                         'slug' => $slug,
                         'icon' => (string) ($input['icon'] ?? 'grid'),
                         'description' => (string) ($input['description'] ?? ''),
+                        'accent' => $this->requestedAccent($input),
                         'sort_order' => (int) ($input['sort_order'] ?? 0),
                     ]);
                     $this->logs->create([
@@ -55,6 +58,7 @@ final readonly class AdminCategoriesAction
                     'name' => trim((string) ($input['name'] ?? '')),
                     'icon' => (string) ($input['icon'] ?? 'grid'),
                     'description' => (string) ($input['description'] ?? ''),
+                    'accent' => $this->requestedAccent($input),
                     'sort_order' => (int) ($input['sort_order'] ?? 0),
                     'status' => ($input['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active',
                 ]);
@@ -110,6 +114,18 @@ final readonly class AdminCategoriesAction
             'categories' => $this->services->allCategories(false),
             'editCategory' => $editCategory,
         ]);
+    }
+
+    /**
+     * `auto` (and anything unknown) means "let the resolver decide from the
+     * name/slug", which is why it is stored rather than rejected.
+     *
+     * @param array<string, mixed> $input
+     */
+    private function requestedAccent(array $input): string
+    {
+        $accent = (string) ($input['accent'] ?? 'auto');
+        return $accent === 'auto' || !$this->accents->isValid($accent) ? 'auto' : $accent;
     }
 
     private function slugify(string $text): string

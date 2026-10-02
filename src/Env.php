@@ -21,9 +21,25 @@ final class Env
         'DB_PASSWORD' => '',
         'DB_TABLE_PREFIX' => '',
         'CACHE_PATH' => 'runtime/cache',
-        'SESSION_NAME' => 'TH_SESSION',
+        'SESSION_NAME' => 'ALIF_SESSION',
         'THROTTLE_MAX_ATTEMPTS' => '5',
         'THROTTLE_DECAY_SECONDS' => '300',
+
+        // --- Notifications (Phase 1) — empty = disabled, safe defaults ---
+        'NOTIFY_QUEUE_BATCH' => '200',
+        'NOTIFY_MAX_ATTEMPTS' => '3',
+        'NOTIFY_BACKOFF_BASE' => '60',
+        'NOTIFY_RETENTION_DAYS' => '180',
+
+        // --- API tokens (Phase 1.5) — the APK unblocker ---
+        'API_TOKEN_TTL_DAYS' => '30',
+        'APP_KEY' => '',
+
+        // --- Channels: present but disabled until credentials exist ---
+        'TELEGRAM_BOT_TOKEN' => '',
+        'TELEGRAM_WEBHOOK_SECRET' => '',
+        'FIREBASE_CREDENTIALS_PATH' => '',
+        'FIREBASE_PROJECT_ID' => '',
     ];
 
     public static function get(string $name, ?string $default = null): ?string

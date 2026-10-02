@@ -14,7 +14,7 @@ final class HomePageCest
         $I->amOnPage('/');
         $I->expectTo('see hero headline.');
         $I->see('ডিজিটাল সেবা এক ক্লিকে!');
-        $I->see('TH Tools');
+        $I->see('Alif Tools');
     }
 
     public function loginPage(WebTester $I): void

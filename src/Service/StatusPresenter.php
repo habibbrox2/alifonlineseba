@@ -36,8 +36,15 @@ final class StatusPresenter
         self::COMPLETED => ['সম্পন্ন', 'badge-success'],
         self::FAILED => ['ব্যর্থ', 'badge-danger'],
         self::CANCELLED => ['বাতিল', 'badge-danger'],
+        'review' => ['যাচাই ধরা হয়েছে', 'badge-info'],
         'approved' => ['অনুমোদিত', 'badge-success'],
         'rejected' => ['বাতিলকৃত', 'badge-danger'],
+        // Referral lifecycle. `pending` is shared with service requests, so it
+        // already appears above; only the two referral-only states are added
+        // here. The wording is deliberately user-facing — "অপেক্ষমাণ" tells a
+        // referrer their friend has signed up but not yet recharged, which is
+        // the single most common question on that page.
+        'paid' => ['পরিশোধিত', 'badge-success'],
         'active' => ['সক্রিয়', 'badge-success'],
         'disabled' => ['নিষ্ক্রিয়', 'badge-neutral'],
         'inactive' => ['নিষ্ক্রিয়', 'badge-neutral'],
@@ -54,7 +61,18 @@ final class StatusPresenter
         'cancel' => ['বাতিল করুন', 'x-circle', 'btn-danger'],
         'retry' => ['পুনরায় চালান', 'rotate-ccw', 'btn-primary'],
         'view' => ['ফলাফল দেখুন', 'eye', 'btn-ghost'],
+        'download' => ['ফাইল ডাউনলোড', 'download', 'btn-primary'],
     ];
+
+    /**
+     * Actions that are answered entirely on the client.
+     *
+     * `view` only expands a result already on the page. `download` is a plain
+     * link to the streaming endpoint — there is nothing to POST, and routing it
+     * through the action API would mean the browser handling the file response
+     * as JSON.
+     */
+    private const LOCAL_ACTIONS = ['view', 'download'];
 
     /**
      * The action buttons offered for a service request in the given status.
@@ -63,9 +81,18 @@ final class StatusPresenter
      * stored result), so it never reaches the server. A pending request offers
      * both `start` and `cancel`, since submitting only queues it.
      *
+     * `$hasDeliverable` is passed in rather than derived from the status because
+     * the two are independent: an admin can attach a file while a request is
+     * still `processing`, and can detach it after `completed`. Deciding from the
+     * status would make the button appear at a moment the file does not exist,
+     * or hide one that does.
+     *
+     * The download button is placed first — it is the reason the user is looking
+     * at a completed row at all.
+     *
      * @return array<int, array{key: string, label: string, icon: string, variant: string, remote: bool}>
      */
-    public static function requestActions(string $status): array
+    public static function requestActions(string $status, bool $hasDeliverable = false): array
     {
         $keys = match ($status) {
             self::PENDING => ['start', 'cancel'],
@@ -73,6 +100,10 @@ final class StatusPresenter
             self::COMPLETED => ['view'],
             default => [],
         };
+
+        if ($hasDeliverable) {
+            array_unshift($keys, 'download');
+        }
 
         $actions = [];
         foreach ($keys as $key) {
@@ -82,7 +113,7 @@ final class StatusPresenter
                 'label' => $label,
                 'icon' => $icon,
                 'variant' => $variant,
-                'remote' => $key !== 'view',
+                'remote' => !in_array($key, self::LOCAL_ACTIONS, true),
             ];
         }
 

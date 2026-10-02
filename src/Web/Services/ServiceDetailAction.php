@@ -42,9 +42,24 @@ final readonly class ServiceDetailAction
         $fields = $this->manager->fieldsFor($service);
         $provider = $this->manager->providerFor($service);
         $history = $this->transactions->forUser($identity->id, 1, 5);
+        $serviceHistory = $this->transactions->forUserByService($identity->id, (int) $service['id']);
+        // The variant label lives in the transaction metadata JSON; surface it
+        // as a plain column for the per-service history table.
+        foreach ($serviceHistory['rows'] as $i => $row) {
+            $serviceHistory['rows'][$i]['variant_label'] = \App\Repository\TransactionRepository::metadata($row)['variant'] ?? null;
+        }
+        $variants = \App\Service\ServiceManager::variantsFor($service);
+        $rules = \App\Service\ServiceManager::rulesFor($service);
 
         $result = null;
         $errors = [];
+
+        // Prefill from the query string — the dashboard's "recent searches"
+        // panel links here as `/services/view/<slug>?<field>=<value>` so a
+        // re-run is one click instead of retyping an NID. Only names the
+        // service actually declares are accepted, so a crafted link cannot
+        // stuff arbitrary values into the form.
+        $prefill = $this->prefill($request, $fields);
 
         if ($request->getMethod() === 'POST') {
             $input = (array) $request->getParsedBody();
@@ -68,9 +83,47 @@ final readonly class ServiceDetailAction
             'fields' => $fields,
             'requirements' => $provider?->requirements() ?? [],
             'history' => $history['rows'],
+            'serviceHistory' => $serviceHistory['rows'],
+            'serviceHistoryTotal' => $serviceHistory['total'],
+            'variants' => $variants,
+            'rules' => $rules,
             'result' => $result,
             'errors' => $errors,
+            'prefill' => $prefill,
             'identity' => $identity,
         ]);
+    }
+
+    /**
+     * Map query parameters onto the service's configured form fields.
+     *
+     * Scalars only, capped in length: the value ends up back in an HTML
+     * attribute, and a 2 KB query string is not a legitimate NID.
+     *
+     * @param array<int, \App\ServiceProvider\ServiceField> $fields
+     * @return array<string, string>
+     */
+    private function prefill(ServerRequestInterface $request, array $fields): array
+    {
+        if ($request->getMethod() === 'POST') {
+            return [];
+        }
+
+        $query = $request->getQueryParams();
+        $prefill = [];
+
+        foreach ($fields as $field) {
+            $raw = $query[$field->name] ?? null;
+            if (!is_scalar($raw)) {
+                continue;
+            }
+            $value = trim((string) $raw);
+            if ($value === '' || mb_strlen($value) > 128) {
+                continue;
+            }
+            $prefill[$field->name] = $value;
+        }
+
+        return $prefill;
     }
 }

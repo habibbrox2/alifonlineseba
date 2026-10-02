@@ -3,24 +3,29 @@
 {% block body %}
 <header class="sticky top-0 z-40 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-700 shadow-md">
     <div class="container-app flex h-16 items-center justify-between gap-4">
-        <a href="/" class="flex items-center gap-2.5 font-bold text-white">
-            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-500 text-sm font-extrabold text-primary-900">TH</span>
-            <span class="text-lg tracking-tight">TH Tools</span>
+        <a href="/" class="flex items-center gap-2.5 font-bold text-white tap-target">
+            <img src="/assets/brand/logo-mark.svg" alt="" class="h-9 w-9" width="36" height="36">
+            <span class="text-lg tracking-tight">Alif Tools</span>
         </a>
         <nav class="hidden items-center gap-6 text-sm font-medium text-white/85 md:flex">
             <a href="/" class="transition hover:text-accent-400">হোম</a>
             <a href="/about" class="transition hover:text-accent-400">আমাদের সম্পর্কে</a>
             <a href="/login" class="transition hover:text-accent-400">লগইন</a>
         </nav>
-        <div class="flex items-center gap-3 md:hidden" x-data="{ open: false }">
-            <button @click="open = !open" class="btn btn-ghost-dark btn-sm" aria-label="মেনু" aria-expanded="false">
-                {{ icon('menu', 'w-5 h-5') }}
+        {# `relative` anchors the dropdown below: without it the absolutely
+           positioned panel resolves against the page and can open off the
+           right edge of a narrow phone screen. #}
+        <div class="relative flex items-center gap-3 md:hidden" x-data="{ open: false }" @keydown.escape.window="open = false">
+            <button @click="open = !open" class="btn btn-ghost-dark btn-sm" aria-label="মেনু" :aria-expanded="open.toString()">
+                <span x-show="!open">{{ icon('menu', 'w-5 h-5') }}</span>
+                <span x-show="open" x-cloak>{{ icon('x', 'w-5 h-5') }}</span>
             </button>
-            <div x-show="open" x-cloak @click.outside="open = false"
-                 class="absolute right-4 top-14 w-44 rounded-xl border border-neutral-200 bg-white p-2 shadow-lg">
+            <div x-show="open" x-cloak @click.outside="open = false" x-transition
+                 class="absolute right-0 top-14 w-48 rounded-xl border border-neutral-200 bg-white p-2 shadow-lg">
                 <a href="/" class="nav-link">হোম</a>
                 <a href="/about" class="nav-link">আমাদের সম্পর্কে</a>
                 <a href="/login" class="nav-link">লগইন</a>
+                <a href="/register" class="nav-link">নিবন্ধন</a>
             </div>
         </div>
     </div>
@@ -44,7 +49,7 @@
             site.contact_phone ? { href: 'tel:' ~ site.contact_phone, label: site.contact_phone, icon: 'smartphone' },
         ]|filter(c => c) %}
 
-        <p class="text-base font-bold text-white">TH Tools</p>
+        <p class="text-base font-bold text-white">Alif Tools</p>
         <p class="mt-1 text-xs text-white/60">{{ siteTagline }}</p>
 
         {% if socialLinks|length or contactLinks|length %}
@@ -59,11 +64,11 @@
         {% endif %}
 
         <nav class="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-            <a href="/about" class="transition hover:text-accent-400">আমাদের সম্পর্কে</a>
-            <a href="/privacy" class="transition hover:text-accent-400">গোপনীয়তা নীতি</a>
-            <a href="/terms" class="transition hover:text-accent-400">শর্তাবলী</a>
+            <a href="/about" class="tap-target transition hover:text-accent-400">আমাদের সম্পর্কে</a>
+            <a href="/privacy" class="tap-target transition hover:text-accent-400">গোপনীয়তা নীতি</a>
+            <a href="/terms" class="tap-target transition hover:text-accent-400">শর্তাবলী</a>
             {% for c in contactLinks %}
-                <a href="{{ c.href }}" class="inline-flex items-center gap-1.5 transition hover:text-accent-400">
+                <a href="{{ c.href }}" class="tap-target inline-flex items-center gap-1.5 transition hover:text-accent-400">
                     {{ icon(c.icon, 'w-3.5 h-3.5') }} {{ c.label }}
                 </a>
             {% endfor %}

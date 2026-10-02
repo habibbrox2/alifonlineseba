@@ -1,5 +1,5 @@
 /* ============================================================
- * TH Tools — Tailwind entry + design tokens
+ * Alif Tools — Tailwind entry + design tokens
  * ============================================================ */
 
 @tailwind base;
@@ -24,9 +24,110 @@
   ::selection {
     @apply bg-primary-100 text-primary-800;
   }
+
+  /* Default accent — the exact same tokens every `.accent-*` class redefines.
+     A page that never sets an accent keeps the primary-green brand. */
+  :root {
+    --accent: #0d8f68;
+    --accent-soft: #ecfdf5;
+    --accent-line: #a7f3d0;
+    --accent-ink: #0b6e51;
+    --accent-on: #ffffff;
+  }
 }
 
 @layer components {
+  /* ============================================================
+   * Category-based theme accent
+   * ============================================================
+   * Each service category carries its own accent (resolved server-side by
+   * App\Service\CategoryAccent, rendered as `accent-<key>`). A single class
+   * re-points five custom properties, and the blocks below build every
+   * accent-tinted surface on top of them. That is the whole colour
+   * hierarchy: one accent per category, a soft surface for large areas,
+   * an ink tone for text, and a solid accent for the single action.
+   * Never hardcode a category colour in a template — add the class.
+   * The palette itself lives outside @layer (see below).
+   */
+
+  /* Tinted icon tile — the category's identity mark. */
+  .accent-tile {
+    @apply flex shrink-0 items-center justify-center rounded-xl;
+    background-color: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* Small uppercase label in the accent ink. */
+  .accent-label {
+    @apply text-xs font-bold uppercase tracking-wide;
+    color: var(--accent-ink);
+  }
+
+  /* Price / headline number. */
+  .accent-value {
+    @apply font-extrabold tabular-nums;
+    color: var(--accent-ink);
+  }
+
+  /* Thin colour bar that ties a card to its category. */
+  .accent-bar {
+    background-color: var(--accent);
+  }
+
+  /* Soft-tinted chip, active state handled by `.chip-accent.chip-active`. */
+  .chip-accent {
+    @apply bg-white;
+    border-color: var(--accent-line);
+    color: var(--accent-ink);
+  }
+  .chip-accent:hover {
+    background-color: var(--accent-soft);
+    color: var(--accent-ink);
+  }
+  .chip-accent.chip-active {
+    @apply text-white;
+    background-color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* The one solid action inside a category-tinted card. */
+  .btn-accent-solid {
+    @apply text-white;
+    background-color: var(--accent);
+  }
+  .btn-accent-solid:hover {
+    background-color: var(--accent-ink);
+  }
+  .btn-accent-solid:focus-visible {
+    --tw-ring-color: var(--accent);
+  }
+
+  /* Focus ring for inputs that live inside a category-tinted panel. */
+  .accent-field:focus {
+    border-color: var(--accent);
+    --tw-ring-color: color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+
+  /* Radio-card option (e.g. service variants) tinted by the category. */
+  .variant-pick {
+    @apply border-neutral-200 transition;
+  }
+  .variant-pick:hover {
+    border-color: var(--accent-line);
+  }
+  .variant-pick.is-picked {
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .variant-pick .variant-price {
+    @apply font-extrabold;
+    color: var(--accent-ink);
+  }
+  .variant-pick .variant-check {
+    color: var(--accent);
+  }
+
   /* Container */
   .container-app {
     @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
@@ -38,6 +139,16 @@
   }
   .card-hover {
     @apply transition duration-200 hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  /* Card that belongs to a category: a coloured top rule plus an accent-tinted
+     hover edge, so hovering tells you which category you are about to enter. */
+  .card-accent {
+    @apply overflow-hidden;
+    box-shadow: inset 0 3px 0 0 var(--accent);
+  }
+  .card-accent:hover {
+    border-color: var(--accent-line);
   }
 
   /* Buttons */
@@ -155,6 +266,69 @@
   }
 }
 
+/* ============================================================
+ * Category accent palette
+ * ------------------------------------------------------------
+ * Deliberately OUTSIDE @layer components: the class names are built at
+ * runtime (`accent-{{ key }}` in Twig, `'accent-' + x` in Alpine), so Tailwind
+ * never sees them in a template and would drop every rule declared inside a
+ * layer. Plain CSS is passed through untouched, which is what a dynamic palette
+ * needs. Keep this list in sync with App\Service\CategoryAccent::PALETTE.
+ * ============================================================ */
+
+.accent-emerald { --accent: #0d8f68; --accent-soft: #ecfdf5; --accent-line: #a7f3d0; --accent-ink: #0b6e51; --accent-on: #ffffff; }
+.accent-teal { --accent: #0d9488; --accent-soft: #f0fdfa; --accent-line: #99f6e4; --accent-ink: #0f766e; --accent-on: #ffffff; }
+.accent-sky { --accent: #0284c7; --accent-soft: #f0f9ff; --accent-line: #bae6fd; --accent-ink: #0369a1; --accent-on: #ffffff; }
+.accent-indigo { --accent: #4f46e5; --accent-soft: #eef2ff; --accent-line: #c7d2fe; --accent-ink: #3730a3; --accent-on: #ffffff; }
+.accent-violet { --accent: #7c3aed; --accent-soft: #f5f3ff; --accent-line: #ddd6fe; --accent-ink: #5b21b6; --accent-on: #ffffff; }
+.accent-fuchsia { --accent: #c026d3; --accent-soft: #fdf4ff; --accent-line: #f5d0fe; --accent-ink: #86198f; --accent-on: #ffffff; }
+.accent-rose { --accent: #e11d48; --accent-soft: #fff1f2; --accent-line: #fecdd3; --accent-ink: #9f1239; --accent-on: #ffffff; }
+.accent-orange { --accent: #ea580c; --accent-soft: #fff7ed; --accent-line: #fed7aa; --accent-ink: #c2410c; --accent-on: #ffffff; }
+.accent-amber { --accent: #d97706; --accent-soft: #fffbeb; --accent-line: #fde68a; --accent-ink: #b45309; --accent-on: #ffffff; }
+.accent-lime { --accent: #4d7c0f; --accent-soft: #f7fee7; --accent-line: #d9f99d; --accent-ink: #3f6212; --accent-on: #ffffff; }
+.accent-cyan { --accent: #0891b2; --accent-soft: #ecfeff; --accent-line: #a5f3fc; --accent-ink: #155e75; --accent-on: #ffffff; }
+.accent-slate { --accent: #475569; --accent-soft: #f8fafc; --accent-line: #cbd5e1; --accent-ink: #334155; --accent-on: #ffffff; }
+
+/* ------------------------------------------------------------
+ * Dark-mode accent palette
+ * ------------------------------------------------------------
+ * The light values above are 500-900 shades: a solid `var(--accent)` button
+ * with white text, and a near-white `var(--accent-soft)` fill. Both break on a
+ * dark surface — the soft fill becomes a glowing white block, and the 500
+ * shade is too dark to read as a label against a dark card. So each hue gets
+ * a second, dark-tuned set:
+ *
+ *   --accent      lighter (300-400) so it reads as text/mark on dark
+ *   --accent-soft 900-950, a dark tinted fill instead of a near-white one
+ *   --accent-line 700-800, a border you can see but that does not glare
+ *   --accent-ink  200-300, the readable text tone
+ *   --accent-on   900, because a dark solid button now needs dark text
+ *
+ * Same keep-in-sync rule as the table above — AccentPaletteCssTest asserts
+ * both tables cover every key in CategoryAccent::PALETTE with all five tokens.
+ * ------------------------------------------------------------ */
+
+/* Trigger: an explicit `.dark` class on <html>, set by the app's theme switcher.
+   Deliberately NOT `@media (prefers-color-scheme: dark)`: these tokens are
+   tuned for a dark *page*, so honouring the OS setting today would paint dark
+   chips onto the still-light cards and put light accent text on `text-neutral-800`
+   — unreadable. Wire the media query in when the surfaces get a dark theme too. */
+
+/* Kept in lockstep with the light table above by AccentPaletteCssTest, which
+   asserts both tables cover every key in CategoryAccent::PALETTE. */
+.dark .accent-emerald { --accent: #34d399; --accent-soft: #062a20; --accent-line: #0f5138; --accent-ink: #6ee7b7; --accent-on: #052e23; }
+.dark .accent-teal { --accent: #2dd4bf; --accent-soft: #042a27; --accent-line: #115e56; --accent-ink: #5eead4; --accent-on: #042f2e; }
+.dark .accent-sky { --accent: #38bdf8; --accent-soft: #082a3c; --accent-line: #0c4a6e; --accent-ink: #7dd3fc; --accent-on: #082f49; }
+.dark .accent-indigo { --accent: #818cf8; --accent-soft: #1e1e4a; --accent-line: #3730a3; --accent-ink: #a5b4fc; --accent-on: #1e1b4b; }
+.dark .accent-violet { --accent: #a78bfa; --accent-soft: #241a47; --accent-line: #4c1d95; --accent-ink: #c4b5fd; --accent-on: #2e1065; }
+.dark .accent-fuchsia { --accent: #e879f9; --accent-soft: #3b0a44; --accent-line: #701a75; --accent-ink: #f0abfc; --accent-on: #4a044e; }
+.dark .accent-rose { --accent: #fb7185; --accent-soft: #3d0a18; --accent-line: #9f1239; --accent-ink: #fda4af; --accent-on: #4c0519; }
+.dark .accent-orange { --accent: #fb923c; --accent-soft: #3a1607; --accent-line: #9a3412; --accent-ink: #fdba74; --accent-on: #431407; }
+.dark .accent-amber { --accent: #fbbf24; --accent-soft: #3a2405; --accent-line: #92400e; --accent-ink: #fcd34d; --accent-on: #451a03; }
+.dark .accent-lime { --accent: #a3e635; --accent-soft: #1e2a08; --accent-line: #4d7c0f; --accent-ink: #bef264; --accent-on: #1a2e05; }
+.dark .accent-cyan { --accent: #22d3ee; --accent-soft: #05272e; --accent-line: #155e75; --accent-ink: #67e8f9; --accent-on: #083344; }
+.dark .accent-slate { --accent: #94a3b8; --accent-soft: #171e29; --accent-line: #334155; --accent-ink: #cbd5e1; --accent-on: #0f172a; }
+
 /* ————— Mobile friendliness ————— */
 
 /* iOS Safari auto-zooms inputs with font-size < 16px.
@@ -180,5 +354,44 @@
   }
   table {
     min-width: 40rem;
+  }
+  /* 11px metadata (timestamps, error strings, hint text) is fine on a desktop
+     monitor but sits below the legibility floor on a phone held at arm's
+     length. Flooring it here beats re-declaring `text-xs` in two dozen
+     templates, and it is a no-op from `sm` upwards. Unlayered, so it outranks
+     the generated utility the same way `.btn-sm` does above. */
+  .text-\[11px\] {
+    font-size: 0.75rem;
+  }
+  /* Opt-in minimum 40px touch target. Several header and inline controls are
+     deliberately compact for desktop density; on a phone they grow to something
+     a thumb can actually hit. Scoped to an explicit class rather than a blanket
+     `a`/`button` rule, which would stretch links sitting inside prose. */
+  .tap-target {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+    min-width: 2.5rem;
+  }
+  /* Bare checkboxes are 13–16px square no matter what min-height says, so the
+     tappable area has to come from the label row wrapping them. */
+  .tap-row {
+    @apply flex min-h-[2.5rem] items-center gap-2 py-1.5;
+  }
+}
+
+/* Header balance chip — a short green flash when the live value changes,
+   driven by initHeaderBalance() in app.js. */
+#header-balance.balance-flash {
+  animation: balance-flash 1.2s ease-out;
+}
+@keyframes balance-flash {
+  0%,
+  100% {
+    background-color: rgb(255 255 255 / 0.1);
+  }
+  30% {
+    background-color: rgb(34 197 94 / 0.45);
   }
 }

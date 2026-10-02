@@ -37,5 +37,23 @@ c3.php
 # Application cache directory
 /cache
 
-# Published/compiled front-end assets (rebuild with `npm run build`)
-/public/assets
+# Published/compiled front-end assets (rebuild with `npm run build`).
+# Only the three things the build actually emits are ignored: the compiled CSS,
+# the synced JS bundle, and the generated icon sprite.
+#
+# The brand, webmanifest and share-card assets under here are *source*. Nothing
+# in `npm run build` produces them, so ignoring the whole directory meant the
+# logo, the PWA manifest, the app icons and the OG cards existed only on the
+# machine that generated them and never reached a deploy.
+/public/assets/*
+!/public/assets/brand/
+!/public/assets/img/
+
+# User-uploaded recharge receipts (private, served through an authenticated action)
+/web/receipts
+
+# Python bytecode cache from importing the scripts/ generators as modules
+__pycache__/
+
+# Freebuff agent workspace metadata (local only)
+/.freebuff

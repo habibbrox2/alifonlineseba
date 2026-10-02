@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Night palette for the launch screen.
+     values/colors.xml is a *brand* palette. `brand_primary` is only ever
+     consumed by Theme.AlifTools.Splash (windowSplashScreenBackground) — the
+     launcher icon reads its own @color/ic_launcher_background resource, so
+     overriding the name here repaints the splash without touching the icon
+     the launcher has already cached and masked.
+
+     Why it moves at all: on API 31+ the system owns the cold-start window and
+     fills it with windowSplashScreenBackground. On a system dark theme the
+     app then opens onto its own dark surface, and a #083F31 green block
+     standing in front of it reads as a stray window that "floats" rather than
+     handing off. Dropping the backdrop to the app's own dark surface (#0B1220)
+     closes that seam.
+
+     `brand_primary_600` is lifted for the same reason: on a near-black
+     backdrop the 600 shade is the only tone that still reads as brand green,
+     and #34D399 is the same hue the dark accent palette uses for emerald
+     (resources/css/app.css), so the splash mark and the running app agree. -->
+<resources>
+    <color name="brand_primary">#0B1220</color>
+    <color name="brand_primary_600">#34D399</color>
+</resources>

@@ -18,6 +18,8 @@ final class Identity
         public readonly string $status,
         public readonly float $balance,
         public readonly ?string $avatar,
+        public readonly ?string $apiKey = null,
+        public readonly int $freeSearches = 0,
     ) {}
 
     public static function fromRow(array $row): self
@@ -31,6 +33,8 @@ final class Identity
             (string) $row['status'],
             (float) ($row['balance'] ?? 0),
             $row['avatar'] ?? null,
+            isset($row['api_key']) ? (string) $row['api_key'] : null,
+            (int) ($row['free_searches'] ?? 0),
         );
     }
 
