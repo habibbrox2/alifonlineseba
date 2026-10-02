@@ -194,7 +194,7 @@ final class PushSubscriptionRepository
             ->bindValue(':e', $endpoint)
             ->queryOne();
 
-        return $row === false ? null : (array) $row;
+        return $row === null ? null : (array) $row;
     }
 
     /**

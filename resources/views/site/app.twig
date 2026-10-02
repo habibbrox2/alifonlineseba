@@ -61,7 +61,7 @@
         </div>
         {% if release %}
             <p class="mt-4 text-sm text-white/60">
-                সর্বশেষ ভার্সন {{ release.version_name }} · {{ apkSizeLabel }} · {{ release.published_at ? bngDate(release.published_at) : 'সদ্য' }}
+                সর্বশেষ ভার্সন {{ release.version_name }} · {{ apkSizeLabel }} · {{ release.published_at ? release.published_at|bndate : 'সদ্য' }}
             </p>
         {% endif %}
     </div>
@@ -97,7 +97,7 @@
                     <div class="rounded-xl bg-surface-100 p-3">
                         <dt class="text-xs text-neutral-500">প্রকাশের তারিখ</dt>
                         <dd class="mt-0.5 font-semibold text-neutral-900">
-                            {{ release.published_at ? bngDate(release.published_at) : '—' }}
+                            {{ release.published_at ? release.published_at|bndate : '—' }}
                         </dd>
                     </div>
                 </dl>

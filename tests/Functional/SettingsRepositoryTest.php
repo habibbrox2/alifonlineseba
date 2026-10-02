@@ -28,10 +28,18 @@ final class SettingsRepositoryTest extends \Codeception\Test\Unit
 
     protected function _after(): void
     {
-        // Clean any rows written by tests so defaults stay pristine.
-        $this->db->createCommand()->delete('{{%site_setting}}', ['setting_key' => [
-            'site_tagline', 'facebook_url', 'unknown_key',
-        ]])->execute();
+        try {
+            // Clean any rows written by tests so defaults stay pristine.
+            $this->db->createCommand()->delete('{{%site_setting}}', ['setting_key' => [
+                'site_tagline', 'facebook_url', 'unknown_key',
+            ]])->execute();
+        } finally {
+            // _before() builds a fresh container, and so a fresh PDO
+            // connection, per test. Close it, in a finally so a failing test
+            // cannot leak either, or the suite eventually exhausts
+            // max_connections.
+            $this->db->close();
+        }
     }
 
     public function testAllReturnsDefaultsWithEmptyTable(): void

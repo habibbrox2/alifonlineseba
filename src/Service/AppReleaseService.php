@@ -86,7 +86,16 @@ final readonly class AppReleaseService
             return null;
         }
 
-        $absolute = $this->absolutePath((string) $release['apk_path']);
+        // A published row is the only thing standing between /app and a 500,
+        // so a row that is missing or has emptied any of the columns this
+        // method reads is treated as no release at all. This is the one
+        // promise the class makes: /app renders, it never breaks.
+        $path = $release['apk_path'] ?? null;
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+
+        $absolute = $this->absolutePath($path);
         if ($absolute === null || !is_file($absolute) || !is_readable($absolute)) {
             return null;
         }
@@ -97,7 +106,7 @@ final readonly class AppReleaseService
         }
 
         $release['apk_size'] = $size;
-        $release['sha256'] = $this->checksum($absolute, (string) $release['sha256']);
+        $release['sha256'] = $this->checksum($absolute, (string) ($release['sha256'] ?? ''));
 
         return $release;
     }

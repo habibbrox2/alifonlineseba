@@ -24,6 +24,14 @@ use Yiisoft\Db\Connection\ConnectionInterface;
  * happens inside a transaction (see `publish()`), and readers always order by
  * `version_code` so the newest wins even if the invariant is ever broken by a
  * hand-edited row.
+ *
+ * ## "No row" is null, never false
+ *
+ * `AbstractCommand::queryOne()` is typed `?array`: an empty result set comes
+ * back as `null`, and it has never returned `false`. Casting that with
+ * `(array) $row` turns "no row" into an *empty array*, which then passes every
+ * `=== null` guard above it and only fails much later, as an undefined-key
+ * error. So every read below compares against `null`.
  */
 final class AppReleaseRepository
 {
@@ -46,7 +54,7 @@ final class AppReleaseRepository
             )
             ->queryOne();
 
-        return $row === false ? null : (array) $row;
+        return $row === null ? null : (array) $row;
     }
 
     /**
@@ -63,7 +71,7 @@ final class AppReleaseRepository
             )
             ->queryOne();
 
-        return $row === false ? null : (array) $row;
+        return $row === null ? null : (array) $row;
     }
 
     /**
@@ -94,7 +102,7 @@ final class AppReleaseRepository
                 . ' ORDER BY [[version_code]] DESC LIMIT 1')
             ->queryOne();
 
-        return $row === false ? 0 : (int) $row['min_version_code'];
+        return $row === null ? 0 : (int) $row['min_version_code'];
     }
 
     /**
@@ -135,7 +143,7 @@ final class AppReleaseRepository
                 'updated_at' => $now,
             ];
 
-            if ($existing === false) {
+            if ($existing === null) {
                 $row['created_at'] = $now;
                 $this->db->createCommand()->insert('{{%app_release}}', $row)->execute();
                 return (int) $this->db->getLastInsertID();
