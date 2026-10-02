@@ -1,10 +1,10 @@
 {
-  "name": "th-tools",
+  "name": "al-tools",
   "private": true,
-  "description": "TH Tools — digital services hub (Yii 3 + Twig + Tailwind + Alpine)",
+  "description": "AL Tools — digital services hub (Yii 3 + Twig + Tailwind + Alpine)",
   "scripts": {
-    "build": "tailwindcss -i ./resources/css/app.css -o ./public/assets/css/app.css --minify && node scripts/sync-js.js && php scripts/generate-sprite.php",
-    "watch": "tailwindcss -i ./resources/css/app.css -o ./public/assets/css/app.css --watch",
+    "build": "php scripts/generate-pay-palette.php && tailwindcss -i ./resources/css/app.css -o ./public/assets/css/app.css --minify && node scripts/sync-js.js && php scripts/generate-sprite.php",
+    "watch": "php scripts/generate-pay-palette.php && tailwindcss -i ./resources/css/app.css -o ./public/assets/css/app.css --watch",
     "copy-js": "node scripts/sync-js.js"
   },
   "devDependencies": {

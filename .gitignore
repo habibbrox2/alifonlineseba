@@ -34,6 +34,11 @@ c3.php
 # Runtime files (compiled Twig templates, caches, logs)
 /runtime
 
+# Local secret material and scratch: VAPID key pairs generated while wiring Web
+# Push, JWT test vectors, and dev-server logs. None of it is source, and the
+# EC private keys in here are real — storage/ must never reach a commit.
+/storage/
+
 # Application cache directory
 /cache
 
@@ -51,6 +56,15 @@ c3.php
 
 # User-uploaded recharge receipts (private, served through an authenticated action)
 /web/receipts
+
+# Finished service-request files uploaded by an admin. Private by definition —
+# NID printouts, certificates — and must never end up in a commit.
+/web/deliverables
+
+# Built APKs, promoted into place by an admin. Binaries do not belong in a
+# repository: they are rebuilt per release, and /app/apk streams them from
+# here through AppReleaseService.
+/web/releases
 
 # Python bytecode cache from importing the scripts/ generators as modules
 __pycache__/

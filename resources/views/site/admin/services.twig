@@ -65,10 +65,14 @@
                 <input id="price" type="number" step="0.01" min="0" name="price" class="form-input" value="{{ fvPrice }}">
                 <p class="form-help">শূন্য বা তার বেশি — ঋণাত্মক মূল্য দেওয়া যাবে না।</p>
             </div>
-            <div>
-                <label for="icon" class="form-label">আইকন (Lucide)</label>
-                <input id="icon" type="text" name="icon" class="form-input" value="{{ fvIcon }}">
-            </div>
+            {# Browse all 1636 Lucide icons instead of typing a name from memory. #}
+            {% include 'components/icon-picker.twig' with {
+                name: 'icon',
+                id: 'icon',
+                value: fvIcon,
+                label: 'আইকন (Lucide)',
+                help: 'আইকন খুঁজে বেছে নিন, অথবা নামটি নিজে লিখুন (যেমন: zap, gift, smartphone)'
+            } %}
             <div>
                 <label for="badge" class="form-label">ব্যাজ</label>
                 <input id="badge" type="text" name="badge" class="form-input" placeholder="যেমন: ইনস্ট্যান্ট ডেলিভারি" value="{{ fvBadge }}">

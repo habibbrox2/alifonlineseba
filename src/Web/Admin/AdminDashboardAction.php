@@ -32,6 +32,7 @@ final readonly class AdminDashboardAction
             'categoryCount' => count($this->services->allCategories(false)),
             'serviceCount' => count($this->services->servicesByCategory()),
             'txStats' => $this->transactions->statsAll(),
+            'openOrders' => $this->transactions->openServiceOrders(),
             'recentLogs' => $this->logs->all(1, 8)['rows'],
             'topupStats' => $stats,
             // What still needs a human: claimed (`review`) and unclaimed

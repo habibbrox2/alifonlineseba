@@ -1,0 +1,66 @@
+{
+  "birth-certificate-clone": {
+    "file": "/assets/img/og/service-birth-certificate-clone.png",
+    "accent": "rose"
+  },
+  "bmet-service": {
+    "file": "/assets/img/og/service-bmet-service.png",
+    "accent": "slate"
+  },
+  "call-sms-list-cdr": {
+    "file": "/assets/img/og/service-call-sms-list-cdr.png",
+    "accent": "amber"
+  },
+  "imei-to-location": {
+    "file": "/assets/img/og/service-imei-to-location.png",
+    "accent": "lime"
+  },
+  "live-location-by-phone": {
+    "file": "/assets/img/og/service-live-location-by-phone.png",
+    "accent": "lime"
+  },
+  "mfs-account-info": {
+    "file": "/assets/img/og/service-mfs-account-info.png",
+    "accent": "teal"
+  },
+  "mrp-epassport-sb-copy": {
+    "file": "/assets/img/og/service-mrp-epassport-sb-copy.png",
+    "accent": "slate"
+  },
+  "nid-by-phone-birth": {
+    "file": "/assets/img/og/service-nid-by-phone-birth.png",
+    "accent": "violet"
+  },
+  "nid-correction-reissue": {
+    "file": "/assets/img/og/service-nid-correction-reissue.png",
+    "accent": "violet"
+  },
+  "nid-password-set": {
+    "file": "/assets/img/og/service-nid-password-set.png",
+    "accent": "violet"
+  },
+  "official-server-copy": {
+    "file": "/assets/img/og/service-official-server-copy.png",
+    "accent": "violet"
+  },
+  "signature-smartcard-pdf": {
+    "file": "/assets/img/og/service-signature-smartcard-pdf.png",
+    "accent": "violet"
+  },
+  "sim-biometric-info": {
+    "file": "/assets/img/og/service-sim-biometric-info.png",
+    "accent": "sky"
+  },
+  "sim-list-by-nid": {
+    "file": "/assets/img/og/service-sim-list-by-nid.png",
+    "accent": "sky"
+  },
+  "tin-certificate-full": {
+    "file": "/assets/img/og/service-tin-certificate-full.png",
+    "accent": "emerald"
+  },
+  "voter-search-by-name": {
+    "file": "/assets/img/og/service-voter-search-by-name.png",
+    "accent": "violet"
+  }
+}

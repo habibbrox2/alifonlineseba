@@ -26,11 +26,13 @@ use App\Web\Admin\AdminTopupsAction;
 use App\Web\Admin\AdminTransactionAction;
 use App\Web\Admin\AdminTransactionsAction;
 use App\Web\Admin\AdminUsersAction;
+use App\Web\Api\AppVersionApiAction;
 use App\Web\Api\AuthApiAction;
 use App\Web\Api\DashboardApiAction;
 use App\Web\Api\DeviceApiAction;
 use App\Web\Api\NotificationsApiAction;
 use App\Web\Api\ProfileApiAction;
+use App\Web\Api\PushApiAction;
 use App\Web\Api\ServiceRequestApiAction;
 use App\Web\Api\ServiceRequestDetailApiAction;
 use App\Web\Api\ServiceRequestsWatchApiAction;
@@ -42,6 +44,8 @@ use App\Web\Auth\RegisterAction;
 use App\Web\Dashboard\DashboardAction;
 use App\Web\Services\CategoryAction;
 use App\Web\Services\ServiceDetailAction;
+use App\Web\Site\ApkDownloadAction;
+use App\Web\Site\AppPageAction;
 use App\Web\Site\HomeAction;
 use App\Web\Site\SitemapAction;
 use App\Web\Site\StaticPageAction;
@@ -61,6 +65,13 @@ return [
     Route::get('/terms')
         ->action(static fn (StaticPageAction $page) => $page('terms'))
         ->name('terms'),
+
+    // The Android client. Public because the person who has to install the app
+    // is, by definition, the one who has no account yet.
+    Route::get('/app')->action(AppPageAction::class)->name('app'),
+    // The bytes themselves. Outside the web root, so this route is the only
+    // way to reach them — see ApkDownloadAction.
+    Route::get('/app/apk')->action(ApkDownloadAction::class)->name('app-apk'),
 
     // Auth
     Route::methods(['GET', 'POST'], '/login')->action(LoginAction::class)->name('login'),
@@ -92,6 +103,18 @@ return [
     // Machine auth (Phase 1.5) — public, no session needed; the throttle for
     // credential abuse lives inside the login flow.
     Route::methods(['POST'], '/api/auth/{action}')->action(AuthApiAction::class)->name('api-auth'),
+
+    // Web Push, deliberately outside the authenticated group: a signed-out
+    // visitor on /app can grant notification permission, and that is the whole
+    // point of offering browser push at all. The POSTs are CSRF-protected by
+    // the middleware stack. See PushApiAction.
+    Route::get('/api/push/key')->action(PushApiAction::class)->name('api-push-key'),
+    Route::post('/api/push/subscribe')->action(PushApiAction::class)->name('api-push-subscribe'),
+    Route::post('/api/push/unsubscribe')->action(PushApiAction::class)->name('api-push-unsubscribe'),
+
+    // The installed app's update check. Unauthenticated on purpose: an app
+    // with an expired token must still be able to find out it needs to update.
+    Route::get('/api/app/version')->action(AppVersionApiAction::class)->name('api-app-version'),
 
     // JSON API (auth required — bearer token OR session)
     Group::create('/api')->middleware(ApiAuthMiddleware::class)->routes(
@@ -126,7 +149,7 @@ return [
             Route::post('/categories')->action(AdminCategoriesAction::class)->name('admin-categories-post'),
             Route::get('/services')->action(AdminServicesAction::class)->name('admin-services'),
             Route::post('/services')->action(AdminServicesAction::class)->name('admin-services-post'),
-            Route::get('/transactions')->action(AdminTransactionsAction::class)->name('admin-transactions'),
+            Route::methods(['GET', 'POST'], '/transactions')->action(AdminTransactionsAction::class)->name('admin-transactions'),
             Route::methods(['GET', 'POST'], '/transactions/{id}')->action(AdminTransactionAction::class)->name('admin-transaction'),
             Route::methods(['GET', 'POST'], '/topups')->action(AdminTopupsAction::class)->name('admin-topups'),
             Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargeAction::class)->name('admin-recharge'),

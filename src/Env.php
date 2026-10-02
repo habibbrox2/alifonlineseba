@@ -40,6 +40,25 @@ final class Env
         'TELEGRAM_WEBHOOK_SECRET' => '',
         'FIREBASE_CREDENTIALS_PATH' => '',
         'FIREBASE_PROJECT_ID' => '',
+
+        // --- Web Push (VAPID / RFC 8292) — both empty = channel disabled ---
+        // VAPID_SUBJECT must be a mailto: or https: URI identifying the sender;
+        // push services contact it about a revoked subscription.
+        'VAPID_SUBJECT' => '',
+        // The raw 32-byte P-256 scalar, base64url encoded — a PEM would need
+        // newlines, which no dotenv parser preserves. Generate a pair with:
+        //   php scripts/generate-vapid-keys.php mailto:ops@example.com
+        'VAPID_PRIVATE_KEY' => '',
+        // How long a push service may hold a message for an offline device, and
+        // whether to mark it urgent. Urgency > 5 becomes `high`, which makes
+        // the service wake the device and is billed/rationed accordingly.
+        'WEB_PUSH_TTL' => '86400',
+        'WEB_PUSH_URGENCY' => '5',
+
+        // --- Android app distribution ---
+        // Set to 0 to take /app/apk offline (e.g. while a build is broken)
+        // without unpublishing the release record.
+        'APP_DOWNLOADS_ENABLED' => 'true',
     ];
 
     public static function get(string $name, ?string $default = null): ?string

@@ -42,6 +42,23 @@ final readonly class ServiceRequestAdminService
      */
     private const UNSETTLED = [StatusPresenter::PENDING, StatusPresenter::PROCESSING];
 
+    /**
+     * Ceiling on one bulk submission.
+     *
+     * The queue page shows twenty rows, so a real selection can never exceed
+     * that — the cap is here for the other kind of caller: a hand-written POST
+     * carrying ten thousand ids, which would be ten thousand notifications and
+     * ten thousand refund decisions driven by whoever wrote the request.
+     */
+    /**
+     * Largest selection one submission may carry.
+     *
+     * Public because the queue and the CSV export are held to the same cap: a
+     * limit enforced only on the settle path would let the two paths drift, and
+     * the cap exists for the page size above them, not for this method.
+     */
+    public const BULK_LIMIT = 100;
+
     public function __construct(
         private TransactionRepository $transactions,
         private UserRepository $users,
@@ -91,6 +108,116 @@ final readonly class ServiceRequestAdminService
         ));
 
         return [true, 'অবস্থা হালনাগাদ হয়েছে: ' . StatusPresenter::label($status)];
+    }
+
+    /**
+     * Settle many requests to one status, on an admin's authority.
+     *
+     * The queue is a queue: an operator working a backlog of a hundred orders
+     * does the same thing to all of them, and making that a hundred page loads
+     * is how a hundred become fifty. So the work is the *same* work — every row
+     * goes through `setStatus()`, with its refund guard, its notification and
+     * its activity log — and this only removes the clicking.
+     *
+     * The dangerous case is the one this refuses to be convenient about. A
+     * top-up lives in the same table with a NULL `service_id` and is already
+     * paid; running `refundIfUnsettled()` over one would credit the user money
+     * that was never debited by this path. The bar is never drawn on the
+     * "all transactions" tab, and this is the guard behind that decision — the
+     * UI hides the path, the service makes it impossible, so a crafted POST
+     * gets a skipped count instead of a payout.
+     *
+     * Rows already in the target status are counted, not settled: re-running
+     * `setStatus()` on them would be the no-op it already handles, and skipping
+     * here keeps the counts honest instead of reporting twenty changes that
+     * were zero.
+     *
+     * `ok` is true only when something actually moved. The caller flashes it,
+     * and "nothing happened" deserves a different colour from "done" — a silent
+     * green bar after a submission that changed nothing is how an operator
+     * concludes the queue is clear when it is not.
+     *
+     * @param int[] $ids
+     *
+     * @return array{ok: bool, message: string, applied: int, unchanged: int, skipped: int}
+     */
+    public function settleMany(array $ids, string $status, Identity $admin): array
+    {
+        if (!StatusPresenter::isRequestStatus($status)) {
+            return $this->bulkResult(false, 0, 0, 0, 'অজানা অবস্থা।');
+        }
+
+        // intval() strips whatever a client put in the array, the filter drops
+        // the zeros and negatives that leaves, and the de-dupe means a
+        // checkbox submitted twice settles once rather than twice.
+        $ids = array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0);
+        $ids = array_slice(array_values(array_unique($ids)), 0, self::BULK_LIMIT);
+
+        if ($ids === []) {
+            return $this->bulkResult(false, 0, 0, 0, 'কোনো অর্ডার নির্বাচন করা হয়নি।');
+        }
+
+        $rows = $this->transactions->findManyByIds($ids);
+
+        $applied = 0;
+        $unchanged = 0;
+        $skipped = 0;
+
+        foreach ($ids as $id) {
+            $row = $rows[$id] ?? null;
+
+            // Missing row, or a row that is a top-up rather than an order.
+            if ($row === null || ($row['service_id'] ?? null) === null) {
+                $skipped++;
+                continue;
+            }
+
+            if ((string) $row['status'] === $status) {
+                $unchanged++;
+                continue;
+            }
+
+            [$ok] = $this->setStatus($id, $status, $admin);
+            $ok ? $applied++ : $skipped++;
+        }
+
+        $message = sprintf(
+            '%d টি অর্ডার হালনাগাদ হয়েছে: %s',
+            $applied,
+            StatusPresenter::label($status),
+        );
+        if ($unchanged > 0) {
+            $message .= sprintf(' · %d টি আগেই এই অবস্থায় ছিল', $unchanged);
+        }
+        if ($skipped > 0) {
+            $message .= sprintf(' · %d টি বাদ পড়েছে', $skipped);
+        }
+
+        if ($applied === 0) {
+            $message = 'কোনো অর্ডারের অবস্থা বদলায়নি।';
+            if ($unchanged > 0) {
+                $message .= sprintf(' %d টি আগেই এই অবস্থায় ছিল।', $unchanged);
+            }
+            if ($skipped > 0) {
+                $message .= sprintf(' %d টি বাদ পড়েছে।', $skipped);
+            }
+        }
+
+        return $this->bulkResult($applied > 0, $applied, $unchanged, $skipped, $message);
+    }
+
+    /**
+     * @return array{ok: bool, message: string, applied: int, unchanged: int, skipped: int}
+     */
+    private function bulkResult(bool $ok, int $applied, int $unchanged, int $skipped, string $message): array
+    {
+        return [
+            'ok' => $ok,
+            'message' => $message,
+            'applied' => $applied,
+            'unchanged' => $unchanged,
+            'skipped' => $skipped,
+        ];
     }
 
     /**

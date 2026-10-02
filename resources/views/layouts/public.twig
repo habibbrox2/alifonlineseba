@@ -10,6 +10,7 @@
         <nav class="hidden items-center gap-6 text-sm font-medium text-white/85 md:flex">
             <a href="/" class="transition hover:text-accent-400">হোম</a>
             <a href="/about" class="transition hover:text-accent-400">আমাদের সম্পর্কে</a>
+            <a href="/app" class="transition hover:text-accent-400">অ্যাপ ডাউনলোড</a>
             <a href="/login" class="transition hover:text-accent-400">লগইন</a>
         </nav>
         {# `relative` anchors the dropdown below: without it the absolutely
@@ -24,6 +25,7 @@
                  class="absolute right-0 top-14 w-48 rounded-xl border border-neutral-200 bg-white p-2 shadow-lg">
                 <a href="/" class="nav-link">হোম</a>
                 <a href="/about" class="nav-link">আমাদের সম্পর্কে</a>
+                <a href="/app" class="nav-link">অ্যাপ ডাউনলোড</a>
                 <a href="/login" class="nav-link">লগইন</a>
                 <a href="/register" class="nav-link">নিবন্ধন</a>
             </div>
@@ -67,6 +69,7 @@
             <a href="/about" class="tap-target transition hover:text-accent-400">আমাদের সম্পর্কে</a>
             <a href="/privacy" class="tap-target transition hover:text-accent-400">গোপনীয়তা নীতি</a>
             <a href="/terms" class="tap-target transition hover:text-accent-400">শর্তাবলী</a>
+            <a href="/app" class="tap-target transition hover:text-accent-400">অ্যাপ ডাউনলোড</a>
             {% for c in contactLinks %}
                 <a href="{{ c.href }}" class="tap-target inline-flex items-center gap-1.5 transition hover:text-accent-400">
                     {{ icon(c.icon, 'w-3.5 h-3.5') }} {{ c.label }}

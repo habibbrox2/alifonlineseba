@@ -14,6 +14,13 @@ ensure(dest + '/js');
 fs.copyFileSync(root + '/resources/js/app.js', dest + '/js/app.js');
 fs.copyFileSync(root + '/resources/js/dashboard.js', dest + '/js/dashboard.js');
 fs.copyFileSync(root + '/resources/js/service-history.js', dest + '/js/service-history.js');
+fs.copyFileSync(root + '/resources/js/icon-picker.js', dest + '/js/icon-picker.js');
+fs.copyFileSync(root + '/resources/js/app-install.js', dest + '/js/app-install.js');
+fs.copyFileSync(root + '/resources/js/push-subscribe.js', dest + '/js/push-subscribe.js');
+
+// public/push-sw.js is NOT copied: the Push API requires the worker script to
+// be served from the web root so its scope covers every route, and that file is
+// a source file rather than a build artefact.
 
 // Alpine.js (vendored, no CDN dependency at runtime).
 const alpineSrc = root + '/node_modules/alpinejs/dist/cdn.min.js';

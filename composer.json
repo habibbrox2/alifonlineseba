@@ -30,7 +30,9 @@
             "Composer\\Config::disableProcessTimeout",
             "@php ./yii serve"
         ],
-        "test": "codecept run"
+        "test": "codecept run",
+        "palette": "@php scripts/generate-pay-palette.php",
+        "palette:check": "@php scripts/generate-pay-palette.php --check"
     },
     "require": {
         "php": "8.2 - 8.5",

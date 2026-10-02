@@ -66,7 +66,17 @@ final class TemplateRenderer
             return null;
         }
 
-        return $row === false ? null : ['title' => (string) $row['title'], 'body' => (string) ($row['body'] ?? '')];
+        // queryOne() returns null for "no row", not false. Guarding on `=== false`
+        // alone therefore fell through to reading a null array, which produced a
+        // template of two empty strings instead of null — and a non-null template
+        // suppresses the MessageTemplates fallback below, so an event with no row
+        // in the table (a new one, say service_request.file) reached the user as a
+        // blank notification. Check for both.
+        if ($row === null || $row === false) {
+            return null;
+        }
+
+        return ['title' => (string) $row['title'], 'body' => (string) ($row['body'] ?? '')];
     }
 
     /**

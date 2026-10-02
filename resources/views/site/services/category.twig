@@ -2,6 +2,17 @@
 
 {% block title %}{{ category.name }} — Alif Tools{% endblock %}
 
+{# Admins get a create-service shortcut here. The full form lives at
+   /admin/services; `category` carries an id on the per-category pages, so it is
+   forwarded as ?category= to pre-select the right row in that form instead of
+   making the admin pick it again. The /services root has no id, so it links
+   straight to the form. Non-admins never see this block. #}
+{% set isAdmin = identity is defined and identity %}
+{% set canCreate = isAdmin and identity.canAccessAdmin() %}
+{% set createUrl = canCreate
+    ? '/admin/services' ~ (category.id is defined ? '?category=' ~ category.id : '')
+    : '' %}
+
 {% block dashboard_content %}
 <nav class="mb-5 flex items-center gap-2 text-sm text-neutral-500" aria-label="ব্রেডকাম্ব">
     <a href="/dashboard" class="tap-target hover:text-primary-600">ড্যাশবোর্ড</a>
@@ -9,14 +20,25 @@
     <span class="font-medium text-neutral-700">{{ category.name }}</span>
 </nav>
 
-<header class="mb-6 flex items-center gap-4 {{ accent(category) }}">
-    <span class="accent-tile h-14 w-14 rounded-2xl">
-        {{ icon(category.icon ?? 'grid', 'w-7 h-7') }}
-    </span>
-    <div>
-        <h1 class="text-2xl font-extrabold text-neutral-900">{{ category.name }}</h1>
-        <p class="mt-0.5 text-sm text-neutral-500">{{ category.description }}</p>
+<header class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between {{ accent(category) }}">
+    <div class="flex items-center gap-4">
+        <span class="accent-tile h-14 w-14 rounded-2xl">
+            {{ icon(category.icon ?? 'grid', 'w-7 h-7') }}
+        </span>
+        <div>
+            <h1 class="text-2xl font-extrabold text-neutral-900">{{ category.name }}</h1>
+            <p class="mt-0.5 text-sm text-neutral-500">{{ category.description }}</p>
+        </div>
     </div>
+    {% if canCreate %}
+        {# Same wrapper as components/page-header.twig: on a phone the button drops
+           below the title at its natural width, on desktop it is pushed right. #}
+        <div class="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <a href="{{ createUrl }}" class="btn btn-primary btn-sm">
+                {{ icon('plus', 'w-4 h-4') }} নতুন সার্ভিস তৈরি করুন
+            </a>
+        </div>
+    {% endif %}
 </header>
 
 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -26,7 +48,14 @@
                 {{ icon('inbox', 'w-6 h-6') }}
             </span>
             <p class="text-sm text-neutral-500">এই ক্যাটাগরিতে এখনো কোনো সার্ভিস নেই।</p>
-            <a href="/services" class="btn btn-primary btn-sm mt-2">সকল সার্ভিস দেখুন</a>
+            <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
+                <a href="/services" class="btn btn-primary btn-sm">সকল সার্ভিস দেখুন</a>
+                {% if canCreate %}
+                    <a href="{{ createUrl }}" class="btn btn-ghost btn-sm">
+                        {{ icon('plus', 'w-4 h-4') }} এখানেই নতুন সার্ভিস যোগ করুন
+                    </a>
+                {% endif %}
+            </div>
         </div>
     {% else %}
         {% for service in services %}

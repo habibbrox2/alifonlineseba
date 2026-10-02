@@ -1,0 +1,281 @@
+{% extends 'layouts/public.twig' %}
+
+{% block title %}অ্যান্ড্রয়েড অ্যাপ — Alif Tools{% endblock %}
+{% block description %}Alif Tools অ্যান্ড্রয়েড অ্যাপ ডাউনলোড করুন — সার্ভিস অর্ডার, রিচার্জ আর রিয়েল-টাইম নোটিফিকেশন এক অ্যাপেই।{% endblock %}
+
+{% block structured_data %}
+{% if release %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Alif Tools",
+    "operatingSystem": "Android 7.0 (API 24) বা তার বেশি",
+    "applicationCategory": "BusinessApplication",
+    "description": {{ 'সার্ভিস অর্ডার, রিচার্জ ও নোটিফিকেশন এক অ্যাপে।'|json_encode|raw }},
+    "downloadUrl": "{{ siteUrl }}/app/apk",
+    "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "BDT"
+    }
+}
+</script>
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+<script type="module">
+    import { initPushSubscribe } from '{{ asset('/assets/js/push-subscribe.js') }}';
+    initPushSubscribe();
+</script>
+{% endblock %}
+
+{% block content %}
+<section class="bg-gradient-to-b from-primary-900 via-primary-800 to-primary-700 py-14 text-white">
+    <div class="container-app text-center">
+        <span class="badge badge-info mb-4 inline-flex">Android · সব ডিভাইসে</span>
+        <h1 class="mx-auto max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl">
+            আপনার পকেটেই পুরো ডিজিটাল সেবা হাব
+        </h1>
+        <p class="mx-auto mt-4 max-w-2xl text-base text-white/80 sm:text-lg">
+            সার্ভিস অর্ডার দিন, ব্যালেন্স চেক করুন, আর অনুরোধের ফলাফল সরাসরি নোটিফিকেশনে পান —
+            ব্রাউজার খোলার দরকারই নেই।
+        </p>
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+            {% if release %}
+                <a href="/app/apk" class="btn btn-accent-solid btn-lg" data-app-download>
+                    {{ icon('download', 'w-5 h-5') }}
+                    APK ডাউনলোড করুন
+                </a>
+            {% else %}
+                <span class="btn btn-accent-solid btn-lg cursor-not-allowed opacity-70" aria-disabled="true">
+                    {{ icon('clock', 'w-5 h-5') }}
+                    শীঘ্রই আসছে
+                </span>
+            {% endif %}
+            <a href="/login" class="btn btn-ghost-dark btn-lg">
+                {{ icon('log-in', 'w-5 h-5') }}
+                ওয়েবে ঢুকুন
+            </a>
+        </div>
+        {% if release %}
+            <p class="mt-4 text-sm text-white/60">
+                সর্বশেষ ভার্সন {{ release.version_name }} · {{ apkSizeLabel }} · {{ release.published_at ? bngDate(release.published_at) : 'সদ্য' }}
+            </p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="container-app -mt-8 pb-14">
+    <div class="grid gap-6 lg:grid-cols-3">
+
+        {# ————— Download card ————— #}
+        <div class="card card-hover p-6 lg:col-span-2">
+            {% if release %}
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-neutral-900">অ্যাপ ডাউনলোড</h2>
+                        <p class="mt-1 text-sm text-neutral-500">
+                            ফাইলটি সরাসরি আমাদের সার্ভার থেকে আসে — কোনো তৃতীয় পক্ষের স্টোর নয়।
+                        </p>
+                    </div>
+                    <span class="badge badge-success">v{{ release.version_name }}</span>
+                </div>
+
+                <dl class="mt-6 grid gap-3 sm:grid-cols-3">
+                    <div class="rounded-xl bg-surface-100 p-3">
+                        <dt class="text-xs text-neutral-500">ফাইলের আকার</dt>
+                        <dd class="mt-0.5 font-semibold text-neutral-900">{{ apkSizeLabel }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-surface-100 p-3">
+                        <dt class="text-xs text-neutral-500">মিনিমাম ভার্সন</dt>
+                        <dd class="mt-0.5 font-semibold text-neutral-900">
+                            {{ release.min_version_code > 0 ? release.min_version_code : '—' }}
+                        </dd>
+                    </div>
+                    <div class="rounded-xl bg-surface-100 p-3">
+                        <dt class="text-xs text-neutral-500">প্রকাশের তারিখ</dt>
+                        <dd class="mt-0.5 font-semibold text-neutral-900">
+                            {{ release.published_at ? bngDate(release.published_at) : '—' }}
+                        </dd>
+                    </div>
+                </dl>
+
+                {% if release.release_notes %}
+                    <div class="mt-6">
+                        <h3 class="text-sm font-bold uppercase tracking-wide text-neutral-500">এই রিলিজে যা আছে</h3>
+                        <div class="mt-2 whitespace-pre-line leading-relaxed text-neutral-600">
+                            {{- release.release_notes -}}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="mt-6 flex flex-wrap items-center gap-3">
+                    <a href="/app/apk" class="btn btn-primary" download>
+                        {{ icon('download', 'w-5 h-5') }}
+                        ডাউনলোড করুন
+                    </a>
+                    <a href="/privacy" class="btn btn-ghost">
+                        {{ icon('shield-check', 'w-5 h-5') }}
+                        কীভাবে ডেটা সুরক্ষিত হয়
+                    </a>
+                </div>
+
+                {# The digest is shown, not just sent: it is what lets a user
+                   check that the file they hold is the one the server meant. #}
+                {% if release.sha256 %}
+                    <p class="mt-4 break-all rounded-lg bg-surface-100 p-3 font-mono text-[11px] text-neutral-500">
+                        SHA-256: {{ release.sha256 }}
+                    </p>
+                {% endif %}
+            {% else %}
+                <div class="py-6 text-center">
+                    <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-100 text-neutral-400">
+                        {{ icon('package', 'w-7 h-7') }}
+                    </div>
+                    <h2 class="mt-4 text-xl font-bold text-neutral-900">রিলিজ প্রকাশের অপেক্ষায়</h2>
+                    <p class="mx-auto mt-2 max-w-md text-sm text-neutral-600">
+                        {% if downloadsEnabled %}
+                            নতুন ভার্সনটি প্রস্তুত হচ্ছে। চাইলে এখনই ওয়েব ভার্সন ব্যবহার করতে পারেন —
+                            সব সার্ভিস এখানেই আছে।
+                        {% else %}
+                            এই মুহূর্তে অ্যাপ ডাউনলোড বন্ধ রাখা হয়েছে। ওয়েব ভার্সন স্বাভাবিকভাবেই চালু আছে।
+                        {% endif %}
+                    </p>
+                    <a href="/login" class="btn btn-primary mt-6">{{ icon('log-in', 'w-5 h-5') }} ওয়েবে ঢুকুন</a>
+                </div>
+            {% endif %}
+        </div>
+
+        {# ————— QR + push ————— #}
+        <div class="space-y-6">
+            {% if release and apkQr %}
+                <div class="card p-6 text-center">
+                    <h2 class="text-sm font-bold uppercase tracking-wide text-neutral-500">
+                        {{ icon('smartphone', 'w-4 h-4') }} ফোনে স্ক্যান করুন
+                    </h2>
+                    <div class="mx-auto mt-4 w-fit rounded-2xl border border-neutral-200 bg-white p-3">
+                        {{ apkQr|raw }}
+                    </div>
+                    <p class="mt-3 break-all text-xs text-neutral-500">
+                        অথবা সরাসরি লিংক:
+                        <a class="font-medium text-primary-700 underline" href="{{ apkUrl }}">{{ apkUrl }}</a>
+                    </p>
+                </div>
+            {% endif %}
+
+            {# Browser push. The only channel available to somebody who has not
+               signed up yet, which is why it lives on this page. The button
+               state is resolved by push-subscribe.js from Notification.permission
+               and PushManager support, so the server only has to say whether
+               Web Push is configured at all. #}
+            <div class="card p-6"
+                 data-push-root
+                 data-vapid-key="{{ vapidPublicKey }}"
+                 data-push-enabled="{{ vapidEnabled ? '1' : '0' }}">
+                <h2 class="flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('bell-ring', 'w-5 h-5 text-primary-700') }}
+                    ব্রাউজার নোটিফিকেশন
+                </h2>
+                <p class="mt-2 text-sm text-neutral-600">
+                    অ্যাপ ইনস্টল না করেই অর্ডার আপডেট পেতে চান? এই ব্রাউজারেই নোটিফিকেশন চালু করুন —
+                    অ্যাপ ছাড়াই কাজ করবে।
+                </p>
+
+                {% if vapidEnabled %}
+                    <button type="button" class="btn btn-primary btn-block mt-4" data-push-toggle disabled>
+                        {{ icon('bell', 'w-5 h-5') }}
+                        <span data-push-label>নোটিফিকেশন চালু করুন</span>
+                    </button>
+                    <p class="mt-2 text-xs text-neutral-500" data-push-hint hidden></p>
+                    <p class="mt-3 text-xs text-neutral-500">
+                        বন্ধ করতে:
+                        <button type="button" class="font-medium text-primary-700 underline" data-push-disable>
+                            নোটিফিকেশন বন্ধ করুন
+                        </button>
+                    </p>
+                {% else %}
+                    <p class="mt-4 rounded-lg bg-surface-100 p-3 text-xs text-neutral-500">
+                        এই সার্ভারে এখনও ব্রাউজার নোটিফিকেশন চালু করা হয়নি।
+                    </p>
+                {% endif %}
+
+                {% if pushSubscriptions > 0 %}
+                    <p class="mt-3 text-xs text-success-700">
+                        {{ icon('check', 'w-3.5 h-3.5') }}
+                        আপনার {{ pushSubscriptions }}টি ব্রাউজার এই অ্যাকাউন্টের সাথে যুক্ত।
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ————— Feature grid ————— #}
+    <div class="mt-12 grid gap-6 sm:grid-cols-3">
+        <div class="card p-6">
+            <div class="icon-tile flex items-center justify-center rounded-xl bg-primary-50 text-primary-700">
+                {{ icon('zap', 'w-6 h-6') }}
+            </div>
+            <h3 class="mt-4 font-bold text-neutral-900">দ্রুত অর্ডার</h3>
+            <p class="mt-1 text-sm text-neutral-600">
+                সার্ভিস বেছে নিয়ে ব্যালেন্স থেকেই অর্ডার — আবার ফোনে একই অর্ডারটি খুঁজতে হবে না।
+            </p>
+        </div>
+        <div class="card p-6">
+            <div class="icon-tile flex items-center justify-center rounded-xl bg-accent-50 text-accent-700">
+                {{ icon('bell-ring', 'w-6 h-6') }}
+            </div>
+            <h3 class="mt-4 font-bold text-neutral-900">রিয়েল-টাইম আপডেট</h3>
+            <p class="mt-1 text-sm text-neutral-600">
+                অনুরোধ প্রসেসিং শুরু হলে, প্রস্তুত হলে কিংবা বাতিল হলে — সাথে সাথে জানতে পাবেন।
+            </p>
+        </div>
+        <div class="card p-6">
+            <div class="icon-tile flex items-center justify-center rounded-xl bg-success-50 text-success-700">
+                {{ icon('shield-check', 'w-6 h-6') }}
+            </div>
+            <h3 class="mt-4 font-bold text-neutral-900">স্বয়ংক্রিয় আপডেট</h3>
+            <p class="mt-1 text-sm text-neutral-600">
+                নতুন ভার্সন এলে অ্যাপ নিজেই খবর দেবে, আপনার হাতে কিছুই করতে হবে না।
+            </p>
+        </div>
+    </div>
+
+    {# ————— Install steps ————— #}
+    {% if release %}
+        <div class="card mt-12 p-6 sm:p-8">
+            <h2 class="text-xl font-bold text-neutral-900">ইনস্টল করার নিয়ম</h2>
+            <ol class="mt-4 grid gap-5 sm:grid-cols-3">
+                <li class="flex gap-3">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-700 text-sm font-bold text-white">১</span>
+                    <div>
+                        <h3 class="font-semibold text-neutral-900">ফাইলটি নামান</h3>
+                        <p class="mt-1 text-sm text-neutral-600">
+                            উপরের বাটনে চাপ দিন, অথবা পাশের কোড স্ক্যান করুন।
+                        </p>
+                    </div>
+                </li>
+                <li class="flex gap-3">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-700 text-sm font-bold text-white">২</span>
+                    <div>
+                        <h3 class="font-semibold text-neutral-900">অজানা উৎস অনুমতি দিন</h3>
+                        <p class="mt-1 text-sm text-neutral-600">
+                            সেটিংস → অ্যাপস → অজানা সোর্স ইনস্টল চালু করুন। এটি শুধু এই APK-র জন্য দরকার।
+                        </p>
+                    </div>
+                </li>
+                <li class="flex gap-3">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-700 text-sm font-bold text-white">৩</span>
+                    <div>
+                        <h3 class="font-semibold text-neutral-900">লগইন করুন</h3>
+                        <p class="mt-1 text-sm text-neutral-600">
+                            যে নম্বর দিয়ে ওয়েবে লগইন করেছেন সেটিই যথেষ্ট — নতুন অ্যাকাউন্ট লাগবে না।
+                        </p>
+                    </div>
+                </li>
+            </ol>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

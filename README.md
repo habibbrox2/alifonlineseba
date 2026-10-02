@@ -79,7 +79,7 @@ vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8099-�
 │   ├── Repository/         # DB অ্যাক্সেস
 │   └── Web/                # Actions (Site, Auth, Dashboard, Services, Account, Admin, Api)
 ├── tests/                  # Codeception স্যুট
-└── docs/                   # architecture-plan, reference-ui-analysis, deployment
+└── docs/                   # architecture-plan, reference-ui-analysis, deployment, payment-brand
 ```
 
 ## ডকুমেন্টেশন
@@ -87,6 +87,7 @@ vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8099-�
 - [ডিপ্লয়মেন্ট গাইড (শেয়ার্ড হোস্টিং)](docs/deployment.md)
 - [আর্কিটেকচার প্ল্যান](docs/architecture-plan.md)
 - [রেফারেন্স UI অ্যানালাইসিস](docs/reference-ui-analysis.md)
+- [পেমেন্ট ব্র্যান্ড গাইডলাইন (bKash, Nagad, Rocket)](docs/payment-brand-guidelines.md)
 
 ## লাইসেন্স
 

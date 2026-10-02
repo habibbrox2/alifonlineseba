@@ -10,6 +10,7 @@
                 { label: 'ড্যাশবোর্ড', href: '/dashboard', icon: 'home', match: 'dashboard' },
                 { label: 'সকল সার্ভিস', href: '/services', icon: 'layers', match: 'services' },
                 { label: 'সার্ভিস হিস্ট্রি', href: '/service-history', icon: 'history', match: 'service-history' },
+                { label: 'অ্যান্ড্রয়েড অ্যাপ', href: '/app', icon: 'smartphone', match: 'app' },
             ],
         },
         {
@@ -28,6 +29,8 @@
     {% if identity.canAccessAdmin() %}
         {% set groups = groups|merge([{ label: 'অ্যাডমিন', icon: 'shield', items: [
             { label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge', match: 'admin' },
+            { label: 'সার্ভিস অর্ডার', href: '/admin/transactions', icon: 'inbox', match: 'admin-transactions' },
+            { label: 'সার্ভিস ম্যানেজমেন্ট', href: '/admin/services', icon: 'sparkles', match: 'admin-services' },
             { label: 'রিচার্জ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' },
             { label: 'রেফারেল', href: '/admin/referrals', icon: 'gift', match: 'admin-referrals' },
             { label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring', match: 'admin-notifications' },
@@ -43,7 +46,12 @@
             </button>
             <div x-show="open" class="mt-0.5 space-y-0.5">
                 {% for item in group.items %}
-                    {% set isActive = currentPath is defined and currentPath starts with item.href %}
+                    {# Prefix match, except for '/admin' — every admin page starts with
+                       it, so highlighting the dashboard link on all of them makes the
+                       active item useless. #}
+                    {% set isActive = currentPath is defined and (
+                        currentPath == item.href or (item.href != '/admin' and currentPath starts with item.href)
+                    ) %}
                     <a href="{{ item.href }}" class="nav-link {{ isActive ? 'nav-link-active' }}" {% if isActive %}aria-current="page"{% endif %}>
                         {{ icon(item.icon, 'w-4 h-4') }} {{ item.label }}
                     </a>

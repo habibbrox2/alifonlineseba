@@ -1,14 +1,27 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}লেনদেন পরিদর্শন — Admin{% endblock %}
+{% block title %}সার্ভিস অর্ডার — Admin{% endblock %}
 
 {% block dashboard_content %}
 {% include 'components/page-header.twig' with {
-    title: 'লেনদেন পরিদর্শন',
-    description: 'সব লেনদেনের রেকর্ড — ফিল্টার, সাজান ও বিস্তারিত দেখুন',
+    title: kind == 'service' ? 'সার্ভিস অর্ডার' : 'লেনদেন পরিদর্শন',
+    description: 'ইউজারদের পাঠানো সব সার্ভিস অর্ডার — খুলে অবস্থা পরিবর্তন করুন ও ফাইল দিন',
 } %}
 
+{# Tab strip rather than another dropdown: which list an operator wants is the
+   first decision they make on this page, and switching it must also work from
+   the pagination links below — hence the links, not a form control. #}
+<div class="mb-4 flex flex-wrap gap-2">
+    <a href="/admin/transactions?kind=service" class="btn btn-sm {{ kind == 'service' ? 'btn-primary' : 'btn-ghost' }}">
+        {{ icon('inbox', 'w-4 h-4') }} শুধু সার্ভিস অর্ডার
+    </a>
+    <a href="/admin/transactions" class="btn btn-sm {{ kind != 'service' ? 'btn-primary' : 'btn-ghost' }}">
+        {{ icon('receipt', 'w-4 h-4') }} সব লেনদেন
+    </a>
+</div>
+
 <form method="get" action="/admin/transactions" class="mb-5 flex flex-wrap gap-2">
+    {% if kind %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
     <input type="search" name="q" value="{{ q }}" class="form-input sm:w-72" placeholder="রেফারেন্স / ইউজার দিয়ে খুঁজুন…">
     <select name="status" class="form-input sm:w-40">
         <option value="">সব স্ট্যাটাস</option>
@@ -19,7 +32,117 @@
     <button type="submit" class="btn btn-primary btn-sm">{{ icon('filter', 'w-4 h-4') }} ফিল্টার</button>
 </form>
 
-{% set txQuery = '/admin/transactions?' ~ (q ? ('q=' ~ q|url_encode) ~ '&' : '') ~ (status ? ('status=' ~ status) ~ '&' : '') %}
+{% set txQuery = '/admin/transactions?' ~ (kind ? ('kind=' ~ kind ~ '&') : '') ~ (q ? ('q=' ~ q|url_encode) ~ '&' : '') ~ (status ? ('status=' ~ status) ~ '&' : '') %}
+
+{# Bulk settle is offered on the service-order tab ONLY. The other tab
+   interleaves top-ups — same table, NULL service_id, already paid — and
+   settling one of those as "failed" would refund money this queue never
+   charged. The tab keeps the path out of reach;
+   ServiceRequestAdminService::settleMany() refuses it anyway, so a hand-made
+   POST gets a skipped count rather than a payout. #}
+{% set bulk = kind == 'service' %}
+
+{# The batch queue, and the reason the settle is asynchronous. Without this the
+   operator submits, gets a message saying the work is queued, and then has no
+   way to learn whether it ever ran — the exact gap the inline settle had
+   filled by simply having finished before the page came back.
+
+   Server-rendered rather than polled: a queue page is reloaded to look at the
+   list, and that is the natural moment to see the last batch's fate. Polling
+   would cost a request every few seconds forever, to watch a bar that is
+   usually already full. #}
+{% if jobs is defined %}
+    {% set jobBadges = { queued: ['অপেক্ষমাণ', 'badge-warning'], processing: ['চলছে', 'badge-info'], done: ['সম্পন্ন', 'badge-success'], failed: ['ব্যর্থ', 'badge-danger'] } %}
+    <div class="card mb-4 px-4 py-3">
+        <p class="mb-3 text-sm font-semibold text-neutral-800">সাম্প্রতিক বাল্ক কাজ</p>
+        {# Rendered even when empty, and that is deliberate. A section that
+           appears only once something has happened in it teaches the operator
+           nothing on the day they first need it — and "no recent jobs" is
+           itself an answer, because it is the difference between a queue that
+           is empty and a cron that has stopped draining it. #}
+        {% if jobs is empty %}
+            <p class="text-xs text-neutral-500">এখনো কোনো বাল্ক কাজ নেই।</p>
+        {% else %}
+            <ul class="space-y-3">
+                {% for job in jobs %}
+                    {% set badge = jobBadges[job.status] ?? ['অজানা', 'badge-neutral'] %}
+                    <li>
+                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span class="font-medium text-neutral-700">
+                                #{{ job.id }} · {{ job.total }} টি অর্ডার
+                                {# The requester's name, because a queue a page loads
+                                   on behalf of staff who can all submit batches means
+                                   "who queued this" is not answerable from the page. #}
+                                <span class="font-normal text-neutral-400">— {{ job.requested_by_name ?: 'admin' }}</span>
+                            </span>
+                            <span class="badge {{ badge[1] }}">{{ badge[0] }}</span>
+                        </div>
+                        {# The width is the one piece of style on the page: it has to
+                           come from a row the server read, and a `style` attribute is
+                           the only way to say that without shipping a JSON blob to the
+                           client first. #}
+                        <div class="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-neutral-200"
+                             role="progressbar" aria-valuenow="{{ job.progress }}" aria-valuemin="0" aria-valuemax="100">
+                            <div class="h-full rounded-full bg-primary-600 transition-all" style="width: {{ job.progress }}%"></div>
+                        </div>
+                        <p class="mt-1 text-xs text-neutral-500">
+                            {{ job.message ?: (job.processed ~ '/' ~ job.total) }}
+                        </p>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+{% endif %}
+
+{% if bulk %}
+    {# Selection is plain `name="ids[]"` checkboxes inside a normal form: the
+       submit button is wired, the ids are already in the body, and the whole
+       thing still works with Alpine asleep. Alpine only adds the count, the
+       select-all and the bar.
+
+       `do` rides on the submit button's own name/value rather than a hidden
+       field, because the form now has two actions and they are genuinely
+       different requests — one queues a status change, one returns a file. A
+       hidden field would have to be rewritten by Alpine before each click, so
+       the action would live in JavaScript; this way the markup alone decides,
+       and a button pressed with JS dead still does the right thing.
+
+       The confirmation asks about the settle only, via `$event.submitter`:
+       prompting "are you sure you want to settle these?" on an export would
+       train operators to click through dialogs they should be reading.
+
+       Pressing Enter in a field submits the *first* button, which is the
+       settle — and the settle is disabled until a target is chosen, so an
+       implicit submit posts no `do` at all. The server refuses an unmatched
+       `do` rather than defaulting to one, so that lands as a rejected action
+       instead of a settlement nobody confirmed. #}
+    <form method="post" action="/admin/transactions"
+          x-data="{ count: 0, total: {{ rows|length }}, all: false, target: '',
+                    {# `$el` is the button, not the form — the bar only ever
+                       exists inside the form, so `.form` is how we get back to it. #}
+                    clear(el) {
+                        el.querySelectorAll('tbody input[type=checkbox]')
+                            .forEach(row => row.checked = false);
+                        this.count = 0; this.all = false; this.target = '';
+                    } }"
+          @change="count = $el.querySelectorAll('tbody input[type=checkbox]:checked').length;
+                   all = count > 0 && count === total"
+          @submit="const btn = $event.submitter;
+                   if (btn && btn.value === 'bulk_status'
+                       && !confirm('নির্বাচিত ' + count + ' টি অর্ডার হালনাগাদ করবেন? টাকা ফেরত দেওয়া হলে ইউজারের ব্যালেন্সে যোগ হবে।'))
+                       $event.preventDefault()">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        {# The view this bar was drawn in, so the redirect puts the operator back
+           on the same filtered page — their next move is nearly always the next
+           batch off the same list. #}
+        <input type="hidden" name="return_kind" value="{{ kind }}">
+        <input type="hidden" name="return_q" value="{{ q }}">
+        <input type="hidden" name="return_status" value="{{ status }}">
+        <input type="hidden" name="return_page" value="{{ page }}">
+        <input type="hidden" name="return_sort" value="{{ sort }}">
+        <input type="hidden" name="return_dir" value="{{ dir }}">
+{% endif %}
 
 <div class="card overflow-hidden">
         {# Outside the <table> so the message is not stranded in a 640px-wide scroll area. #}
@@ -29,7 +152,9 @@
                     {{ icon('receipt', 'w-6 h-6') }}
                 </span>
                 <p class="text-sm text-neutral-500">
-                    {% if q or status %}এই ফিল্টারে কোনো লেনদেন পাওয়া যায়নি।{% else %}কোনো লেনদেন পাওয়া যায়নি।{% endif %}
+                    {% if q or status %}এই ফিল্টারে কোনো লেনদেন পাওয়া যায়নি।
+                    {% elseif kind == 'service' %}এখনো কোনো সার্ভিস অর্ডার পাওয়া যায়নি।
+                    {% else %}কোনো লেনদেন পাওয়া যায়নি।{% endif %}
                 </p>
             </div>
         {% else %}
@@ -37,6 +162,17 @@
             <table class="table-base">
                 <thead>
                     <tr>
+                        {% if bulk %}
+                            {# No `name`, so it is never submitted — it only drives the
+                               row boxes, and the form's own change handler counts
+                               them back. #}
+                            <th class="w-10">
+                                <input type="checkbox" x-bind:checked="all"
+                                       @change="$el.form.querySelectorAll('tbody input[type=checkbox]').forEach(row => row.checked = $el.checked)"
+                                       class="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                                       aria-label="এই পাতার সব অর্ডার নির্বাচন করুন">
+                            </th>
+                        {% endif %}
                         {% include 'components/sortable-header.twig' with { label: 'রেফারেন্স', column: 'reference', sort: sort, dir: dir, base: txQuery } %}
                         {% include 'components/sortable-header.twig' with { label: 'ইউজার', column: 'username', sort: sort, dir: dir, base: txQuery } %}
                         <th>সার্ভিস</th>
@@ -49,12 +185,19 @@
                 <tbody>
                     {% for tx in rows %}
                         <tr>
+                            {% if bulk %}
+                                <td class="w-10">
+                                    <input type="checkbox" name="ids[]" value="{{ tx.id }}"
+                                           class="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                                           aria-label="অর্ডার {{ tx.reference }} নির্বাচন করুন">
+                                </td>
+                            {% endif %}
                             <td class="font-mono text-xs">{{ tx.reference }}</td>
                             <td>
                                 <p class="font-medium text-neutral-800">{{ tx.username ?? '—' }}</p>
                                 <p class="text-xs text-neutral-400">{{ tx.phone ?? '' }}</p>
                             </td>
-                            <td>{{ tx.service_name ?? '—' }}</td>
+                            <td>{{ tx.service_name ?? 'রিচার্জ' }}</td>
                             <td class="font-semibold text-primary-700">{{ tx.amount|money }}</td>
                             <td>{% include 'components/status-badge.twig' with { status: tx.status } %}</td>
                             <td class="whitespace-nowrap text-neutral-500">{{ tx.created_at|bndate }}</td>
@@ -84,4 +227,57 @@
     baseUrl: txQuery ~ 'page=',
     sort: sort, dir: dir,
 } %}
+
+{% if bulk %}
+        {# The bar is fixed to the bottom of the viewport so it is reachable
+           however far down a page of orders the operator has scrolled, and
+           hidden until something is ticked — an always-present bar over a list
+           nobody is acting on is just furniture.
+
+           The spacer is what keeps the last rows of the table from sitting
+           underneath it. Both carry `x-cloak` so neither flashes into view for
+           the moment before Alpine boots.
+
+           It sits above the WhatsApp float on narrow screens (`bottom-20`),
+           where the two would otherwise land in the same corner. #}
+        <div class="h-28" x-show="count > 0" x-cloak></div>
+
+        <div class="fixed inset-x-0 bottom-20 z-40 mx-auto w-full max-w-3xl px-4 sm:bottom-4"
+             x-show="count > 0" x-cloak>
+            <div class="card flex flex-wrap items-center gap-2 px-4 py-3 shadow-lg">
+                <p class="mr-auto text-sm font-semibold text-neutral-800">
+                    <span x-text="count"></span> টি অর্ডার নির্বাচিত
+                </p>
+
+                {# No `required` here: the export button does not need a status,
+                   and a required select would silently block it at the browser's
+                   own validation step, with no message about what went wrong. The
+                   settle button is already disabled until a target is chosen,
+                   which is the same rule stated where it applies. #}
+                <select name="status" x-model="target"
+                        class="form-input sm:w-44" aria-label="নতুন অবস্থা">
+                    <option value="">অবস্থা বেছে নিন…</option>
+                    {% for st in statuses %}
+                        <option value="{{ st }}">{{ st|statuslabel }}</option>
+                    {% endfor %}
+                </select>
+
+                <button type="submit" name="do" value="bulk_status"
+                        class="btn btn-primary btn-sm" x-bind:disabled="target === ''">
+                    {{ icon('list-checks', 'w-4 h-4') }} অবস্থা প্রয়োগ করুন
+                </button>
+
+                {# The second action on the same selection. Same `type="submit"`,
+                   so it carries the ids like any other — the only difference is
+                   the `do` value the server branches on, and that it answers with
+                   a file instead of a redirect. #}
+                <button type="submit" name="do" value="bulk_export" class="btn btn-ghost btn-sm">
+                    {{ icon('download', 'w-4 h-4') }} CSV
+                </button>
+
+                <button type="button" class="btn btn-ghost btn-sm" @click="clear($el.form)">বাতিল</button>
+            </div>
+        </div>
+    </form>
+{% endif %}
 {% endblock %}

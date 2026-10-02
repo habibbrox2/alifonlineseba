@@ -59,6 +59,33 @@ data class LoginData(
     val user: LoggedInUser? = null,
 )
 
+/**
+ * Shape of `data` returned by GET /api/app/version.
+ *
+ * Every field is defaulted so a server that grows or drops one does not break
+ * an installed build — an app that cannot parse the update manifest cannot
+ * find out that it needs updating, which is the one failure mode that matters
+ * here. `download_url` is relative, so it is resolved against
+ * BuildConfig.API_BASE_URL at the call site.
+ *
+ * Note the transport is NOT this file's Retrofit service: UpdateChecker uses
+ * its own unauthenticated client so a version check can never rotate a token
+ * or sign the user out. The DTO lives here because it is a wire model.
+ */
+@Serializable
+data class AppVersion(
+    @SerialName("version_code") val versionCode: Int = 0,
+    @SerialName("version_name") val versionName: String = "",
+    @SerialName("min_version_code") val minVersionCode: Int = 0,
+    @SerialName("update_available") val updateAvailable: Boolean = false,
+    @SerialName("update_required") val updateRequired: Boolean = false,
+    @SerialName("size_bytes") val sizeBytes: Long = 0,
+    val sha256: String = "",
+    @SerialName("release_notes") val releaseNotes: String? = null,
+    @SerialName("download_url") val downloadUrl: String? = null,
+    @SerialName("published_at") val publishedAt: String? = null,
+)
+
 // ---- Token storage ---------------------------------------------------------
 
 /**

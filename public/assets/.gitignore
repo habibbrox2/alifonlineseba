@@ -1,2 +1,14 @@
-*
+/*
 !.gitignore
+
+# `/*` rather than `*`: a bare `*` matches at every depth, so it kept matching
+# the files *inside* brand/ and img/ and no directory-level negation could undo
+# it. Scoped to the immediate children it ignores the build output (css/, js/,
+# icons/) while letting git descend into the two source directories.
+#
+# The root .gitignore documents brand/ and img/ as *source*, not build output:
+# nothing in `npm run build` produces the logo, the OG cards or the payment
+# method marks. Without these negations this file won over the root rules and
+# every one of those files existed only on the machine that generated it.
+!brand/
+!img/

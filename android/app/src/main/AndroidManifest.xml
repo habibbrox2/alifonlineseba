@@ -3,6 +3,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      Sideloaded updates. From API 26 the user must allow this app to install
+      packages from Settings before an install intent will work at all; the app
+      routes them there via UpdateChecker.requestInstallPermission(). It is
+      "normal" rather than "special" protection, so it is granted at install
+      time and the per-app Settings toggle is what actually gates the install.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="Alif Tools"

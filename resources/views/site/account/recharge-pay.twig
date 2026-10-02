@@ -2,6 +2,12 @@
 
 {% block title %}পেমেন্ট করুন — রিচার্জ — Alif Tools{% endblock %}
 
+{# Brand identity of the chosen method: label, official colour, logo mark.
+   `method` comes from the query string and is re-validated by RechargeAction
+   before the template is reached, but payment_brand() still degrades to an
+   unbranded default for an unknown key rather than throwing. #}
+{% set brand = payment_brand(method) %}
+
 {% block dashboard_content %}
 <div class="mb-6">
     <h1 class="text-2xl font-extrabold text-neutral-900">নিরাপদ ও দ্রুত ব্যালেন্স টপ-আপ</h1>
@@ -25,9 +31,12 @@
     <section class="card p-6">
         <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="flex items-center gap-2 text-lg font-bold text-neutral-900">
-                <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-                    {{ icon('smartphone', 'w-5 h-5') }}
-                </span>
+                {% if brand.logo %}
+                    <img src="{{ brand.logo }}" alt="{{ brand.label }}" class="pay-mark-sm">
+                {% else %}
+                    <span class="pay-mark-tile text-xs font-extrabold text-white"
+                          style="background-color: {{ brand.color }}">{{ brand.initials }}</span>
+                {% endif %}
                 {{ methodLabel }} পার্সোনাল পেমেন্ট
             </h2>
             <a href="/recharge" class="text-xs font-semibold text-neutral-400 hover:text-neutral-600">← পরিবর্তন</a>
@@ -35,9 +44,9 @@
 
         <p class="mb-4 text-sm text-neutral-500">নিচের নম্বরে সেন্ড মানি করুন</p>
 
-        <div class="mb-5 rounded-xl bg-primary-50 p-4">
-            <p class="text-xs font-medium uppercase tracking-wide text-primary-700">পরিশোধ করতে হবে</p>
-            <p class="mt-1 text-3xl font-extrabold text-primary-800">{{ amount|money }}</p>
+        <div class="pay-panel pay-{{ method }} mb-5 rounded-xl p-4">
+            <p class="pay-panel-eyebrow text-xs font-medium uppercase tracking-wide">পরিশোধ করতে হবে</p>
+            <p class="pay-panel-amount mt-1 text-3xl font-extrabold">{{ amount|money }}</p>
         </div>
 
         {% if wallet %}
@@ -47,7 +56,7 @@
                     <input id="wallet-number" type="text" value="{{ wallet }}" readonly
                            class="form-input flex-1 font-mono text-lg font-bold tracking-wide text-neutral-800"
                            aria-label="{{ methodLabel }} পার্সোনাল নম্বর">
-                    <button type="button" class="btn btn-primary shrink-0"
+                    <button type="button" class="btn pay-accent-bg pay-{{ method }} shrink-0"
                             @click="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('wallet-number').value); copied = true; setTimeout(() => copied = false, 1500)">
                         {{ icon(copied ? 'check' : 'copy', 'w-4 h-4') }}
                         <span x-text="copied ? 'কপি হয়েছে' : 'কপি'">কপি</span>
@@ -126,7 +135,7 @@
 
             <div class="flex flex-wrap items-center gap-3 pt-1">
                 <a href="/recharge" class="btn btn-ghost">← ফিরে যান</a>
-                <button type="submit" class="btn btn-primary flex-1" :disabled="tooBig">
+                <button type="submit" class="btn pay-accent-bg pay-{{ method }} flex-1" :disabled="tooBig">
                     {{ icon('send', 'w-4 h-4') }} টাকা জমা দিয়েছি
                 </button>
             </div>

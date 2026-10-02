@@ -7,8 +7,10 @@ use App\Notification\Channel\TelegramChannel;
 use App\Notification\NotificationManager;
 use App\Notification\QueueRepository;
 use App\Notification\TemplateRenderer;
+use App\Repository\AppReleaseRepository;
 use App\Repository\BotConnectionRepository;
 use App\Repository\DeviceRepository;
+use App\Service\AppReleaseService;
 use App\Service\DeliverableStorage;
 use App\Service\ReceiptStorage;
 
@@ -20,6 +22,12 @@ return [
     // Same reason: the deliverable directory lives outside the web root, so the
     // container cannot infer the path.
     DeliverableStorage::class => static fn (): DeliverableStorage => DeliverableStorage::fromProjectRoot(),
+
+    // And the same again for self-hosted APKs: `web/releases/` sits outside
+    // the document root, so the container cannot infer the path. The
+    // repository autowires.
+    AppReleaseRepository::class => AppReleaseRepository::class,
+    AppReleaseService::class => static fn (AppReleaseRepository $r): AppReleaseService => AppReleaseService::fromProjectRoot($r),
 
     // Notification stack: repositories autowire; channels are plain classes.
     QueueRepository::class => QueueRepository::class,

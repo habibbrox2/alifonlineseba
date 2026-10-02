@@ -116,17 +116,25 @@ final readonly class AdminServicesAction
             ]);
         }
 
-        $editId = (int) ($request->getQueryParams()['edit'] ?? 0);
+        $query = $request->getQueryParams();
+        $editId = (int) ($query['edit'] ?? 0);
         $form = $this->session->pull(self::FORM_KEY);
         $form = is_array($form) ? $form : null;
         $editId = $form !== null && $form['do'] === 'update' ? (int) $form['id'] : $editId;
 
         $editService = $editId > 0 ? $this->services->findServiceById($editId) : null;
         $formValues = $form !== null && isset($form['values']) && is_array($form['values']) ? $form['values'] : null;
+        $categories = $this->services->allCategories(false);
+        if ($formValues === null && $editService === null) {
+            // The services pages deep-link here with ?category=<id> so the create
+            // form opens on the category the admin was looking at. Ignored while
+            // editing — an edit form is already bound to its own service.
+            $formValues = self::preselectCategoryValues((int) ($query['category'] ?? 0), $categories);
+        }
 
         return $this->view->render('site/admin/services.twig', [
             'services' => $this->services->allServicesAdmin(),
-            'categories' => $this->services->allCategories(false),
+            'categories' => $categories,
             'editService' => $editService,
             'formValues' => $formValues,
             'formDo' => $form !== null ? (string) $form['do'] : null,
@@ -137,6 +145,33 @@ final readonly class AdminServicesAction
             'usingFieldDefaults' => $editService === null || $this->manager->formFieldConfig($editService) === null,
             'trashedCount' => $this->services->countTrashed(),
         ]);
+    }
+
+    /**
+     * Form values for a fresh create form, seeded with the category the admin
+     * came from. Static and pure — like buildFormFieldConfig() — so the deep-link
+     * rule can be checked without a request or a database.
+     *
+     * An unknown or deleted id yields null so the select keeps its own first-row
+     * default instead of rendering a stray "selected" the browser would then
+     * submit back as a category that does not exist.
+     *
+     * @param list<array<string, mixed>> $categories Rows from allCategories().
+     * @return array<string, mixed>|null
+     */
+    public static function preselectCategoryValues(int $categoryId, array $categories): ?array
+    {
+        if ($categoryId <= 0) {
+            return null;
+        }
+
+        foreach ($categories as $category) {
+            if ((int) ($category['id'] ?? 0) === $categoryId) {
+                return ['category_id' => $categoryId];
+            }
+        }
+
+        return null;
     }
 
     /** Rules text for the editor: submitted value wins, else the stored one. */

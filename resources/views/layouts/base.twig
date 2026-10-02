@@ -72,11 +72,23 @@
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('/assets/css/app.css') }}">
     <script type="module" src="{{ asset('/assets/js/app.js') }}"></script>
+    {# The install banner ships in every layout, so its bootstrap cannot live
+       in a page. Kept inline and tiny rather than added to app.js because
+       app.js is loaded on pages that have no `data-app-install` element and
+       would then carry a second entry point for no reason. #}
+    <script type="module">
+        import { initAppInstall } from '{{ asset('/assets/js/app-install.js') }}';
+        initAppInstall();
+    </script>
     {% block page_scripts %}{% endblock %}
     <script defer src="/assets/js/alpine.min.js"></script>
     {% block scripts %}{% endblock %}
 </head>
 <body class="flex min-h-full flex-col">
     {% block body %}{% endblock %}
+
+    {# Outside `block body` on purpose: this ships on public pages, signed-in
+       pages and the app page alike. #}
+    {% include 'partials/app-install.twig' %}
 </body>
 </html>

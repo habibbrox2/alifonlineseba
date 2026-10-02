@@ -3,10 +3,14 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.compose)
-    // google-services is NOT applied: there is deliberately no google-services.json
-    // in the repo (it binds the app to one Firebase project). Add yours and
-    // uncomment to enable FCM in a real build.
-    // alias(libs.plugins.google.services)
+}
+
+// google-services.json binds the build to one Firebase project, so it is never
+// committed (see android/.gitignore). The plugin is applied only when the file
+// is present: contributors without the Firebase project still build, and FCM
+// activates the moment google-services.json is dropped into android/app/.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 android {

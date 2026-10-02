@@ -6,6 +6,8 @@ namespace App\Twig;
 
 use App\Env;
 use App\Service\CategoryAccent;
+use App\Service\IconLibrary;
+use App\Service\PaymentBrand;
 use App\Service\StatusPresenter;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFilter;
@@ -27,7 +29,41 @@ final class TwigExtension extends AbstractExtension
             new TwigFunction('accent_options', [$this, 'accentOptions']),
             new TwigFunction('variant_accent', [$this, 'variantAccent']),
             new TwigFunction('service_og_image', [$this, 'serviceOgImage']),
+            new TwigFunction('payment_brand', [$this, 'paymentBrand']),
+            new TwigFunction('icon_index_url', [$this, 'iconIndexUrl']),
+            new TwigFunction('icon_available', [$this, 'iconAvailable']),
         ];
+    }
+
+    /**
+     * Brand identity of one payment method: label, colour, logo.
+     *
+     * The `logo` key is resolved here rather than in {@see PaymentBrand}
+     * because this is the layer that knows the asset root, and because a brand
+     * colour is worth nothing without the mark beside it. The existence check
+     * mirrors serviceOgImage(): the marks are source files under
+     * `public/assets/brand/payment/`, and a deploy that shipped the code
+     * without them must show the initials tile rather than a broken image in
+     * the middle of a payment form. So `logo` comes back null when the file is
+     * missing and the template decides what to draw instead.
+     *
+     * @return array{key: string, label: string, css_class: string, color: string,
+     *               logo: ?string, logo_path: string, initials: string}
+     */
+    public function paymentBrand(string $key): array
+    {
+        $brand = $this->brands()->get($key);
+        $path = $brand['logo'];
+
+        // array_merge, not `+`: the union operator keeps the left-hand value
+        // for a duplicate key, so `logo` would stay the raw path and the
+        // existence check below would be silently discarded.
+        $brand['logo'] = $path !== '' && is_file(dirname(__DIR__, 2) . '/public' . $path)
+            ? $this->asset($path)
+            : null;
+        $brand['logo_path'] = $path;
+
+        return $brand;
     }
 
     /**
@@ -100,6 +136,50 @@ final class TwigExtension extends AbstractExtension
     private function accents(): CategoryAccent
     {
         return $this->accents ??= new CategoryAccent();
+    }
+
+    /**
+     * Lazily built, for the same reason as `accents()`: the extension has to
+     * stay constructible with `new TwigExtension()` in the unit tests.
+     */
+    private ?PaymentBrand $brands = null;
+
+    private function brands(): PaymentBrand
+    {
+        return $this->brands ??= new PaymentBrand();
+    }
+
+    /**
+     * Lazily built, for the same reason as `brands()`: the unit tests construct
+     * this extension with `new TwigExtension()`.
+     */
+    private ?IconLibrary $icons = null;
+
+    private function icons(): IconLibrary
+    {
+        return $this->icons ??= new IconLibrary();
+    }
+
+    /**
+     * Cache-busted URL of the Lucide search index the icon picker fetches.
+     *
+     * Empty string when the build artefacts are missing, so the picker renders
+     * as a plain text box instead of firing a request that 404s.
+     */
+    public function iconIndexUrl(): string
+    {
+        return $this->icons()->isBuilt() ? $this->asset($this->icons()->indexUrl()) : '';
+    }
+
+    /**
+     * Whether the Lucide sprite can draw this name — used to flag a hand-typed
+     * value the storefront would render blank.
+     */
+    public function iconAvailable(string $name): bool
+    {
+        $name = trim($name);
+
+        return $name !== '' && in_array($name, $this->icons()->spriteNames(), true);
     }
 
     /**

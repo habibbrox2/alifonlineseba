@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notification\Channel;
 
+use App\Repository\DeviceRepository;
+
 /**
  * FCM HTTP v1 push channel. Uses the Firebase HTTP v1 API directly via curl
  * with an OAuth2 service-account token — no SDK dependency, which keeps the
@@ -29,9 +31,62 @@ final class FcmChannel
             && (string) \App\Env::get('FIREBASE_PROJECT_ID', '') !== '';
     }
 
+    /**
+     * Dry-run validation for `app:fcm:check`. Returns '' when everything is
+     * in place — config present, credentials parse, and an OAuth access token
+     * can actually be minted — or the failure reason.
+     */
+    public function credentialsError(): string
+    {
+        if ((string) \App\Env::get('FIREBASE_PROJECT_ID', '') === '') {
+            return 'FIREBASE_PROJECT_ID is not set.';
+        }
+        $path = self::credentialsPath();
+        if ($path === '') {
+            return 'FIREBASE_CREDENTIALS_PATH is not set.';
+        }
+        if (!is_file($path) || !is_readable($path)) {
+            return "FIREBASE_CREDENTIALS_PATH does not point to a readable file: {$path}";
+        }
+        $creds = json_decode((string) file_get_contents($path), true);
+        if (!is_array($creds) || !isset($creds['client_email'], $creds['private_key'])) {
+            return 'Credentials file is not a valid service-account JSON (client_email / private_key missing).';
+        }
+        if ($this->accessToken() === null) {
+            return 'OAuth token fetch failed — the service account may be disabled, the key revoked, or server clock skewed.';
+        }
+        return '';
+    }
+
+    /**
+     * Send one message to one raw device token — used by `app:fcm:check
+     * --token=...` to prove the whole delivery path (auth → v1 API → device)
+     * without routing through the queue.
+     *
+     * @param array<string, mixed> $payload {title, body, data}
+     */
+    public function sendToToken(string $deviceToken, array $payload): DeliveryResult
+    {
+        if (!$this->isAvailable()) {
+            return DeliveryResult::permanent('FCM credentials not configured.');
+        }
+        $token = $this->accessToken();
+        if ($token === null) {
+            return DeliveryResult::transient('FCM OAuth token fetch failed.');
+        }
+        return $this->sendToOne($token, $deviceToken, $payload);
+    }
+
     private static function credentialsPath(): string
     {
-        return trim((string) \App\Env::get('FIREBASE_CREDENTIALS_PATH', ''));
+        $path = trim((string) \App\Env::get('FIREBASE_CREDENTIALS_PATH', ''));
+        if ($path !== '' && !str_starts_with($path, '/') && !preg_match('#^[A-Za-z]:[/\\\\]#', $path)) {
+            // Relative paths resolve against the project root whatever the
+            // current working directory is — cron entries and web requests
+            // do not share one.
+            $path = dirname(__DIR__, 3) . '/' . $path;
+        }
+        return $path;
     }
 
     /**
@@ -154,8 +209,15 @@ final class FcmChannel
             'iat' => $now,
             'exp' => $now + 3600,
         ];
-        $jwt = $this->base64Url(json_encode($assertion, JSON_THROW_ON_ERROR)) . '.'
-            . $this->base64Url('{"alg":"RS256","typ":"JWT"}');
+        // kid is required whenever the service account holds more than one
+        // key (the system-managed one + ours) — without it Google cannot pick
+        // the key and rejects the grant with invalid_scope.
+        $header = ['alg' => 'RS256', 'typ' => 'JWT'];
+        if (isset($creds['private_key_id'])) {
+            $header['kid'] = (string) $creds['private_key_id'];
+        }
+        $jwt = $this->base64Url(json_encode($header, JSON_THROW_ON_ERROR)) . '.'
+            . $this->base64Url(json_encode($assertion, JSON_THROW_ON_ERROR));
         openssl_sign($jwt, $signature, $creds['private_key'], 'sha256WithRSAEncryption');
         $jwt .= '.' . $this->base64Url($signature);
 

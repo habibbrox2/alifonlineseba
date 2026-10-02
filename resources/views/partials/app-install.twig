@@ -1,0 +1,28 @@
+{#
+    Bottom-of-screen prompt to install the Android app.
+
+    Rendered into every public layout but shipped `hidden`: whether it applies
+    at all is a client-side question (Android? a phone? already installed?
+    dismissed before?) and only the browser can answer it. `app-install.js`
+    reads the two data attributes and removes `hidden` when the visitor is
+    actually the person this is for.
+
+    The dismissal is a plain button rather than a link, so it never becomes a
+    dismissible-hijack target: it records the choice in localStorage and
+    removes the element. Server-side there is no state to hide, which is the
+    whole reason this is a partial rather than a route.
+#}
+<div id="app-install" class="app-install" data-app-install hidden>
+    <button type="button" class="app-install-close" data-app-install-close aria-label="বন্ধ করুন">
+        {{ icon('x', 'w-4 h-4') }}
+    </button>
+
+    <div class="mx-auto flex max-w-3xl items-center gap-3">
+        <img src="/assets/brand/logo-mark.svg" alt="" class="h-11 w-11 shrink-0" width="44" height="44">
+        <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-bold text-neutral-900">Alif Tools অ্যাপ ইনস্টল করুন</p>
+            <p class="truncate text-xs text-neutral-500">অর্ডার ট্র্যাক করুন, নোটিফিকেশন পান — সরাসরি ফোনে।</p>
+        </div>
+        <a href="/app" class="btn btn-primary btn-sm shrink-0">ইনস্টল</a>
+    </div>
+</div>

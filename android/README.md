@@ -58,13 +58,25 @@ Every response uses the `App\Service\Api` envelope `{success, message, data, err
 
 ## Enabling FCM in a real build
 
-1. Create a Firebase project, add an Android app with package `online.broxlab.aliftools`.
-2. Drop the downloaded `google-services.json` into `android/app/`.
-3. Uncomment the `alias(libs.plugins.google.services)` line in `android/app/build.gradle.kts`.
-4. Optionally set `FIREBASE_*` env vars server-side (`src/Env.php`) so the worker
-   actually sends; FCM queue rows already accumulate regardless of credentials.
+1. Create a Firebase project, add an Android app with package `online.broxlab.aliftools`
+   and enable **Cloud Messaging** (Project settings → Cloud Messaging).
+2. Copy `android/app/google-services.json.example` to `android/app/google-services.json`
+   and fill in the real values from the Firebase console (Project settings → Your apps).
+3. Done on the Gradle side — `app/build.gradle.kts` applies the google-services plugin
+   automatically when `google-services.json` exists, so builds without the file stay green.
+4. On Android 13+ the app asks for the `POST_NOTIFICATIONS` runtime permission on entry
+   (`MainActivity`); a denial is not fatal — pushes are simply not rendered.
+5. Server side: point `FIREBASE_CREDENTIALS_PATH` at the service-account JSON (outside
+   the web root), set `FIREBASE_PROJECT_ID`, then verify end to end:
 
-The in-app `DeviceRegistrar` no-ops safely when Firebase isn't configured.
+   ```
+   php yii app:fcm:check                # config + credentials + OAuth token
+   php yii app:fcm:check --token=...    # + one real test message to a device
+   ```
+
+The in-app `DeviceRegistrar` no-ops safely when Firebase isn't configured; the current
+token is re-registered on every logged-in app start and after login, so a rotated
+token never leaves the device silent.
 
 ## Dev server URL
 

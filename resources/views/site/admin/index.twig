@@ -57,6 +57,25 @@
 {# Quick actions. These are navigation, not status, so they sit in one even
    grid — 1 / 2 / 4 columns as the viewport allows. #}
 <section class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {# First because it is the queue with a deadline: a request that sits
+       `pending` is money held and a user waiting. It opens pre-filtered to
+       service orders so the operator lands on work, not on the whole ledger. #}
+    <a href="/admin/transactions?kind=service&status=pending" class="card card-hover group flex flex-col p-5">
+        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+            {{ icon('inbox', 'w-6 h-6') }}
+        </span>
+        <span class="mt-3 font-bold text-neutral-800">সার্ভিস অর্ডার</span>
+        <span class="mt-1 flex-1 text-xs text-neutral-500">
+            অবস্থা বদলান ও ফাইল আপলোড করুন
+            {% if openOrders.count > 0 %}
+                <span class="mt-1 block font-semibold text-accent-600">{{ openOrders.count }}টি অপেক্ষমাণ</span>
+            {% endif %}
+        </span>
+        <span class="mt-3 text-xs font-semibold text-primary-600 opacity-0 transition group-hover:opacity-100">
+            খুলুন →
+        </span>
+    </a>
+
     <a href="/admin/users" class="card card-hover group flex flex-col p-5">
         <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
             {{ icon('users', 'w-6 h-6') }}

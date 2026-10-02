@@ -38,10 +38,14 @@
                     <input id="slug" type="text" name="slug" class="form-input" placeholder="auto-generated">
                 </div>
             {% endif %}
-            <div>
-                <label for="icon" class="form-label">আইকন (Lucide)</label>
-                <input id="icon" type="text" name="icon" class="form-input" value="{{ editCategory.icon ?? 'grid' }}">
-            </div>
+            {# Browse all 1636 Lucide icons instead of typing a name from memory. #}
+            {% include 'components/icon-picker.twig' with {
+                name: 'icon',
+                id: 'icon',
+                value: editCategory.icon ?? 'grid',
+                label: 'আইকন (Lucide)',
+                help: 'আইকন খুঁজে বেছে নিন, অথবা নামটি নিজে লিখুন (যেমন: zap, gift, smartphone)'
+            } %}
             <div>
                 <label for="description" class="form-label">বর্ণনা</label>
                 <textarea id="description" name="description" rows="2" class="form-input">{{ editCategory.description ?? '' }}</textarea>

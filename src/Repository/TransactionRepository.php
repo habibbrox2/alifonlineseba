@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Service\StatusPresenter;
 use Yiisoft\Db\Connection\ConnectionInterface;
 
 final class TransactionRepository
@@ -39,6 +40,109 @@ final class TransactionRepository
             ->bindValue(':id', $id)
             ->queryOne();
         return $row === false ? null : $row;
+    }
+
+    /**
+     * Every existing row behind a set of ids, in the order asked for.
+     *
+     * One query for the whole selection, because a bulk settle over a page of
+     * twenty orders that called `findById()` twenty times is twenty round trips
+     * to learn twenty things it could have been told once. Ids that do not
+     * exist are simply absent from the result — the caller maps the difference
+     * back to "skipped" rather than being handed a hole.
+     *
+     * No `service_id` filter here on purpose: telling a top-up apart from a
+     * service request is a *policy* decision about what may be settled, and it
+     * belongs with the service that settles, not hidden inside the fetch. See
+     * `ServiceRequestAdminService::settleMany()`.
+     *
+     * @param int[] $ids
+     *
+     * @return array<int, array<string, mixed>> id => row
+     */
+    public function findManyByIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            return [];
+        }
+
+        // The placeholders are generated from the id count and numbered, so
+        // nothing a client sends can reach the SQL text — and they have to be
+        // distinct names, because two binds called `:id` would collapse into
+        // one and quietly search for a single id.
+        $placeholders = [];
+        $params = [];
+        foreach (array_values($ids) as $i => $id) {
+            $placeholders[] = ':id' . $i;
+            $params[':id' . $i] = $id;
+        }
+
+        $rows = $this->db
+            ->createCommand(
+                'SELECT * FROM {{%transaction}} WHERE [[id]] IN (' . implode(', ', $placeholders) . ')',
+            )
+            ->bindValues($params)
+            ->queryAll();
+
+        $byId = [];
+        foreach ($rows as $row) {
+            $byId[(int) $row['id']] = $row;
+        }
+
+        return $byId;
+    }
+
+    /**
+     * The export view of a selection: the same rows `findManyByIds()` returns,
+     * plus the two joined names a spreadsheet needs and cannot derive.
+     *
+     * Deliberately a second method rather than a widened `findManyByIds()`.
+     * The join is the only difference, and the settle must not start carrying
+     * it: a bulk settle over a page of orders is asking "what may I change
+     * about these rows", and every extra joined column is another way for the
+     * two uses of the same table to drift into disagreeing about what a row is.
+     *
+     * Both joins are LEFT because a transaction can outlive the row it points
+     * at — an export of a deleted user's order should still export it, with a
+     * blank name, rather than silently shorten the file.
+     *
+     * @param int[] $ids
+     *
+     * @return array<int, array<string, mixed>> id => row
+     */
+    public function findManyForExport(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = [];
+        $params = [];
+        foreach ($ids as $i => $id) {
+            $placeholders[] = ':id' . $i;
+            $params[':id' . $i] = $id;
+        }
+
+        $rows = $this->db
+            ->createCommand(
+                'SELECT {{%transaction}}.*, {{%service}}.[[name]] AS service_name,'
+                . ' {{%user}}.[[username]], {{%user}}.[[phone]]'
+                . ' FROM {{%transaction}}'
+                . ' LEFT JOIN {{%user}} ON {{%user}}.[[id]] = {{%transaction}}.[[user_id]]'
+                . ' LEFT JOIN {{%service}} ON {{%service}}.[[id]] = {{%transaction}}.[[service_id]]'
+                . ' WHERE {{%transaction}}.[[id]] IN (' . implode(', ', $placeholders) . ')',
+            )
+            ->bindValues($params)
+            ->queryAll();
+
+        $byId = [];
+        foreach ($rows as $row) {
+            $byId[(int) $row['id']] = $row;
+        }
+
+        return $byId;
     }
 
     /** A request the given user owns, or null — the ownership check for every status action. */
@@ -215,10 +319,29 @@ final class TransactionRepository
         'username' => '{{%user}}.[[username]]',
     ];
 
-    public function all(int $page, int $perPage, string $status = '', string $q = '', string $sort = 'id', string $dir = 'desc'): array
-    {
+    /**
+     * The admin order queue.
+     *
+     * `$servicesOnly` exists because a service request and a top-up live in
+     * the same table: `service_id` is what tells them apart. The operator
+     * working a queue of requests to deliver does not want recharge rows
+     * interleaved with them — those have their own admin page — so the queue
+     * can be narrowed to rows that actually have a service on them.
+     */
+    public function all(
+        int $page,
+        int $perPage,
+        string $status = '',
+        string $q = '',
+        string $sort = 'id',
+        string $dir = 'desc',
+        bool $servicesOnly = false,
+    ): array {
         $where = '1=1';
         $params = [];
+        if ($servicesOnly) {
+            $where .= ' AND {{%transaction}}.[[service_id]] IS NOT NULL';
+        }
         if ($status !== '') {
             $where .= ' AND {{%transaction}}.[[status]] = :st';
             $params[':st'] = $status;
@@ -427,6 +550,36 @@ final class TransactionRepository
     public function statsAll(): array
     {
         return $this->stats('1=1', []);
+    }
+
+    /**
+     * Service requests still waiting on an operator — `pending` or
+     * `processing`, and only rows that actually have a service on them.
+     *
+     * This is the admin dashboard's "work waiting" number, and it deliberately
+     * excludes top-ups: those have their own queue (`TopupRepository::stats()`)
+     * and their own card, so counting both here would let one backlog inflate
+     * the other card and hide the queue that is actually unattended.
+     *
+     * @return array{count: int, amount: float}
+     */
+    public function openServiceOrders(): array
+    {
+        $row = $this->db
+            ->createCommand(
+                'SELECT COUNT(*) AS c, COALESCE(SUM([[amount]]),0) AS amount FROM {{%transaction}}'
+                . ' WHERE [[service_id]] IS NOT NULL AND [[status]] IN (:pending, :processing)'
+            )
+            ->bindValues([
+                ':pending' => StatusPresenter::PENDING,
+                ':processing' => StatusPresenter::PROCESSING,
+            ])
+            ->queryOne();
+
+        return [
+            'count' => (int) ($row['c'] ?? 0),
+            'amount' => (float) ($row['amount'] ?? 0),
+        ];
     }
 
     private function stats(string $where, array $params): array

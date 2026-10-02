@@ -1,0 +1,128 @@
+{# ============================================================
+   Lucide icon picker — browse all 1636 icons, click to select.
+   ============================================================
+   Usage:
+     {% include 'components/icon-picker.twig' with {
+         name: 'icon', id: 'icon', value: category.icon, label: 'আইকন (Lucide)'
+     } %}
+
+   The visible <input> is an ordinary form field. Everything Alpine does is
+   write to it, so the form submits correctly with JS disabled, with the index
+   unavailable, or if this component never initialises at all.
+#}
+
+{% set pickerId = id|default(name|default('icon')) %}
+{% set pickerName = name|default('icon') %}
+{% set pickerValue = (value|default(''))|trim %}
+
+{% if icon_index_url() is not empty %}
+    {# defer, NOT type="module". Alpine boots from a deferred classic script in
+       the layout footer and walks the DOM immediately, so a deferred *module*
+       here can still land after it — the x-data expression then throws
+       "iconPicker is not defined", leaves an empty data object, and the picker
+       never initialises. Deferred classic scripts share one ordered list, and
+       this tag is earlier in the document than Alpine's, so it always wins. #}
+    <script defer src="{{ asset('/assets/js/icon-picker.js') }}"></script>
+{% endif %}
+
+<div class="icon-picker"
+     {# json_encode then raw: the values are interpolated into a JS expression,
+        and single-quoting the attribute keeps the JSON's double quotes legal. #}
+     x-data='iconPicker({{ icon_index_url()|json_encode|raw }}, {{ asset('/assets/icons/lucide-sprite.svg')|json_encode|raw }}, {{ pickerValue|json_encode|raw }})'
+     @keydown.escape.window="if (open) close()">
+
+    <label for="{{ pickerId }}" class="form-label">{{ label|default('আইকন (Lucide)') }}</label>
+
+    <div class="icon-picker-field">
+        {# Live preview of whatever is currently in the box. #}
+        <span class="icon-picker-preview" aria-hidden="true">
+            <svg x-show="value.trim() !== ''" class="icon-picker-preview-glyph">
+                <use :href="spriteHref(value.trim())"></use>
+            </svg>
+        </span>
+
+        <input x-ref="input"
+               id="{{ pickerId }}"
+               type="text"
+               name="{{ pickerName }}"
+               x-model="value"
+               :class="fieldState"
+               class="form-input"
+               autocomplete="off"
+               spellcheck="false"
+               placeholder="grid"
+               value="{{ pickerValue }}">
+
+        <button type="button" class="icon-picker-toggle" @click="open ? close() : openPanel()"
+                :aria-expanded="open.toString()"
+                aria-controls="{{ pickerId }}-panel">
+            <span x-text="open ? 'বন্ধ' : 'বেছে নিন'">বেছে নিন</span>
+        </button>
+    </div>
+
+    {# Only rendered when the index is missing, so the field still looks right. #}
+    <p x-show="unknown !== null" x-cloak class="form-help icon-picker-warning">
+        <span x-text="'“' + unknown + '” নামের কোনো আইকন নেই। তালিকা থেকে বেছে নিন।'"></span>
+    </p>
+
+    {% if help|default('') %}
+        <p class="form-help">{{ help }}</p>
+    {% endif %}
+
+    {# ——— Panel ——— #}
+    <div id="{{ pickerId }}-panel"
+         x-show="open"
+         x-cloak
+         @click.outside="close()"
+         x-transition.opacity.duration.150ms
+         class="icon-picker-panel">
+
+        <div class="icon-picker-search">
+            <svg class="icon-picker-search-glyph" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#search"></use></svg>
+            <input x-ref="search"
+                   type="search"
+                   class="icon-picker-search-input"
+                   x-model.debounce.120ms="query"
+                   placeholder="আইকন খুঁজুন — নাম বা শব্দ, যেমন: money, arrow, gift"
+                   aria-label="আইকন খুঁজুন"
+                   autocomplete="off">
+        </div>
+
+        {# Loading / error / empty states. #}
+        <p x-show="loading" class="icon-picker-status">আইকন লোড হচ্ছে…</p>
+        <p x-show="error" x-text="error" class="icon-picker-status icon-picker-status--error"></p>
+        <p x-show="loaded && !loading && filtered.length === 0" class="icon-picker-status">
+            এই নামে কোনো আইকন নেই।
+        </p>
+
+        <div class="icon-picker-grid" x-show="loaded && !loading && filtered.length > 0">
+            <template x-for="name in visible" :key="name">
+                <button type="button"
+                        class="icon-tile"
+                        :class="name === selected ? 'is-active' : ''"
+                        @click="choose(name)"
+                        :title="name"
+                        :aria-label="name"
+                        :aria-pressed="(name === selected).toString()">
+                    <svg class="icon-tile-glyph" aria-hidden="true">
+                        <use :href="spriteHref(name)"></use>
+                    </svg>
+                </button>
+            </template>
+        </div>
+
+        {# Footer: a live count, so a filtered result never looks truncated. #}
+        <div class="icon-picker-footer" x-show="loaded && !loading && filtered.length > 0">
+            <span class="icon-picker-count">
+                <span x-text="query.trim() ? filtered.length : total"></span>
+                <span x-text="query.trim() ? 'টি মিলেছে' : 'টি আইকন'"></span>
+                <span x-show="hasMore" class="icon-picker-count-rest">
+                    · আরও <span x-text="remaining"></span>টি আছে
+                </span>
+            </span>
+            <button type="button" class="icon-picker-more" x-show="hasMore" @click="loadMore()">
+                আরও দেখুন
+            </button>
+        </div>
+    </div>
+</div>

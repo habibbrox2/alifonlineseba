@@ -133,6 +133,9 @@ final readonly class AdminTransactionAction
             'isImage' => $this->deliverables->isViewable((string) ($row['deliverable_mime'] ?? '')),
             'maxBytes' => DeliverableStorage::MAX_BYTES,
             'allowedExtensions' => DeliverableStorage::ALLOWED_EXTENSIONS,
+            // A leading dot is required per the HTML spec for extension tokens;
+            // browsers silently ignore a bare `pdf` and offer every file type.
+            'acceptTypes' => '.' . implode(',.', DeliverableStorage::ALLOWED_EXTENSIONS),
             'identity' => $identity,
         ]);
     }
