@@ -117,11 +117,29 @@ jobs:
           fi
           chmod 600 "$key"
 
+          if [ ! -s "$key" ]; then
+            # The common cause by far: the secret is not a private key at all.
+            # Without this branch the symptom is "0 bytes" and a blank line,
+            # which says nothing about what was actually pasted.
+            echo "::error::No private key found in $key_source."
+            [ "$key_source" = "CPANEL_SSH_KEY" ] && \
+              echo "::error::That secret has no '-----BEGIN ... PRIVATE KEY-----' block, so nothing was extracted."
+            echo "::error::It is most likely one of:"
+            echo "::error::  - the PUBLIC key (.pub, or a line starting ssh-ed25519/ssh-rsa)"
+            echo "::error::  - a PuTTY key (.ppk) — convert it first:"
+            echo "::error::      puttygen old.ppk -O private-openssh -o new.key"
+            echo "::error::  - the base64 form pasted into the plain-key field"
+            echo "::error::For the base64 form use CPANEL_SSH_KEY_B64 instead:"
+            echo "::error::      base64 -w0 <keyfile>"
+            exit 1
+          fi
+
           if ! ssh-keygen -y -P '' -f "$key" > /dev/null 2>"$RUNNER_TEMP/key.err"; then
             echo "::error::The deploy key is not a usable private key (from $key_source)."
             echo "::error::bytes=$(wc -c < "$key") lines=$(wc -l < "$key")"
             echo "::error::first line: $(head -1 "$key" | cut -c1-40)"
             echo "::error::last line:  $(tail -1 "$key" | cut -c1-40)"
+            echo "::error::A key with a passphrase cannot be used here — cPanel's SSH keys have none either."
             head -3 "$RUNNER_TEMP/key.err" | sed 's/^/::error::  /'
             exit 1
           fi
@@ -284,11 +302,29 @@ jobs:
           fi
           chmod 600 "$key"
 
+          if [ ! -s "$key" ]; then
+            # The common cause by far: the secret is not a private key at all.
+            # Without this branch the symptom is "0 bytes" and a blank line,
+            # which says nothing about what was actually pasted.
+            echo "::error::No private key found in $key_source."
+            [ "$key_source" = "CPANEL_SSH_KEY" ] && \
+              echo "::error::That secret has no '-----BEGIN ... PRIVATE KEY-----' block, so nothing was extracted."
+            echo "::error::It is most likely one of:"
+            echo "::error::  - the PUBLIC key (.pub, or a line starting ssh-ed25519/ssh-rsa)"
+            echo "::error::  - a PuTTY key (.ppk) — convert it first:"
+            echo "::error::      puttygen old.ppk -O private-openssh -o new.key"
+            echo "::error::  - the base64 form pasted into the plain-key field"
+            echo "::error::For the base64 form use CPANEL_SSH_KEY_B64 instead:"
+            echo "::error::      base64 -w0 <keyfile>"
+            exit 1
+          fi
+
           if ! ssh-keygen -y -P '' -f "$key" > /dev/null 2>"$RUNNER_TEMP/key.err"; then
             echo "::error::The deploy key is not a usable private key (from $key_source)."
             echo "::error::bytes=$(wc -c < "$key") lines=$(wc -l < "$key")"
             echo "::error::first line: $(head -1 "$key" | cut -c1-40)"
             echo "::error::last line:  $(tail -1 "$key" | cut -c1-40)"
+            echo "::error::A key with a passphrase cannot be used here — cPanel's SSH keys have none either."
             head -3 "$RUNNER_TEMP/key.err" | sed 's/^/::error::  /'
             echo "::error::Re-create it as: base64 -w0 <keyfile>   (no passphrase, no quotes)"
             exit 1
