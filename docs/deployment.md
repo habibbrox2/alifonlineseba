@@ -475,7 +475,7 @@ TWA অ্যাপ ডোমেইন ভালিডেশন ব্যর্�
 
 ```
 checkout → composer install → npm run build → php yii list (স্মোক টেস্ট)
-        → rsync (SSH) → rm runtime/cache → migrate:up
+        → ফাইল ট্রান্সফার (rsync, না থাকলে tar) → rm runtime/cache → migrate:up
         → maintenance.lock তোলা → curl হেলথ চেক → lock নামানো
 ```
 
@@ -485,12 +485,25 @@ checkout → composer install → npm run build → php yii list (স্মো�
 ### ১১.১ একবারের cPanel প্রস্তুতি
 
 1. **SSH চালু করুন:** cPanel → *Security* → *SSH Access* → *Enable SSH* (অনেক হোস্টে টার্মিনাল UI আলাদা)।
+
+   > **rsync লাগে না।** হোস্টে rsync থাকলে সেটাই দিয়ে ট্রান্সফার হয় (আংশিক, দ্রুত);
+   > না থাকলে workflow নিজে থেকেই tar দিয়ে পুরো রিলেজ পাঠাবে — যা প্রতিটি বেস ইমেজে আছে।
 2. **SSH কী যোগ করুন:** একটি নতুন keypair বানান (শুধু পাবলিক অংশ cPanel-এ দিন):
    ```bash
-   ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/cpanel_deploy
+   # পাসফ্রেজ দেবেন না — নিচে দেখুন কেন
+   ssh-keygen -t ed25519 -N "" -C "github-actions-deploy" -f ~/.ssh/cpanel_deploy
    ```
    *Manage SSH Keys* → *Import Key* → `~/.ssh/cpanel_deploy.pub`-এর **কনটেন্ট** পেস্ট করুন
    (ফাইলটা আপলোড করবেন না, ভেতরের লাইনটাই দিতে হবে)।
+
+   প্রাইভেট অংশটি GitHub-এ **base64 করে** দিন (`CPANEL_SSH_KEY_B64`) — কারণ secret
+   একটি লেখার খান, আর পেস্ট করা কী-তে Windows-এর `\r`, উদ্ধতিচিহ্ন বা শেষের নিউলাইন
+   ঢুকে গেলে OpenSSH কীটা পড়তেই পারে না (`error in libcrypto`)।
+   ```bash
+   base64 -w0 ~/.ssh/cpanel_deploy > cpanel_deploy.b64   # উইন্ডোজে: -w0 ছাড়া
+   ```
+   > **পাসফ্রেজ যাবে না।** Workflow-এ কী পড়তে পাসফ্রেজ চাইতে পারে না (ইন্টার‌্যাক্টিভ
+   > প্রম্পট হলে job-টাই ঝুলে থাকবে), আর cPanel-এর keypair-ও পাসফ্রেজ রাখতে দেয় না।
 3. **ডিরেক্টরি ও symlink** (ম্যানুয়াল, একবারই):
    ```bash
    mkdir -p /home/<cpanel-user>/alif_tools
@@ -517,7 +530,8 @@ checkout → composer install → npm run build → php yii list (স্মো�
 |---|---|
 | `CPANEL_HOST` | cPanel-এর *Connect via SSH*-এ দেখানো হোস্ট, যেমন `srv123.cpanel.net` (IP বদলায়, হোস্টনেম বদলায় না) |
 | `CPANEL_USER` | cPanel অ্যাকাউন্ট নাম (যেটা দিয়ে লগইন করেন) |
-| `CPANEL_SSH_KEY` | ওপরের ধাপে বানানো keypair-এর **প্রাইভেট** অংশ (`.pub` নয়) |
+| `CPANEL_SSH_KEY_B64` | **এটাই ব্যবহার করুন** — `base64 -w0`-কৃত প্রাইভেট কী (উপরে দেখুন) |
+| `CPANEL_SSH_KEY` | বিকল্প — প্রাইভেট কীর কাঁটা লেখা, কিন্তু `\r`/কোটো ঢুকে গেলে নষ্ট হয় |
 
 **Secrets (ঐচ্ছিক):**
 
@@ -536,12 +550,15 @@ checkout → composer install → npm run build → php yii list (স্মো�
 
 ### ১১.৩ যা ডিপ্লয় করে, যা করে না
 
-> রিলেজে `runtime/` rsync-এর exclude-এ থাকে, তাই সার্ভারের লগ, ক্যাশ ও
+> রিলেজে `runtime/` exclude-এ থাকে, তাই সার্ভারের লগ, ক্যাশ ও
 > `maintenance.lock` কখনো মুছে ফেলা হয় না — বিস্তারিত §১২-তে।
 
 - **`vendor/` ও `public/assets/` যায়** — gitignore করা, কিন্তু বিল্ড-এর আউটপুট, তাই দরকার।
 - **`.env`, `runtime/`, `storage/`, `cache/`, `web/receipts|deliverables|releases/` যায় না** —
   এগুলো git-এ নেই, আর rsync-এর `--delete`-এ exclude করা পথ মুছে ফেলে **না**। ইউজারের আপলোড করা ফাইল, লগ ও সিক্রেট বেঁচে থাকে।
+- **পুরোনো ফাইল মোছা হয়** — rsync মোডে `--delete`; tar মোডে প্রতিটি রিলেজের সাথে
+  `.deploy-manifest` যায়, আর পরের ডিপ্লয়ে আগের ম্যানিফেস্টে থাকা কিন্তু এই রিলেজে নেই
+  এমন ফাইলগুলো মুছে ফেলা হয় (`.env`/আপলোড/লগ কখনো নয়)।
 - **মাইগ্রেশন প্রতিটি ডিপ্লয়ে** চলে (`migrate:up` ইডেমপোটেন্ট — নতুন নেই বলেই শুধু ছাড়ে)।
 - **Android/TWA/docs-only কমিট ডিপ্লয় ট্রিগার করে না** (`paths-ignore`)।
 
@@ -558,8 +575,9 @@ checkout → composer install → npm run build → php yii list (স্মো�
 | সমস্যা | সমাধান |
 |---|---|
 | `Permission denied (publickey)` | cPanel-এ পাবলিক কী ইমপোর্ট হয়েছে কি না দেখুন; সিক্রেটে **প্রাইভেট** কী দিতে হবে |
+| `Load key …: error in libcrypto` | সিক্রেটের লেখাটি কী হিসেবে পড়া যাচ্ছে না — উপরে বলা `\r`/কোটো সমস্যা। `base64 -w0` করে `CPANEL_SSH_KEY_B64`-এ দিলে সব মিটে যায় |
 | `Host key verification failed` | হোস্টের IP বদলে গেছে — সেক্রেটে বর্তমান `CPANEL_HOST` আছে কি না দেখুন |
-| `::error::rsync is not installed on the host` | cPanel → *Software* → *Install PHP/Rsync* অথবা অন্য পদ্ধতি |
+| `::warning::rsync is not installed…falling back to a tar transfer` | এটি ব্যর্থতা নয় — workflow নিজে থেকেই tar-এ চলে। শুধু ট্রান্সফারটি একবারে (পুরো tarball) যায়, তাই একটু ধীর |
 | `No PHP binary found on the host` | `CPANEL_PHP_BIN` ভ্যারিয়েবলে সঠিক পথ দিন (`ls -d /opt/cpanel/ea-php*/root/usr/bin/php`) |
 | মাইগ্রেশন ব্যর্থ, সাইট 500 | `APP_DEBUG=true` করে ব্রাউজারে সরাসরি ত্রুটিটা দেখুন, তারপর আবার `false` |
 
@@ -572,7 +590,7 @@ rsync চলাকালীন সার্ভারের কোড ফোল�
 ### ১২.১ কীভাবে কাজ করে
 
 ```
-main-এ পুশ → runtime/maintenance.lock তৈরি → rsync → migrate
+main-এ পুশ → runtime/maintenance.lock তৈরি → ট্রান্সফার (rsync/tar) → migrate
            → lock মুছে যায় → / ও /login-এ 200 নিশ্চিত → গ্রিন
 ```
 
@@ -605,7 +623,7 @@ printf '%s\n' "Scheduled maintenance — back shortly" > runtime/maintenance.loc
 rm -f runtime/maintenance.lock
 ```
 
-> `.env`-এর মতোই, লক ফাইলটি gitignore করা (`/runtime`) ও workflow-এর rsync exclude-এ
+> `.env`-এর মতোই, লক ফাইলটি gitignore করা (`/runtime`) ও workflow-এর exclude-এ
 > থাকে — `--delete` কখনো এটিকে সরাবে না, আর ভুল করে commit-ও হবে না।
 
 ### ১২.৪ ব্যর্থ deploy থেকে সাইট বের করা

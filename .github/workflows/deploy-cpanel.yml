@@ -89,12 +89,43 @@ jobs:
           CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
           CPANEL_USER: ${{ secrets.CPANEL_USER }}
           CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_SSH_KEY_B64: ${{ secrets.CPANEL_SSH_KEY_B64 }}
           CPANEL_SSH_PORT: ${{ vars.CPANEL_SSH_PORT || '22' }}
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$CPANEL_SSH_KEY" | sed -e 's/\r$//' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          key="$HOME/.ssh/deploy_key"
+
+          if [ -n "$CPANEL_SSH_KEY_B64" ]; then
+            if ! printf '%s' "$CPANEL_SSH_KEY_B64" | tr -d ' \t\r\n' | base64 --decode | tr -d '\r' > "$key" 2>/dev/null; then
+              echo "::error::CPANEL_SSH_KEY_B64 is not valid base64."
+              exit 1
+            fi
+            key_source="CPANEL_SSH_KEY_B64"
+          elif [ -n "$CPANEL_SSH_KEY" ]; then
+            printf '%s' "$CPANEL_SSH_KEY" | tr -d '\r' \
+              | sed -n '/-----BEGIN [A-Z ]*PRIVATE KEY-----/,/-----END [A-Z ]*PRIVATE KEY-----/p' \
+              > "$key"
+            key_source="CPANEL_SSH_KEY"
+          else
+            echo "::error::No SSH key secret. Set CPANEL_SSH_KEY_B64 (preferred) or CPANEL_SSH_KEY."
+            exit 1
+          fi
+
+          if [ -n "$(tail -c 1 "$key")" ]; then
+            printf '\n' >> "$key"
+          fi
+          chmod 600 "$key"
+
+          if ! ssh-keygen -y -P '' -f "$key" > /dev/null 2>"$RUNNER_TEMP/key.err"; then
+            echo "::error::The deploy key is not a usable private key (from $key_source)."
+            echo "::error::bytes=$(wc -c < "$key") lines=$(wc -l < "$key")"
+            echo "::error::first line: $(head -1 "$key" | cut -c1-40)"
+            echo "::error::last line:  $(tail -1 "$key" | cut -c1-40)"
+            head -3 "$RUNNER_TEMP/key.err" | sed 's/^/::error::  /'
+            exit 1
+          fi
+
           ssh-keyscan -p "$CPANEL_SSH_PORT" "$CPANEL_HOST" >> ~/.ssh/known_hosts
           cat >> ~/.ssh/config <<EOF
           Host cpanel
@@ -151,17 +182,23 @@ jobs:
           CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
           CPANEL_USER: ${{ secrets.CPANEL_USER }}
           CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_SSH_KEY_B64: ${{ secrets.CPANEL_SSH_KEY_B64 }}
           CPANEL_PATH: ${{ vars.CPANEL_PATH }}
         run: |
           set -euo pipefail
           missing=()
-          [ -n "$CPANEL_HOST" ]  || missing+=(secret CPANEL_HOST)
-          [ -n "$CPANEL_USER" ]  || missing+=(secret CPANEL_USER)
-          [ -n "$CPANEL_SSH_KEY" ] || missing+=(secret CPANEL_SSH_KEY)
+          [ -n "$CPANEL_HOST" ] || missing+=("secret CPANEL_HOST")
+          [ -n "$CPANEL_USER" ] || missing+=("secret CPANEL_USER")
+          # Either form of the key is enough; B64 is the one that cannot be
+          # corrupted by the secrets UI, so it is the one to reach for first.
+          if [ -z "$CPANEL_SSH_KEY_B64" ] && [ -z "$CPANEL_SSH_KEY" ]; then
+            missing+=("secret CPANEL_SSH_KEY_B64 or CPANEL_SSH_KEY")
+          fi
           # CPANEL_PATH has no default on purpose — see the env block above.
-          [ -n "$CPANEL_PATH" ] || missing+=(variable CPANEL_PATH)
+          [ -n "$CPANEL_PATH" ] || missing+=("variable CPANEL_PATH")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Missing repository ${missing[*]}"
+            echo "::error::Missing repository:"
+            for m in "${missing[@]}"; do echo "::error::  - $m"; done
             echo "::error::CPANEL_PATH must be the app root, e.g. /home/<cpanel-user>/<app>."
             exit 1
           fi
@@ -208,14 +245,56 @@ jobs:
           CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
           CPANEL_USER: ${{ secrets.CPANEL_USER }}
           CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_SSH_KEY_B64: ${{ secrets.CPANEL_SSH_KEY_B64 }}
           CPANEL_SSH_PORT: ${{ vars.CPANEL_SSH_PORT || '22' }}
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
-          # GitHub secrets are text; a CRLF or a missing trailing newline makes
-          # ssh refuse the key with a confusing "invalid format" error.
-          printf '%s\n' "$CPANEL_SSH_KEY" | sed -e 's/\r$//' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          key="$HOME/.ssh/deploy_key"
+
+          # A secret is a single-line text field, and a private key pasted into
+          # one arrives with whatever the source had: CRLF from a Windows
+          # editor, quotes from a shell command, a missing final newline. Each
+          # of those produces the same useless `error in libcrypto`, so the key
+          # is decoded, trimmed and *parsed* here — before the first ssh call —
+          # and a bad one fails with something a human can act on.
+          if [ -n "$CPANEL_SSH_KEY_B64" ]; then
+            # Preferred: base64 cannot be corrupted by the secrets UI. The
+            # decoded text still needs CR stripping, because the key file it
+            # came from may well have been generated on Windows.
+            if ! printf '%s' "$CPANEL_SSH_KEY_B64" | tr -d ' \t\r\n' | base64 --decode | tr -d '\r' > "$key" 2>/dev/null; then
+              echo "::error::CPANEL_SSH_KEY_B64 is not valid base64."
+              exit 1
+            fi
+            key_source="CPANEL_SSH_KEY_B64"
+          elif [ -n "$CPANEL_SSH_KEY" ]; then
+            printf '%s' "$CPANEL_SSH_KEY" | tr -d '\r' \
+              | sed -n '/-----BEGIN [A-Z ]*PRIVATE KEY-----/,/-----END [A-Z ]*PRIVATE KEY-----/p' \
+              > "$key"
+            key_source="CPANEL_SSH_KEY"
+          else
+            echo "::error::No SSH key secret. Set CPANEL_SSH_KEY_B64 (preferred) or CPANEL_SSH_KEY."
+            exit 1
+          fi
+
+          # A key file whose last line has no newline is rejected by OpenSSH
+          # even when every byte of the key is correct.
+          if [ -n "$(tail -c 1 "$key")" ]; then
+            printf '\n' >> "$key"
+          fi
+          chmod 600 "$key"
+
+          if ! ssh-keygen -y -P '' -f "$key" > /dev/null 2>"$RUNNER_TEMP/key.err"; then
+            echo "::error::The deploy key is not a usable private key (from $key_source)."
+            echo "::error::bytes=$(wc -c < "$key") lines=$(wc -l < "$key")"
+            echo "::error::first line: $(head -1 "$key" | cut -c1-40)"
+            echo "::error::last line:  $(tail -1 "$key" | cut -c1-40)"
+            head -3 "$RUNNER_TEMP/key.err" | sed 's/^/::error::  /'
+            echo "::error::Re-create it as: base64 -w0 <keyfile>   (no passphrase, no quotes)"
+            exit 1
+          fi
+          echo "Deploy key OK ($key_source): $(ssh-keygen -lf "$key" | awk '{print $2}')"
+
           # ssh-keyscan pins nothing on its own — it trusts whatever answers on
           # port 22. The host still has to be yours (see note in the summary),
           # but this avoids shipping a hard-coded host key that goes stale.
@@ -236,6 +315,7 @@ jobs:
       # ---------------------------------------------------------------- deploy
 
       - name: Prepare the deploy directory on the server
+        id: prepare
         run: |
           set -euo pipefail
           # The heredoc below is quoted, so nothing is expanded locally and the
@@ -244,12 +324,20 @@ jobs:
           # quotes, spaces or a `$` in it intact instead of breaking the shell.
           env_q=$(printf '%q' "$DEPLOY_PATH")
           b64_q=$(printf '%q' "$CPANEL_ENV_B64")
-          ssh cpanel "DEPLOY_PATH=$env_q CPANEL_ENV_B64=$b64_q bash -s" <<'REMOTE'
+          output=$(ssh cpanel "DEPLOY_PATH=$env_q CPANEL_ENV_B64=$b64_q bash -s" <<'REMOTE'
           set -euo pipefail
           mkdir -p "$DEPLOY_PATH"
-          # rsync is the one dependency this host really needs; every cPanel
-          # image has it, but say so plainly instead of "rsync: not found".
-          command -v rsync >/dev/null || { echo "::error::rsync is not installed on the host"; exit 1; }
+          # rsync is the better transfer (incremental, one pass, built-in
+          # pruning) but plenty of shared hosts ship without it, and it is not
+          # installable from the workflow. tar is in every base image, so the
+          # transfer degrades to a tar-over-SSH stream instead of failing.
+          if command -v rsync >/dev/null; then
+            echo "::transfer::rsync"
+          else
+            command -v tar >/dev/null || { echo "::error::neither rsync nor tar is available on the host"; exit 1; }
+            echo "::warning::rsync is not installed on this host; falling back to a tar transfer."
+            echo "::transfer::tar"
+          fi
 
           # Writable state that lives only on the server. Created up front so
           # the app never has to guess, and so a half-empty first deploy still
@@ -274,6 +362,16 @@ jobs:
             *) echo "::warning::public_html resolves to $link, which is outside $DEPLOY_PATH" ;;
           esac
           REMOTE
+          )
+          # Picked out by marker rather than by "last line", because the
+          # script above prints warnings and notices of its own.
+          transfer=$(printf '%s\n' "$output" | sed -n 's/^::transfer:://p' | tail -1)
+          if [ -z "$transfer" ]; then
+            echo "::error::Could not determine how to transfer the release."
+            exit 1
+          fi
+          echo "transfer=$transfer" >> "$GITHUB_OUTPUT"
+          echo "Transfer mode: $transfer"
         env:
           # Empty string, not unset, when the secret is absent: the remote
           # script's `${CPANEL_ENV_B64:-}` guard treats both the same.
@@ -300,51 +398,118 @@ jobs:
           echo "Maintenance mode on: $(cat "$DEPLOY_PATH/runtime/maintenance.lock")"
           REMOTE
 
-      - name: Rsync the release
+      - name: Transfer the release
+        env:
+          TRANSFER_MODE: ${{ steps.prepare.outputs.transfer }}
         run: |
           set -euo pipefail
-          # Excluded paths are ALSO protected from --delete, which is the whole
-          # trick: .env, uploads and logs are not in git, so deleting "files
-          # that vanished from the repo" must not touch them.
+          # One list of names, rendered into the two syntaxes the tools
+          # disagree about: rsync matches `docs/` against a transfer-relative
+          # path, while GNU tar matches `./docs` against the member name it
+          # stored. Deriving both from the same names is what keeps rsync and
+          # tar mode from shipping different files.
           #
-          # vendor/ and public/assets/* are the opposite case: gitignored,
-          # built above, and therefore wanted here.
-          rsync \
-            --archive \
-            --compress \
-            --delete \
-            --delete-delay \
-            --partial \
-            --human-readable \
-            --info=stats2 \
-            --timeout=600 \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='.kilo/' \
-            --exclude='.freebuff/' \
-            --exclude='node_modules/' \
-            --exclude='.env' \
-            --exclude='runtime/' \
-            --exclude='storage/' \
-            --exclude='cache/' \
-            --exclude='web/receipts/' \
-            --exclude='web/deliverables/' \
-            --exclude='web/releases/' \
-            --exclude='android/' \
-            --exclude='twa/' \
-            --exclude='docs/' \
-            --exclude='tests/' \
-            --exclude='scripts/__pycache__/' \
-            --exclude='codeception.yml' \
-            --exclude='psalm.xml' \
-            --exclude='rector.php' \
-            --exclude='package.json' \
-            --exclude='package-lock.json' \
-            --exclude='tailwind.config.js' \
-            --exclude='.gitignore' \
-            --exclude='README.md' \
-            --exclude='*.log' \
-            ./ cpanel:"$DEPLOY_PATH/"
+          # vendor/ and public/assets/* are deliberately absent: they are
+          # gitignored, built in the steps above, and wanted on the server.
+          #
+          # The .env / runtime / storage / web upload rules are also what keeps
+          # the transfer from destroying server-only state — rsync protects
+          # excluded paths from --delete, and the tar path never touches them.
+          dirs=".git .github .kilo .freebuff node_modules runtime storage cache web/receipts web/deliverables web/releases android twa docs tests scripts/__pycache__"
+          files=".env .deploy-manifest .deploy-manifest.old codeception.yml psalm.xml rector.php package.json package-lock.json tailwind.config.js .gitignore README.md"
+
+          rsync_ex=$(mktemp)
+          tar_ex=$(mktemp)
+          for d in $dirs; do printf '%s/\n' "$d" >> "$rsync_ex"; printf './%s\n' "$d" >> "$tar_ex"; done
+          for f in $files; do printf '%s\n' "$f" >> "$rsync_ex"; printf './%s\n' "$f" >> "$tar_ex"; done
+          printf '*.log\n' >> "$rsync_ex"
+          printf './*.log\n' >> "$tar_ex"
+
+          if [ "$TRANSFER_MODE" = rsync ]; then
+            rsync \
+              --archive \
+              --compress \
+              --delete \
+              --delete-delay \
+              --partial \
+              --human-readable \
+              --info=stats2 \
+              --timeout=600 \
+              --exclude-from="$rsync_ex" \
+              ./ cpanel:"$DEPLOY_PATH/"
+          else
+            # No rsync on the host: ship a tarball over the SSH channel. It is
+            # one big sequential write instead of an incremental diff, but it
+            # works everywhere and needs nothing installed.
+            #
+            # The tarball is built in RUNNER_TEMP, deliberately *outside* the
+            # tree: writing release.tgz into the directory being archived
+            # changes that directory mid-read, and GNU tar reacts by aborting
+            # with "file changed as we read it".
+            tarball="$RUNNER_TEMP/release.tgz"
+            manifest="$RUNNER_TEMP/manifest.txt"
+            echo "Building a tar release…"
+            tar -czf "$tarball" --exclude-from="$tar_ex" .
+
+            # The member list of that exact tarball is the manifest of what we
+            # shipped, so the next deploy can remove files the release no longer
+            # contains — the one thing plain tar-overwrite cannot do.
+            tar -tzf "$tarball" \
+              | sed 's|^\./||' \
+              | grep -v '/$' \
+              | LC_ALL=C sort > "$manifest"
+            echo "Release contains $(wc -l < "$manifest") files."
+
+            path_q=$(printf '%q' "$DEPLOY_PATH")
+            # Keep the previous manifest before the new one lands; the prune
+            # step below needs it to know what used to be there.
+            ssh cpanel "cd $path_q && mv -f .deploy-manifest .deploy-manifest.old 2>/dev/null || true"
+            # The compressed stream goes over as-is and the remote tar's own
+            # -z unpacks it. Decompressing here as well would feed tar plain
+            # bytes and it would fail with "gzip: stdin: not in gzip format".
+            cat "$tarball" | ssh cpanel "tar -xzf - -C $path_q --no-same-owner"
+            ssh cpanel "cat > $path_q/.deploy-manifest" < "$manifest"
+            echo "Transfer complete ($(du -h "$tarball" | cut -f1) compressed)."
+          fi
+
+          # release.tgz is a build artifact of this run, not source.
+          rm -f "$rsync_ex" "$tar_ex"
+
+      - name: Prune files this release dropped
+        # tar cannot delete, so stale code from the previous release would
+        # otherwise sit next to the new one forever. The manifest makes the
+        # deletion precise: only files this project shipped, that the new
+        # release no longer contains, and that are not server state.
+        if: steps.prepare.outputs.transfer == 'tar'
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          # Deliberately not `set -e`: removing leftovers must never be able to
+          # fail a deploy whose code is already on disk and correct.
+          set -uo pipefail
+          cd "$DEPLOY_PATH"
+          if [ ! -f .deploy-manifest.old ]; then
+            echo "No previous manifest — nothing to prune."
+            exit 0
+          fi
+          if [ ! -f .deploy-manifest ]; then
+            echo "::warning::No current manifest; skipping the prune."
+            exit 0
+          fi
+          removed=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              .env|runtime/*|storage/*|cache/*|web/receipts/*|web/deliverables/*|web/releases/*|.deploy-manifest*) continue ;;
+            esac
+            if [ -f "$f" ] && ! grep -qxF -- "$f" .deploy-manifest; then
+              rm -f -- "$f" && removed=$((removed + 1))
+            fi
+          done < .deploy-manifest.old
+          rm -f .deploy-manifest.old
+          echo "Pruned $removed file(s) left behind by the previous release."
+          REMOTE
 
       # ------------------------------------------------------------ aftercare
 
