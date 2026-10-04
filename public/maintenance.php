@@ -201,7 +201,7 @@ echo <<<HTML
 
   <a href="{$selfUri}">এখনই আবার চেষ্টা করুন</a>
 
-  <footer>allseba.online</footer>
+  <footer>allseba.dgtts.org</footer>
 </main>
 </body>
 </html>

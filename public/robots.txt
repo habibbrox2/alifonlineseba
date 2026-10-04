@@ -10,4 +10,4 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /logout
 
-Sitemap: https://allseba.online/sitemap.xml
+Sitemap: https://allseba.dgtts.org/sitemap.xml

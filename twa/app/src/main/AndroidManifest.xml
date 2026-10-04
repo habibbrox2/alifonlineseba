@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Trusted Web Activity for https://allseba.online.
+  Trusted Web Activity for https://allseba.dgtts.org.
 
   There is deliberately NO android:usesCleartextTraffic here. The native client
   in ../../android sets it because it talks to a dev server over http; a TWA
@@ -88,7 +88,7 @@
 
             <!--
               autoVerify is what makes Chrome run
-              https://allseba.online/.well-known/assetlinks.json
+              https://allseba.dgtts.org/.well-known/assetlinks.json
               during install. If that file does not name this package and this
               signing certificate, verification fails, the TWA silently falls
               back to a browser Custom Tab, and the installed app looks broken

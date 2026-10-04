@@ -50,7 +50,7 @@ Every response uses the `App\Service\Api` envelope `{success, message, data, err
 (`{event, title, body, link, tx_id}`) and builds a tap `PendingIntent` with
 `FLAG_IMMUTABLE` and a per-notification request code, targeting either
 
-- `https://allseba.online/requests/{id}` (App Links), or
+- `https://allseba.dgtts.org/requests/{id}` (App Links), or
 - `aliftools://requests/{id}` (custom-scheme fallback for the pilot).
 
 `DeepLink` maps both onto the `request/{id}` nav route, which fetches

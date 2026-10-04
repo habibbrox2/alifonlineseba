@@ -9,8 +9,8 @@
     "time. See ../../twa/README.md for the two-field checklist."
   ],
   "packageId": "online.broxlab.aliftools.twa",
-  "host": "allseba.online",
-  "startUrl": "https://allseba.online/",
+  "host": "allseba.dgtts.org",
+  "startUrl": "https://allseba.dgtts.org/",
   "launcherName": "Alif Tools",
   "displayStandalone": true,
   "enableNotifications": true,

@@ -305,7 +305,7 @@ the raw auto-increment `id` — that is internal enumeration and leaks row count
 `ServiceManager::newReference()` and stores them in `{{%transaction}}.reference`).
 
 **Android manifest (app side):** `intent-filter` on a custom scheme
-`https://allseba.online/requests/*` (App Links) **plus** a fallback custom
+`https://allseba.dgtts.org/requests/*` (App Links) **plus** a fallback custom
 scheme for the non-Play pilot build. Notification tap must carry `PendingIntent` with
 `FLAG_IMMUTABLE` and a unique request code per notification id (otherwise Android merges
 taps and opens the wrong screen).
@@ -1115,7 +1115,7 @@ FIREBASE_PROJECT_ID=
 
 # --- Phase 3: Android ---
 ANDROID_PACKAGE=broxlab.onlinesheba
-DEEP_LINK_HOST=allseba.online   # must match APP_URL
+DEEP_LINK_HOST=allseba.dgtts.org   # must match APP_URL
 
 # --- Phase 4: Telegram ---
 TELEGRAM_BOT_TOKEN=

@@ -93,7 +93,7 @@ final class TwaFingerprintCommand extends Command
                 . ' will run in a browser bar instead of full screen.'
             );
             $io->definitionList(
-                ['TWA_ORIGIN' => 'not set — must be a bare https origin, e.g. https://allseba.online'],
+                ['TWA_ORIGIN' => 'not set — must be a bare https origin, e.g. https://allseba.dgtts.org'],
                 ['TWA_FINGERPRINTS' => 'not set — one or more package@SHA256:AA:BB:… entries'],
             );
             $io->text('');
@@ -160,7 +160,7 @@ final class TwaFingerprintCommand extends Command
 
         $io->section('Add to .env');
         $io->text(
-            'TWA_ORIGIN=' . ($links->origin() !== '' ? $links->origin() : 'https://allseba.online')
+            'TWA_ORIGIN=' . ($links->origin() !== '' ? $links->origin() : 'https://allseba.dgtts.org')
             . "\nTWA_FINGERPRINTS=" . $package . '@' . $fingerprint
         );
         $io->text('Append a comma and another package@fingerprint for your other build (debug vs release).');
