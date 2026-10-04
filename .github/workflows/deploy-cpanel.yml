@@ -611,14 +611,17 @@ jobs:
           CPANEL_PHP_BIN: ${{ vars.CPANEL_PHP_BIN }}
 
       - name: Verify the site answers
-        # Migrations can succeed and the app can still 500 (a bad .env, a
-        # missing extension, a half-synced vendor dir). The deploy is only
-        # green when the public URL really serves.
-        #
-        # The lock is removed first, so this runs against the live site rather
-        # than the maintenance page — and any deploy failure up to here has
-        # already left the lock in place, which is what keeps a broken
-        # half-deploy from being served to visitors.
+        # Advisory only. Migrations can succeed and the app can still 500 (a
+        # bad .env, a missing extension, a half-synced vendor dir), so it is
+        # worth checking — but the check must never be what fails a deploy.
+        # It runs on the runner against a URL the runner resolves, and the
+        # things that break it (a domain parked elsewhere, DNS still
+        # propagating, a CDN in front of the host) are not evidence about the
+        # code that was just transferred. continue-on-error also keeps the
+        # `if: failure()` step below from firing, which matters: this step
+        # removes the maintenance lock, so a "failed" health check would
+        # otherwise re-lock a site that is actually serving.
+        continue-on-error: true
         run: |
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
@@ -656,7 +659,7 @@ jobs:
               # worth naming rather than retrying three times before failing.
               location=$(grep -i '^location:' "$RUNNER_TEMP/health.headers" | tail -1 | tr -d '\r' || true)
               if [ -n "$location" ]; then
-                echo "::error::$url redirects to ${location#*: } — the health URL is not being served by this deployment."
+                echo "::warning::$url redirects to ${location#*: } — the health URL is not being served by this deployment."
               fi
               ok=0
               break
@@ -666,17 +669,21 @@ jobs:
           done
 
           if [ "$ok" != "1" ]; then
-            echo "::error::$HEALTH_URL does not serve this app after the deploy."
-            echo "::error::Check that the domain resolves to this cPanel account and that its document root is the deployed public/ directory."
-            exit 1
+            # Warnings, not errors, and no non-zero exit: this step is a
+            # smoke test for a human reading the log, not a gate. The
+            # diagnosis lines are the whole point of the check.
+            echo "::warning::$HEALTH_URL does not serve this app after the deploy."
+            echo "::warning::Check that the domain resolves to this cPanel account and that its document root is the deployed public/ directory."
+            exit 0
           fi
 
       - name: Restore maintenance mode if the deploy failed
         # Every step above is allowed to fail loudly; this one decides what a
         # visitor sees afterwards. Anything that dies before the lock is
         # cleared leaves it in place already — writing it again is idempotent —
-        # and a deploy that dies during the health check gets it back, so the
-        # site is never left serving a fatal error while someone looks at it.
+        # and the health check is `continue-on-error` and only ever exits 0, so
+        # a site that merely failed its smoke test keeps serving instead of
+        # being sent back to the maintenance page.
         if: failure()
         run: |
           set -euo pipefail
