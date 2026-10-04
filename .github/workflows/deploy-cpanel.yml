@@ -413,6 +413,53 @@ jobs:
           # script's `${CPANEL_ENV_B64:-}` guard treats both the same.
           CPANEL_ENV_B64: ${{ secrets.CPANEL_ENV_B64 }}
 
+      # The most common deploy failure on shared hosting is a .env that cannot
+      # reach the database — a wrong prefixed user name, a rotated password, a
+      # missing GRANT. It is entirely predictable, so it is checked here, while
+      # the old working code is still serving traffic. Left to the migration
+      # step it would only surface *after* the transfer replaced the site, which
+      # is how a config typo turns into a deploy that leaves the site down.
+      # Quoted: an unquoted `name:` value may not contain a colon itself.
+      - name: "Pre-flight: database reachable"
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          php_q=$(printf '%q' "$CPANEL_PHP_BIN")
+          ssh cpanel "DEPLOY_PATH=$env_q CPANEL_PHP_BIN=$php_q bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          if [ ! -f .env ]; then
+            echo "::error::No .env on the server — add one at $DEPLOY_PATH/.env (chmod 600) or set the CPANEL_ENV_B64 secret."
+            exit 1
+          fi
+          if [ ! -f vendor/autoload.php ]; then
+            # Nothing to probe on a first deploy; the migration step is where
+            # this gets exercised for real.
+            echo "First deploy (no vendor/ yet) — skipping the database pre-flight."
+            exit 0
+          fi
+          PHP_BIN=""
+          for candidate in "${CPANEL_PHP_BIN:-}" /opt/cpanel/ea-php82/root/usr/bin/php /usr/local/bin/php /usr/bin/php; do
+            if [ -n "$candidate" ] && command -v "$candidate" >/dev/null 2>&1; then
+              PHP_BIN="$candidate"
+              break
+            fi
+          done
+          [ -n "$PHP_BIN" ] || { echo "::error::No PHP binary found on the host"; exit 1; }
+          # migrate:new opens the same connection the real migration will, so
+          # this fails exactly where that would — but before anything is taken
+          # offline. It only reads the migration history.
+          if ! "$PHP_BIN" yii migrate:new --no-interaction; then
+            echo "::error::The deployed .env cannot reach the database (see the error above)."
+            echo "::error::Check DB_DSN / DB_USERNAME / DB_PASSWORD in $DEPLOY_PATH/.env against cPanel -> MySQL Databases."
+            echo "::error::cPanel prefixes both the database and the user with the account name, e.g. <account>_allseba."
+            exit 1
+          fi
+          echo "Database pre-flight OK."
+          REMOTE
+        env:
+          CPANEL_PHP_BIN: ${{ vars.CPANEL_PHP_BIN }}
+
       # Placed *after* the prepare step on purpose: the lock lives in
       # runtime/, which is one of the directories that step creates, and there
       # is no reason to hold the site while the runner builds assets either.
