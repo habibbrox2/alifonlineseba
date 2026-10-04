@@ -401,15 +401,36 @@ jobs:
             echo "Seeded .env from the CPANEL_ENV_B64 secret."
           fi
 
-          # Report the web-root wiring without touching it. The symlink is a
-          # one-time manual cPanel step; this only tells us if it drifted.
-          link=$(readlink -f "$HOME/public_html" 2>/dev/null || echo "(not a symlink)")
+          # Report the web-root wiring without touching it. A cPanel subdomain
+          # serves ~/public_html by default, while the app lives in
+          # $DEPLOY_PATH — so the one-time cPanel step that points the
+          # document root at $DEPLOY_PATH/public is what makes the domain
+          # serve this app at all. Report both facts, because "the deploy
+          # was green and the site shows something else" is otherwise
+          # undiagnosable from the log.
+          [ -f "$DEPLOY_PATH/public/index.php" ] \
+            || echo "::warning::$DEPLOY_PATH/public/index.php is missing — the release did not land."
+          link=$(readlink -f "$HOME/public_html" 2>/dev/null || echo "(not a symlink or not present)")
+          echo "public_html -> $link"
           case "$link" in
-            "$DEPLOY_PATH"/*|"$DEPLOY_PATH") echo "public_html -> $link" ;;
-            *) echo "::warning::public_html resolves to $link, which is outside $DEPLOY_PATH" ;;
+            "$DEPLOY_PATH/public"|"$DEPLOY_PATH/public/"|"$DEPLOY_PATH")
+              echo "public_html points inside the release: OK" ;;
+            *)
+              echo "::warning::public_html is $link, outside $DEPLOY_PATH/public."
+              echo "::warning::If the domain serves the wrong site, fix it in cPanel: Domains -> the subdomain -> Document Root = $DEPLOY_PATH/public (or symlink ~/public_html to it). The deploy itself cannot change the vhost." ;;
           esac
           REMOTE
           )
+          # Everything the remote script printed except the marker is
+          # diagnostics — the public_html wiring, the .env seed notice, the
+          # rsync/tar warning. Command substitution swallowed all of it, so a
+          # docroot pointing outside DEPLOY_PATH (the single most common
+          # "the deploy succeeded but the site is not this app" cause) never
+          # reached the log. Replay it, with the marker stripped.
+          # Replayed verbatim, not indented: a leading space stops GitHub
+          # parsing the line as a workflow command, which would turn a
+          # ::warning:: back into invisible plain text.
+          printf '%s\n' "$output" | grep -v '^::transfer::' || true
           # Picked out by marker rather than by "last line", because the
           # script above prints warnings and notices of its own.
           transfer=$(printf '%s\n' "$output" | sed -n 's/^::transfer:://p' | tail -1)
