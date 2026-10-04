@@ -17,6 +17,10 @@ use Yiisoft\Db\Migration\RevertibleMigrationInterface;
  * guarded: if a prior run crashed midway (the first attempt died on the
  * bot_connection bigint), re-running finishes the job instead of failing on
  * the first duplicate object.
+ *
+ * The charset repair below the seed is not decoration — it is what makes the
+ * migration finish on a host that already has these tables. See
+ * repairCharsetForExistingTables() for the deadlock it breaks.
  */
 final class M240109000000_CreateNotificationInfrastructure implements RevertibleMigrationInterface
 {
@@ -33,6 +37,27 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
      * alters the database default later.
      */
     private const CHARSET = 'CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+
+    /**
+     * Every table this migration touches, for the charset repair.
+     *
+     * The same list M240121000000 converts, kept here as a literal rather than
+     * shared: a migration has to keep working on its own years from now, and a
+     * shared helper refactored in the meantime must not be able to stop a
+     * production host from migrating.
+     *
+     * @var string[]
+     */
+    private const TABLES = [
+        '{{%notification_queue}}',
+        '{{%notification_delivery}}',
+        '{{%notification_device}}',
+        '{{%notification_preference}}',
+        '{{%notification_template}}',
+        '{{%api_token}}',
+        '{{%bot_connection}}',
+        '{{%notification}}',
+    ];
 
     public function up(MigrationBuilder $b): void
     {
@@ -165,6 +190,10 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
         $this->safe(fn () => $b->createIndex('{{%bot_connection}}', 'uk_bot_user', ['user_id'], 'UNIQUE'));
         $this->safe(fn () => $b->addForeignKey('{{%bot_connection}}', 'fk_bot_user', 'user_id', '{{%user}}', 'id'));
 
+        // ---- Repair, then seed ----------------------------------------------
+        // Load-bearing order: the seed writes Bengali into notification_template.
+        $this->safe(fn () => $this->repairCharsetForExistingTables($b));
+
         // ---- Seed the template table with the compiled-in copy --------------
         $this->safe(fn () => $this->seedTemplates($b));
     }
@@ -182,6 +211,70 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
         $b->dropColumn('{{%notification}}', 'priority');
         $b->dropColumn('{{%notification}}', 'link');
         $b->dropColumn('{{%notification}}', 'event');
+    }
+
+    /**
+     * Bring any of these tables that already exist into utf8mb4 before
+     * anything writes Bengali into them.
+     *
+     * Why this has to live *here*, and not only in the later conversion
+     * migration, is the shape of the failure it was written for.
+     *
+     * A host that ran this migration before CHARSET existed has the tables
+     * already, in whatever the database default was — latin1 on cPanel. On
+     * such a host `createTable` reports "table exists" (errno 1050) and is
+     * skipped, so the columns stay latin1, and the seed below then dies:
+     *
+     *   SQLSTATE[22007] ... Incorrect string value: '\xE0\xA6\xB8...'
+     *   for column `notification_template`.`title` at row 1
+     *
+     * `safe()` swallows duplicate-object errors, not this one, so the
+     * migration aborts here — which means the conversion migration that was
+     * written to repair it (M240121000000) never gets to run, on this run or
+     * any future one. The host is stuck: every `yii migrate:up` dies at the
+     * same line, and the repair sits behind it in the queue.
+     *
+     * Repairing first breaks that loop. The conversion is guarded on the
+     * table's actual collation, so a fresh install (whose tables were just
+     * created as utf8mb4) pays nothing.
+     */
+    private function repairCharsetForExistingTables(MigrationBuilder $b): void
+    {
+        foreach (self::TABLES as $table) {
+            $db = $b->getDb();
+            $name = $this->tableName($db, $table);
+
+            $row = $db
+                ->createCommand('SHOW TABLE STATUS LIKE :name')
+                ->bindValue(':name', $name)
+                ->queryOne();
+
+            // queryOne() is null when the LIKE matches no table: a host that
+            // has not created this one yet must not fail the migration.
+            $collation = $row['Collation'] ?? null;
+            if ($collation === null || str_starts_with((string) $collation, 'utf8mb4')) {
+                continue;
+            }
+
+            $b->execute(sprintf(
+                'ALTER TABLE %s CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
+                $db->getQuoter()->quoteTableName($name),
+            ));
+        }
+    }
+
+    /**
+     * Expand a {{%name}} token into the real, prefixed table name.
+     *
+     * The connection applies the configured table prefix, so the token is
+     * reduced to its bare name first — asking the quoter to expand it would
+     * quote the braces.
+     */
+    private function tableName(\Yiisoft\Db\Connection\ConnectionInterface $db, string $table): string
+    {
+        $bare = str_replace(['{{%', '%}}', '{{', '}}'], '', $table);
+
+        return $db->getTablePrefix() . $bare;
     }
 
     private function seedTemplates(MigrationBuilder $b): void

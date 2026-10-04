@@ -24,6 +24,10 @@ use Yiisoft\Db\Migration\RevertibleMigrationInterface;
  * that fix went in. This migration performs the conversion the create path can
  * no longer perform.
  *
+ * This migration is the repair, not the fix: M240109 also converts before it
+ * seeds, because on a stuck host the seed aborts M240109 and `yii migrate:up`
+ * never reaches this file. That repair is what lets this one run at all.
+ *
  * `CONVERT TO CHARACTER SET` rewrites every text column and re-encodes its
  * contents. Tables caught before any Bengali was written convert cleanly; text
  * already mangled to `?` by a non-strict host is not recoverable here, which is
@@ -68,24 +72,30 @@ final class M240121000000_ConvertNotificationTablesToUtf8mb4 implements Revertib
      * Both conditions are checked before the statement rather than caught
      * afterwards: a table M240109 has not created yet must not fail this
      * migration, and neither must one that is already correct.
+     *
+     * The collation has to be read *by name*. `SHOW TABLE STATUS` returns Name
+     * as its first column, so the scalar form of this query handed back the
+     * table name — a string that never starts with "utf8mb4" — and every table
+     * was rebuilt on every run, including the ones already correct. On a
+     * large table that is a long ALTER holding a write lock for nothing.
      */
     private function convert(MigrationBuilder $b, string $table): void
     {
         $db = $b->getDb();
         $name = $this->tableName($db, $table);
 
-        $collation = $db
+        $row = $db
             ->createCommand('SHOW TABLE STATUS LIKE :name')
             ->bindValue(':name', $name)
-            ->queryScalar();
+            ->queryOne();
 
-        // queryScalar() is false when the LIKE matches nothing.
-        if ($collation === false || $collation === null) {
+        // queryOne() is null when the LIKE matches nothing.
+        $collation = $row['Collation'] ?? null;
+        if ($collation === null) {
             return;
         }
 
-        $collation = (string) $collation;
-        if (str_starts_with($collation, 'utf8mb4')) {
+        if (str_starts_with((string) $collation, 'utf8mb4')) {
             return;
         }
 
