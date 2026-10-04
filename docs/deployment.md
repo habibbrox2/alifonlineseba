@@ -5,6 +5,7 @@ Alif Tools একটি PHP 8.2+ / Yii 3 অ্যাপ্লিকেশন, �
 ## ১. রিকোয়্যারমেন্ট
 
 - PHP **8.2+** (ext: pdo_mysql, mbstring, openssl, filter)
+- PHP **ext-curl** — FCM/Telegram/Web Push পুশ পাঠানোর জন্য (cPanel-এ *Select PHP Version* → Extensions)। না থাকলে বা `disable_functions`-এ বন্ধ থাকলে সাইট স্বাভাবিক চলতে থাকে, শুধু পুশ চ্যানেল নিজে থেকে dead-letter হয়ে কারণটি কিউতে লিখে দেয় (নিচে §৮)।
 - MySQL 8 (বা 5.7+)
 - Apache + mod_rewrite
 - Composer (লোকালে বিল্ড করে আপলোড করলে হোস্টে Composer লাগে না)
@@ -57,7 +58,7 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ index.php [L]
 ```
 
-> **বিকল্প:** `.env`-এ `APP_HOST_PATH=/aliftools/public` সেট করলে সাব-ডিরেক্টরি হোস্টিং-ও (যেমন `example.com/tools/`) সাপোর্ট করে — বিস্তারিত `src/Environment.php`।
+> **বিকল্প:** `.env`-এ `APP_HOST_PATH=/aliftools/public` সেট করলে এরর-পেজের ট্রেস-লিংক সেই পাথে রিরাইট হয় (`config/common/di/error-handler.php`)। এটি **সাব-ডিরেক্টরি ইনস্টল সাপোর্ট করে না** — রুট, রুট ও অ্যাসেট URL সব ডোমেইন-রুটেই ধরে বানানো, তাই `example.com/tools/`-এ চালাতে চাইলে ডোমেইনের ডকরুট `public/`-এ পয়েন্ট করানোই একমাত্র সমর্থিত পথ (উপরের কেস A/B)।
 
 ## ৩. কনফিগারেশন
 
@@ -246,7 +247,7 @@ SSH না থাকলে একটি অস্থায়ী `cron-probe.php
 2. `runtime/logs/cron-notify.log`-এর লাস্ট লাইনে দেখুন — খালি হলে `Queue empty.`, কাজ হলে `Processed 12: 12 sent, 0 scheduled for retry, 0 dead-lettered.`
 3. **অ্যাডমিন প্যানেলে লগইন করে `/admin/notifications` খুলুন** — উপরের *Queue depth* কার্ড হলো যাচাইয়ের আসল জায়গা:
    - `Queued` সংখ্যা ক্রমশ বাড়ছে → ক্রন চলছে না (PATH/`cd` সমস্যা)।
-   - `Dead` বাড়ছে → চ্যানেল কনফিগ ভাঙা; ডেড-রো-রে বার্তা পড়ে দেখুন, যেমন *"Unknown channel …"* মানে ওই ইউজারের ডিভাইস টোকেন অবৈধ।
+   - `Dead` বাড়ছে → চ্যানেল কনফিগ ভাঙা; ডেড-রো-রে বার্তা পড়ে দেখুন, যেমন *"Unknown channel …"* মানে ওই ইউজারের ডিভাইস টোকেন অবৈধ, আর *"curl … is disabled or missing"* মানে হোস্টে ext-curl বন্ধ (§৮)।
    - `Queued` শূন্য থাকে → হেলথি।
 
 একবার টেস্ট করতে চাইলে ক্রন বাদ দিয়ে হাতে চালান:
@@ -293,7 +294,9 @@ cd /home/aliftools/alif_tools && php yii app:notification:work --limit=5 -v
 | Unknown database 'alif_tools' | §৪.১-এর ধাপে ডাটাবেস তৈরি হয়নি; প্রিফিক্সড নাম (যেমন `user_alif_tools`) হলে `DB_DSN`-এ সেটাই আছে কিনা দেখুন |
 | মাইগ্রেশন ব্যর্থ / অর্ধেক টেবিল | `php yii migrate:up --no-interaction` আবার চালান — Yii শুধু বাকি মাইগ্রেশন চালায়; নোটিফিকেশন মাইগ্রেশনটি (M240109) আংশিক-ব্যর্থ রানও সামলায়। আটকালে `SELECT * FROM migration`-এ শেষ সফল এন্ট্রি দেখে সেটার পরেরটি আলাদা করে পরীক্ষা করুন |
 | অ্যাসেট 404 | `public/assets/*` আপলোড হয়েছে কিনা দেখুন; CDN/থিম ক্যাশ পরিষ্কার করুন |
-| CSRF 419/422 | ডোমেইন HTTPS হলে কুকি `Secure` — সিস্টেম ঘড়ি ঠিক আছে কিনা দেখুন; সেশন পাথ writable কিনা চেক করুন |
+| CSRF 419/422 | ডোমেইন HTTPS হলে কুকি `Secure` — সিস্টেম ঘড়ি ঠিক আছে কি না দেখুন; সেশন পাথ writable কি না চেক করুন |
+| পুশ/FCM/Telegram কিছুই পাঠানো হচ্ছে না | `php yii app:fcm:check` (বা `app:webpush:check`) চালান। "curl … is disabled or missing" দিলে হোস্টে ext-curl বন্ধ — সেটি ছাড়াও পুরো সাইট চলে, শুধু পুশ কাজ করে না; `/admin/notifications`-এ সেই কারণ নিজেই dead-letter মেসেজে লেখা থাকে |
+| `/.well-known/assetlinks.json` 403 | `public/.htaccess`-এর `.well-known` ব্যতিক্রমটি আছে কি না দেখুন — ডটফাইল ব্লক ছাড়া রুটটি Apache-ই 403 দিয়ে দেয়, অ্যাপ কখনো দেখতেই পায় না। ব্যতিক্রম থাকলে 403 আসছে অ্যাপ থেকে, অর্থাৎ `TWA_FINGERPRINTS` সেট করা নেই |
 
 ## ৯. আপডেট ডিপ্লয়
 
@@ -462,7 +465,10 @@ Apache-ও একইভাবে সার্ভিসে থাকা দরক
 ### ১০.৮ TWA / assetlinks
 
 `/.well-known/assetlinks.json` যতক্ষণ `TWA_FINGERPRINTS` খালি, ততক্ষণ 403 দেয় (ইচ্ছাকৃত)।
-TWA ইনস্টল করলে অ্যাড্রেস বার দেখাবে — এটা ডোমেইন সমস্যা নয়, সাইনিং সার্টিফিকেটের
+`public/.htaccess` এই রুটটিকে ডটফাইল ব্লক থেকে বাদ দেয়, তাই Apache-তেও অনুরোধটি অ্যাপের
+কাছেই পৌঁছায় (ডটফাইল নিয়মটি সরাসরি `/.well-known/...`-কে 403 দিলে ফিঙ্গারপ্রিন্ট সেট
+করেও ভেরিফিকেশন কখনো সফল হত না)। তবে 403 মানে এখনও সেট করা হয়নি — TWA ইনস্টল করলে
+অ্যাড্রেস বার দেখাবে, এটা ডোমেইন সমস্যা নয়, সাইনিং সার্টিফিকেটের
 ফিঙ্গারপ্রিন্ট না থাকার কারণে। অ্যাপের সাইনিং সার্টিফিকেট থেকে ফিঙ্গারপ্রিন্ট বের করে `.env`-এ বসান:
 
 ```bash

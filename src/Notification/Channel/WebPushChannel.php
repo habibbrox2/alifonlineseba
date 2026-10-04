@@ -56,6 +56,11 @@ final class WebPushChannel
      */
     public function credentialsError(): string
     {
+        // First, so `app:webpush:check` reports the blocker instead of
+        // passing the key checks and dying on the send it attempts after.
+        if (($blocker = CurlSupport::blocker()) !== '') {
+            return $blocker;
+        }
         if (trim((string) \App\Env::get('VAPID_SUBJECT', '')) === '') {
             return 'VAPID_SUBJECT is not set (expected a mailto: or https: URI).';
         }
@@ -86,6 +91,12 @@ final class WebPushChannel
      */
     public function send(int $userId, array $payload): DeliveryResult
     {
+        // Before the credentials check: a host without curl cannot deliver
+        // this however good the VAPID keys are, and "keys not configured"
+        // sends the operator to the wrong file.
+        if (($blocker = CurlSupport::blocker()) !== '') {
+            return DeliveryResult::permanent($blocker);
+        }
         if (!$this->isAvailable()) {
             return DeliveryResult::permanent('VAPID keys not configured.');
         }
@@ -152,6 +163,9 @@ final class WebPushChannel
      */
     public function sendToSubscription(array $subscription, array $payload): DeliveryResult
     {
+        if (($blocker = CurlSupport::blocker()) !== '') {
+            return DeliveryResult::permanent($blocker);
+        }
         if (!$this->isAvailable()) {
             return DeliveryResult::permanent('VAPID keys not configured.');
         }

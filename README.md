@@ -17,6 +17,7 @@
 ## প্রয়োজনীয়তা
 
 - PHP 8.2+ (pdo_mysql, mbstring, openssl, filter)
+- PHP ext-curl — FCM/Telegram/Web Push পুশ পাঠানোর জন্য (ঐচ্ছিক: না থাকলে চ্যানেল নিজে থেকে dead-letter হয়, সাইট ও ইন-অ্যাপ নোটিফিকেশন অক্ষত থাকে)
 - Composer 2.x
 - Node 18+ / npm (অ্যাসেট বিল্ডের জন্য)
 - MySQL 8 (বা 5.7+)
@@ -86,6 +87,7 @@ vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8099-�
 ## ডকুমেন্টেশন
 
 - [ডিপ্লয়মেন্ট গাইড (শেয়ার্ড হোস্টিং)](docs/deployment.md)
+- [Shared Hosting রেডিনেস রিপোর্ট — কী করা হলো, কেন করা হলো](docs/shared-hosting-readiness-report.md)
 - [আর্কিটেকচার প্ল্যান](docs/architecture-plan.md)
 - [রেফারেন্স UI অ্যানালাইসিস](docs/reference-ui-analysis.md)
 - [পেমেন্ট ব্র্যান্ড গাইডলাইন (bKash, Nagad, Rocket)](docs/payment-brand-guidelines.md)

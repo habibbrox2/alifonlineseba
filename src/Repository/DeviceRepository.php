@@ -27,7 +27,15 @@ final class DeviceRepository
             ->bindValue(':t', $token)
             ->queryOne();
 
-        if ($existing === false) {
+        // `queryOne()` returns null for "no row", not false — see
+        // PushSubscriptionRepository::subscribe() and TemplateRenderer. Testing
+        // for `=== false` alone therefore never took this branch: a first-time
+        // registration fell into the update below, which matched no row, wrote
+        // nothing, and returned an id from a row that did not exist. The device
+        // was silently never registered, so FCM could not reach a phone that
+        // had just installed the app — reported as "push does not work" with
+        // nothing in any log.
+        if ($existing === null || $existing === false) {
             $this->db->createCommand()->insert('{{%notification_device}}', [
                 'user_id' => $userId,
                 'device_token' => $token,

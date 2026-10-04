@@ -38,6 +38,12 @@ final class FcmChannel
      */
     public function credentialsError(): string
     {
+        // Checked first so `app:fcm:check` names the real blocker. Without it
+        // the command reports every credential as fine and then fatals below
+        // on the OAuth fetch — a green check followed by an unexplained crash.
+        if (($blocker = CurlSupport::blocker()) !== '') {
+            return $blocker;
+        }
         if ((string) \App\Env::get('FIREBASE_PROJECT_ID', '') === '') {
             return 'FIREBASE_PROJECT_ID is not set.';
         }
@@ -67,6 +73,9 @@ final class FcmChannel
      */
     public function sendToToken(string $deviceToken, array $payload): DeliveryResult
     {
+        if (($blocker = CurlSupport::blocker()) !== '') {
+            return DeliveryResult::permanent($blocker);
+        }
         if (!$this->isAvailable()) {
             return DeliveryResult::permanent('FCM credentials not configured.');
         }
@@ -97,6 +106,11 @@ final class FcmChannel
      */
     public function send(int $userId, array $payload): DeliveryResult
     {
+        // Before the credentials check: without curl this host can never send,
+        // and saying so beats blaming credentials that are perfectly fine.
+        if (($blocker = CurlSupport::blocker()) !== '') {
+            return DeliveryResult::permanent($blocker);
+        }
         if (!$this->isAvailable()) {
             return DeliveryResult::permanent('FCM credentials not configured.');
         }

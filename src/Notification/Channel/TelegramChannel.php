@@ -27,6 +27,12 @@ final class TelegramChannel
      */
     public function send(int $userId, array $payload): DeliveryResult
     {
+        // Before the credentials check on purpose: on a host without curl the
+        // token is perfectly configured and the send would still fatal, and
+        // "bot token not configured" would be a lie the operator acts on.
+        if (($blocker = CurlSupport::blocker()) !== '') {
+            return DeliveryResult::permanent($blocker);
+        }
         if (!$this->isAvailable()) {
             return DeliveryResult::permanent('Telegram bot token not configured.');
         }

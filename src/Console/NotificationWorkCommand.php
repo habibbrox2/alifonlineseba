@@ -64,17 +64,29 @@ final class NotificationWorkCommand extends Command
             $userId = (int) ($job['user_id'] ?? 0);
             $payload = json_decode((string) ($job['payload'] ?? '{}'), true) ?: [];
 
-            $result = match ($channel) {
-                'fcm' => $this->fcm->send($userId, $payload),
-                'telegram' => $this->telegram->send($userId, $payload),
-                // One job, one user, every browser they have left watching —
-                // the fan-out is inside WebPushChannel, so this is the same
-                // shape as the two above.
-                'webpush' => $this->webpush->send($userId, $payload),
-                // Unknown/disabled channel: dead-letter with a clear reason
-                // instead of retrying something that can never succeed.
-                default => \App\Notification\Channel\DeliveryResult::permanent("Unknown channel '{$channel}'."),
-            };
+            try {
+                $result = $this->deliver($channel, $userId, $payload);
+            } catch (\Throwable $e) {
+                // A row that throws must not take the batch with it. This is
+                // the same isolation `app:bulk:work` already has, and the
+                // docblock above promises; without it a host that is missing a
+                // function (ext-curl disabled, openssl gone), a database blip,
+                // or a credentials file that will not parse kills the worker on
+                // its first job — every tick, forever, with nothing logged and
+                // the claimed rows stuck until the next reclaim. The row goes
+                // back for retry with the reason recorded, and the rest of the
+                // batch is still sent; `max_attempts` keeps a poison row from
+                // retrying for good.
+                $message = trim($e->getMessage());
+                $this->queue->markFailed(
+                    $id,
+                    $message !== '' ? $message : $e::class,
+                    retryable: true,
+                    backoffBase: $backoffBase,
+                );
+                $failed++;
+                continue;
+            }
 
             if ($result->ok) {
                 $this->queue->markSent($id, $result->providerMessageId, $result->latencyMs);
@@ -92,5 +104,26 @@ final class NotificationWorkCommand extends Command
 
         $io->success(sprintf('Processed %d: %d sent, %d scheduled for retry, %d dead-lettered.', count($jobs), $sent, $failed, $dead));
         return Command::SUCCESS;
+    }
+
+    /**
+     * One job, one channel driver — the part that is allowed to throw, and is
+     * caught by the loop above.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function deliver(string $channel, int $userId, array $payload): \App\Notification\Channel\DeliveryResult
+    {
+        return match ($channel) {
+            'fcm' => $this->fcm->send($userId, $payload),
+            'telegram' => $this->telegram->send($userId, $payload),
+            // One job, one user, every browser they have left watching —
+            // the fan-out is inside WebPushChannel, so this is the same
+            // shape as the two above.
+            'webpush' => $this->webpush->send($userId, $payload),
+            // Unknown/disabled channel: dead-letter with a clear reason
+            // instead of retrying something that can never succeed.
+            default => \App\Notification\Channel\DeliveryResult::permanent("Unknown channel '{$channel}'."),
+        };
     }
 }
