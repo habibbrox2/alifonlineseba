@@ -301,3 +301,321 @@ cd /home/aliftools/alif_tools && php yii app:notification:work --limit=5 -v
 2. `php yii migrate:up --no-interaction`
 3. `rm -rf runtime/cache`
 4. অপচ্ছন্ন করুন: `runtime/logs`, পুরনো `runtime/diag-*.php`
+
+## ১০. Cloudflare Tunnel দিয়ে ডিপ্লয় (allseba.online)
+
+শেয়ার্ড হোস্টিং না করে লোকাল মেশিন (XAMPP) থেকেই অ্যাপটি সরাসরি `https://allseba.online`-এ
+প্রকাশ করা যায়। Cloudflare Tunnel মানে কোনো পাবলিক IP বা পোর্ট ফোরওয়ার্ড লাগে না —
+cloudflared লোকাল Apache-এর দিকে একটি encrypted connection ধরে রাখে, আর Cloudflare-এর
+edge থেকে ট্রাফিক সেই connection-এর ভেতর দিয়ে আসে। TLS সার্টিফিকেট ও DNS দুটোই
+Cloudflare সামলায়, তাই Let's Encrypt বা কোনো সার্টিফিকেট ফাইলও লাগে না।
+
+### ১০.১ আর্কিটেকচার
+
+```
+ইন্টারনেট → Cloudflare Edge (TLS শেষ করে, HTTPS চালু) → tunnel (QUIC)
+           → cloudflared (লোকাল) → http://127.0.0.1:8080 → Apache (vhost)
+           → DocumentRoot public/ → index.php → Yii 3
+```
+
+### ১০.২ একবারের সেটআপ
+
+```bash
+# ১. টানেল তৈরি (ড্যাশবোর্ডে Tunnels থেকেও হয়; লগইন লাগবে)
+cloudflared tunnel create th-tools-onlinesheba
+
+# ২. ডোমেইন → টানেল (ক্লাউডফ্লেয়ারের জোনে CNAME, proxied)
+cloudflared tunnel route dns th-tools-onlinesheba allseba.online
+cloudflared tunnel route dns th-tools-onlinesheba www.allseba.online
+
+# ৩. লোকাল কনফিগ: ~/.cloudflared/config.yml
+#    ingress-এ হোস্টনেম → লোকাল সার্ভিস, শেষে অবশ্যই http_status:404
+# ৪. টানেল চালু
+cloudflared tunnel run th-tools-onlinesheba
+```
+
+`config.yml`:
+
+```yaml
+tunnel: df90132c-89ef-45d9-a680-eb59a954c476
+credentials-file: C:\Users\Alif\.cloudflared\df90132c-89ef-45d9-a680-eb59a954c476.json
+
+ingress:
+  - hostname: allseba.online
+    service: http://127.0.0.1:8080
+  - hostname: www.allseba.online
+    service: http://127.0.0.1:8080
+  - service: http_status:404
+```
+
+ভুল কনফিগ বুঝতে:
+
+```bash
+cloudflared tunnel ingress validate
+cloudflared tunnel ingress rule https://allseba.online
+```
+
+**ingress নিয়ম:** প্রতিটি হোস্টনেমের জন্য একটা নিয়ম, আর একদম শেষে ক্যাচ-অল
+`- service: http_status:404`। শেষেরটা না দিলে অজানা হোস্টনেমও লোকাল সার্ভিসে চলে যায়।
+
+### ১০.৩ Apache vhost
+
+টানেলের সামনে Apache লাগে, একটা আলাদা পোর্টে (এখানে `8080`) শুনতে হবে:
+
+```apache
+<VirtualHost *:8080>
+    ServerName allseba.online
+    ServerAlias www.allseba.online 127.0.0.1 localhost
+    DocumentRoot "D:/xampp-server/digital-sheba/public"
+
+    <Directory "D:/xampp-server/digital-sheba/public">
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog "logs/digital-sheba-error.log"
+    CustomLog "logs/digital-sheba-access.log" common
+</VirtualHost>
+```
+
+সেটআপ স্ক্রিপ্টটি একই কাজটি করে (idempotent, পুনরায় চালানো যায়):
+
+```bash
+php scripts/add-sheba-vhost.php
+```
+
+উপরের `ServerAlias`-এ ইচ্ছাকৃতভাবে পুরনো ডোমেইন `onlinesheba.broxlab.online`
+নেই — নতুন মেশিনে সেটা দরকারও হবে না। বিদ্যমান কনফিগে ওই alias এখনো আছে, যাতে
+আগে থেকে বানানো APK ইনস্টলগুলো ভাঙে না। নতুন APK সবাই `allseba.online`-এ চলে গেলে
+alias আর tunnel ingress — দুটোই সরিয়ে দিন।
+
+### ১০.৪ ⚠️ X-Forwarded-Proto মুছবেন না
+
+এটাই এই সেটআপে সবচেয়ে আস্ত ফাঁদ। cloudflared লোকাল Apache-এ `X-Forwarded-Proto: https`
+পাঠায়; অ্যাপের `App\Web\ForwardedProtoMiddleware` সেই হেডার থেকেই HTTPS বুঝে
+সেশন কুকিতে `Secure` বসায়। vhost-এ যদি লেখা থাকে
+
+```apache
+RequestHeader unset X-Forwarded-Proto
+```
+
+তাহলে অ্যাপ HTTP ভাবেই নিজেকে চিনবে → লগইন কুকি `Secure` ছাড়া যাবে →
+ব্রাউজার HTTPS সাইটে সেটা ফেরত পাঠাবে → প্রতিবার লগইন হারানো।
+
+অ্যাপ শুধু লুপব্যাক ঠিকানা (`127.0.0.1`, `::1`) থেকে আসা হেডার বিশ্বাস করে, আর cloudflared
+ঠিক লুপব্যাক থেকেই ডায়াল করে — তাই হেডারটা আসল সত্যিই।
+
+চেক:
+
+```bash
+curl -sI https://allseba.online/ | grep -i '^set-cookie'
+# ALIF_SESSION=...; Domain=allseba.online; Path=/; Secure; HttpOnly; SameSite=Lax
+```
+
+`Secure` না থাকলে vhost আবার দেখুন।
+
+### ১০.৫ `.env`
+
+```dotenv
+APP_ENV=prod
+APP_DEBUG=false
+APP_URL=https://allseba.online
+TWA_ORIGIN=https://allseba.online
+TWA_FINGERPRINTS=
+```
+
+`APP_URL` এখন পুরো অ্যাপে পাবলিক URL হিসেবে বসে — canonical/og:url, sitemap,
+রেফারাল লিংক, push deep link। ডোমেইন বদলালে এটা না বদলালে ইমেইল/শেয়ার লিংকে
+পুরনো ডোমেইন চলে যাবে। `TWA_ORIGIN` আর Android/TWA কনফিগ একসাথে বদলাতে হয়।
+
+### ১০.৬ চালু থাকা ও যাচাই
+
+```bash
+# টানেল সত্যিই আপস্ট্রিমে আছে কি না
+cloudflared tunnel info th-tools-onlinesheba
+# সব পেজ ঠিক ডোমেইন দিয়ে হিট করছে কি না
+curl -sI https://allseba.online/ | head -1
+curl -sI https://allseba.online/app | head -1
+```
+
+`httpd -f .../conf/httpd.conf -t` দিয়ে vhost সিনট্যাক্স, `cloudflared tunnel ingress validate`
+দিয়ে ingress যাচাই করুন — দুটোই আগে চালালে ভুল কনফিগে সার্ভার না চালু করাই ভালো।
+
+### ১০.৭ টানেল বুটে গেলে
+
+cloudflared কোনো Windows সার্ভিস হিসেবে ইনস্টল না করলে সেশন শেষ হলেই টানেল বন্ধ হয়ে যায়
+(ডোমেইন তখন 1033 / connection refused দেবে)। স্থায়ী করতে সার্ভিস হিসেবে ইনস্টল করুন:
+
+```powershell
+cloudflared service install <TOKEN>
+# বা সার্ভিস ছাড়াই রিবুটে বেঁচে থাকতে Task Scheduler-এ "At startup" ট্রিগার দিন
+```
+
+Apache-ও একইভাবে সার্ভিসে থাকা দরকার — নইলে টানেল health দেখাবে, কিন্তু আসল পেজ 502 দেবে।
+
+### ১০.৮ TWA / assetlinks
+
+`/.well-known/assetlinks.json` যতক্ষণ `TWA_FINGERPRINTS` খালি, ততক্ষণ 403 দেয় (ইচ্ছাকৃত)।
+TWA ইনস্টল করলে অ্যাড্রেস বার দেখাবে — এটা ডোমেইন সমস্যা নয়, সাইনিং সার্টিফিকেটের
+ফিঙ্গারপ্রিন্ট না থাকার কারণে। অ্যাপের সাইনিং সার্টিফিকেট থেকে ফিঙ্গারপ্রিন্ট বের করে `.env`-এ বসান:
+
+```bash
+php yii app:twa:fingerprints --cert=path/to/release.cer --package=online.broxlab.aliftools.twa
+```
+
+কমান্ডটি `TWA_ORIGIN` ও `TWA_FINGERPRINTS`-এর জন্য ঠিক-ঠিক লাইন ছাপে (`.env`-এ কপি করে
+ফাইলটা রিস্টার্ট দিন)। এরপর `https://allseba.online/.well-known/assetlinks.json`
+২০০ দিতে হবে, `twa/twa-manifest.json`-এর `host`/`startUrl` ও
+`android/app/build.gradle.kts`-এর `API_BASE_URL` একই ডোমেইনে থাকতে হবে — না হলে
+TWA অ্যাপ ডোমেইন ভালিডেশন ব্যর্থ করবে।
+
+## ১১. GitHub Actions দিয়ে অটো ডিপ্লয় (cPanel)
+
+`.github/workflows/deploy-cpanel.yml` — `main`-এ পুশ করলেই ধাপে ধাপে সাইট আপডেট হবে:
+
+```
+checkout → composer install → npm run build → php yii list (স্মোক টেস্ট)
+        → rsync (SSH) → rm runtime/cache → migrate:up
+        → maintenance.lock তোলা → curl হেলথ চেক → lock নামানো
+```
+
+বিল্ড **রানারে** হয়, সার্ভারে নয় — কারণ cPanel-এ composer/Node নাও থাকতে পারে, আর
+`vendor/` ও `public/assets/` দুটোই gitignore করা, তাই এগুলো লোকালে তৈরি হওয়ার কথা নয়।
+
+### ১১.১ একবারের cPanel প্রস্তুতি
+
+1. **SSH চালু করুন:** cPanel → *Security* → *SSH Access* → *Enable SSH* (অনেক হোস্টে টার্মিনাল UI আলাদা)।
+2. **SSH কী যোগ করুন:** একটি নতুন keypair বানান (শুধু পাবলিক অংশ cPanel-এ দিন):
+   ```bash
+   ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/cpanel_deploy
+   ```
+   *Manage SSH Keys* → *Import Key* → `~/.ssh/cpanel_deploy.pub`-এর **কনটেন্ট** পেস্ট করুন
+   (ফাইলটা আপলোড করবেন না, ভেতরের লাইনটাই দিতে হবে)।
+3. **ডিরেক্টরি ও symlink** (ম্যানুয়াল, একবারই):
+   ```bash
+   mkdir -p /home/<cpanel-user>/alif_tools
+   ln -s /home/<cpanel-user>/alif_tools/public /home/<cpanel-user>/public_html
+   ```
+   > উপরের নামে `alit_tools` লেখা হলে সেটাই ব্যবহার হবে — যে নামেই ডিরেক্টরি বানাবেন,
+   > `CPANEL_PATH`-এ হুবহু সেটাই দিতে হবে (কেস-সেনসিটিভ)।
+4. **`.env`** প্রথমবার হাতে দিন (বা নিচের `CPANEL_ENV_B64` সিক্রেট দিন):
+   ```bash
+   cd /home/<cpanel-user>/alif_tools
+   nano .env      # .env.example থেকে কপি করে DB_DSN/DB_USERNAME/DB_PASSWORD/APP_KEY বসান
+   chmod 600 .env
+   ```
+5. **ডাটাবেস ও মাইগ্রেশন** প্রথমবার: §৪.১-এর নিয়মে ডাটাবেস বানান, তারপর একবার
+   `php yii migrate:up --no-interaction` (এরপর থেকে মাইগ্রেশন workflow করে)।
+
+### ১১.২ Repository secrets ও variables
+
+*Settings → Secrets and variables → Actions*:
+
+**Secrets (আবশ্যক):**
+
+| নাম | মান |
+|---|---|
+| `CPANEL_HOST` | cPanel-এর *Connect via SSH*-এ দেখানো হোস্ট, যেমন `srv123.cpanel.net` (IP বদলায়, হোস্টনেম বদলায় না) |
+| `CPANEL_USER` | cPanel অ্যাকাউন্ট নাম (যেটা দিয়ে লগইন করেন) |
+| `CPANEL_SSH_KEY` | ওপরের ধাপে বানানো keypair-এর **প্রাইভেট** অংশ (`.pub` নয়) |
+
+**Secrets (ঐচ্ছিক):**
+
+| নাম | কাজ |
+|---|---|
+| `CPANEL_ENV_B64` | `base64 -w0 .env` — সার্ভারে `.env` না থাকলে **শুধু তখনই** বসবে; পরের ডিপ্লয়ে ছুঁবে না |
+
+**Variables:**
+
+| নাম | মান |
+|---|---|
+| `CPANEL_PATH` | **আবশ্যক** — অ্যাপের রুট পাথ, যেমন `/home/<cpanel-user>/alif_tools`। ডিফল্ট নেই: এই রিপোজিটরি public, তাই cPanel-এর ইউজারনেম ফাইলে বেঁচে থাকা ঠিক নয় |
+| `DEPLOY_HEALTH_URL` | ডিফল্ট `https://allseba.online` |
+| `CPANEL_SSH_PORT` | ডিফল্ট `22` (অনেক হোস্টে `2222`) |
+| `CPANEL_PHP_BIN` | খালি রাখলে হোস্টে `/opt/cpanel/ea-php82/...`, `/usr/local/bin/php`, `/usr/bin/php` ক্রমে খোঁজে |
+
+### ১১.৩ যা ডিপ্লয় করে, যা করে না
+
+> রিলেজে `runtime/` rsync-এর exclude-এ থাকে, তাই সার্ভারের লগ, ক্যাশ ও
+> `maintenance.lock` কখনো মুছে ফেলা হয় না — বিস্তারিত §১২-তে।
+
+- **`vendor/` ও `public/assets/` যায়** — gitignore করা, কিন্তু বিল্ড-এর আউটপুট, তাই দরকার।
+- **`.env`, `runtime/`, `storage/`, `cache/`, `web/receipts|deliverables|releases/` যায় না** —
+  এগুলো git-এ নেই, আর rsync-এর `--delete`-এ exclude করা পথ মুছে ফেলে **না**। ইউজারের আপলোড করা ফাইল, লগ ও সিক্রেট বেঁচে থাকে।
+- **মাইগ্রেশন প্রতিটি ডিপ্লয়ে** চলে (`migrate:up` ইডেমপোটেন্ট — নতুন নেই বলেই শুধু ছাড়ে)।
+- **Android/TWA/docs-only কমিট ডিপ্লয় ট্রিগার করে না** (`paths-ignore`)।
+
+### ১১.৪ যাচাই ও ট্রাবলশুটিং
+
+- Actions ট্যাবে লগ দেখুন — শেষে `https://…/ ও /login → 200` দুটোই দেখাতে হবে; না দেখালে ডিপ্লয় ব্যর্থ।
+- `workflow_dispatch` দিয়ে হাতে চালাতে পারেন।
+- **ফোল্ডার না পাল্টানো চাইলে** Actions-এ `environment: production`-এ manual approval বসান
+  (Settings → Environments → production → *Required reviewers*)।
+- সাইট খুলে খাঁচাই করে পুরোনো `vendor/` থেকে কোনো ফাইল বাকি থাকলে কী হয়:
+  Actions-এর সব ধাপ সবুজ, কিন্তু পেজে কিছু একটা পুরোনো — সম্ভবত `runtime/cache/` লেগে আছে; SSH-তে `rm -rf runtime/cache/*` করুন।
+- **`::error::Missing repository secrets`** মানে উপরের টেবিলের কোনো সিক্রেট সেট হয়নি।
+
+| সমস্যা | সমাধান |
+|---|---|
+| `Permission denied (publickey)` | cPanel-এ পাবলিক কী ইমপোর্ট হয়েছে কি না দেখুন; সিক্রেটে **প্রাইভেট** কী দিতে হবে |
+| `Host key verification failed` | হোস্টের IP বদলে গেছে — সেক্রেটে বর্তমান `CPANEL_HOST` আছে কি না দেখুন |
+| `::error::rsync is not installed on the host` | cPanel → *Software* → *Install PHP/Rsync* অথবা অন্য পদ্ধতি |
+| `No PHP binary found on the host` | `CPANEL_PHP_BIN` ভ্যারিয়েবলে সঠিক পথ দিন (`ls -d /opt/cpanel/ea-php*/root/usr/bin/php`) |
+| মাইগ্রেশন ব্যর্থ, সাইট 500 | `APP_DEBUG=true` করে ব্রাউজারে সরাসরি ত্রুটিটা দেখুন, তারপর আবার `false` |
+
+## ১২. Maintenance mode (`runtime/maintenance.lock`)
+
+rsync চলাকালীন সার্ভারের কোড ফোল্ডার সাময়িকভাবে অসম (সবচেয়ে ঝুঁকিপূর্ণ সময়: `vendor/`
+লেখা হচ্ছে, `.env`-সংশ্লিষ্ট কনফিগ ক্যাশ পুরোনো)। তখন ভিজিটর ফ্যাটাল এরর পেতেন। এই
+লক ফাইলটি থাকলে সাইট সেই বদলে একটা সুন্দর “আপডেট হচ্ছে” পেজ (HTTP 503) দেখায়।
+
+### ১২.১ কীভাবে কাজ করে
+
+```
+main-এ পুশ → runtime/maintenance.lock তৈরি → rsync → migrate
+           → lock মুছে যায় → / ও /login-এ 200 নিশ্চিত → গ্রিন
+```
+
+যেকোনো ধাপে deploy মরলে **lock থেকেই যায়** — ফলে অর্ধেক-হওয়া কোড ভিজিটরের সামনে
+এসে ফ্যাটাল এরর দেখায় না। পরে ঠিক করে আবার deploy করলেই সাইট ফিরে আসে।
+
+গেটটি `public/index.php`-এ **`src/bootstrap.php`-এর আগে** বসানো, কারণ ওখানেই
+`vendor/autoload.php` লোড হয় — আর ভাঙা deploy-এ সেটাই প্রথমে নেই। ফ্রেমওয়ার্কের
+ভেতরে gate বসালে ঠিক সেই মুহূর্তে 500 + স্ট্যাক-ট্রেসই দেখাত। পেজটি
+[public/maintenance.php](public/maintenance.php)-এ, সম্পূর্ণ স্বাধীন — কোনো
+autoload, `.env`, CSS বা ফন্ট নেই (মাঝাকালে `public/assets/` নিজেই আংশিক)।
+
+লক ফাইলের **প্রথম লাইন** পেজে দেখানো হয়, তাই লিখতে হবে:
+
+```bash
+printf '%s\n' "Deploying $(git rev-parse --short HEAD)" > runtime/maintenance.lock
+```
+
+### ১২.২ যা বন্ধ থাকে না
+
+- **স্ট্যাটিক অ্যাসেট** — `public/.htaccess` আসল ফাইল সরাসরি দেয়, তাই লোগো, CSS, ওয়েবম্যানিফেস্ট ডিপ্লয়ের সময়ও লোড হয় (ইচ্ছাকৃত — না হলে মানুষ হাফ-হাজার ছবি দেখবে)। ডেভ সার্ভারেও একই আচরণ: `public/index.php`-এর cli-server শাখাটি মেইনটেনেন্স গেটের **আগে** বসানো, তাই `php yii serve`-এও CSS/ফেভিকন আসল ফাইলই আসে, 503 নয়।
+- **কনসোল কমান্ড** — গেট শুধু HTTP-তে, তাই ক্রন ও `php yii` চলতেই থাকে।
+
+### ১২.৩ সাইট বন্ধ করে রাখতে হলে (হাতে)
+
+```bash
+cd /home/<cpanel-user>/alif_tools
+printf '%s\n' "Scheduled maintenance — back shortly" > runtime/maintenance.lock
+# শেষ করার সময়
+rm -f runtime/maintenance.lock
+```
+
+> `.env`-এর মতোই, লক ফাইলটি gitignore করা (`/runtime`) ও workflow-এর rsync exclude-এ
+> থাকে — `--delete` কখনো এটিকে সরাবে না, আর ভুল করে commit-ও হবে না।
+
+### ১২.৪ ব্যর্থ deploy থেকে সাইট বের করা
+
+workflow লাল হলে লক থেকে যায় — এটাই ইচ্ছাকৃত। সাইট ফিরিয়ে আনতে **দুইভাবে**:
+
+1. **আবার deploy** (সাধারণত এটাই ঠিক): Actions → *Deploy to cPanel* → *Run workflow*।
+2. **শুধু লক তুলে ফেলা** — Actions → *Deploy to cPanel* → *Run workflow* →
+   **clear_maintenance** টিক দিন। কোড বা ডেটাবেস না বদলে শুধু `runtime/maintenance.lock`
+   মুছে দেয়, তারপর সাইট 200 দিচ্ছে কি না দেখায়।
+
+> লক তুলে ফেলার পরও সাইট যদি না ওঠে, তাহলে আগের deploy-ই আংশিক — সেটি ঠিক না
+> করে লক ফেরত দিয়ে দিন, নাহলে ভিজিটররা ফ্যাটাল এরর দেখবে।

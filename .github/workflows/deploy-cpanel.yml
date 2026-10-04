@@ -1,0 +1,473 @@
+name: Deploy to cPanel
+
+# Ships a push to `main` to the cPanel shared host: build on the runner, push
+# with rsync over SSH, migrate, then smoke-test the live site.
+#
+# Why build here instead of on the server: composer is not guaranteed on cPanel
+# accounts, the host's PHP CLI is often the wrong version, and `npm run build`
+# needs Node + Tailwind. vendor/ and public/assets/ are gitignored, so they have
+# to be produced somewhere — the runner is the only place they are guaranteed.
+#
+# Maintenance mode: `runtime/maintenance.lock` goes up just before the transfer
+# and comes down once the live site answers, so visitors get a page instead of
+# a fatal error for the few seconds the tree is inconsistent. If a deploy dies
+# in between the lock deliberately stays, and the `clear_maintenance` dispatch
+# input takes the site back out by hand.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   CPANEL_HOST      e.g. srv123.cpanel.net   (the host from cPanel's "Connect
+#                       via SSH" box — the IP changes, the hostname does not)
+#   CPANEL_USER      cPanel account name, e.g. the username cPanel logs you in with
+#   CPANEL_SSH_KEY   the PRIVATE key of the public key added in
+#                     cPanel → SSH Access → Manage SSH Keys
+# Optional:
+#   CPANEL_ENV_B64   base64 of a .env to seed the server with, written only
+#                     when the server has no .env yet (never overwritten)
+#   CPANEL_PHP_BIN   PHP CLI on the host; auto-detected when unset
+# Variables (Settings → Secrets and variables → Actions → Variables):
+#   CPANEL_PATH      app root on the server, e.g. /home/user/allseba/alif_tools
+#   DEPLOY_HEALTH_URL  URL polled after deploy (default https://allseba.online)
+#   CPANEL_SSH_PORT  default 22
+
+on:
+  push:
+    branches: [main]
+    # Deploy for anything the running site actually depends on. Android/TWA and
+    # docs changes are real commits but do not change a PHP file on the host,
+    # and each deploy costs a full rsync + migration run.
+    paths-ignore:
+      - 'android/**'
+      - 'twa/**'
+      - 'docs/**'
+      - 'tests/**'
+      - '**/*.md'
+      - '.github/workflows/android-apk.yml'
+      - '.kilo/**'
+      - '.freebuff/**'
+  workflow_dispatch:
+    inputs:
+      clear_maintenance:
+        description: >-
+          Only remove runtime/maintenance.lock from the server and verify the
+          site. Use this when a deploy failed midway and left the site in
+          maintenance mode.
+        type: boolean
+        default: false
+
+# cancel-in-progress is deliberately false: an rsync cut in half leaves the
+# live site with a partial vendor/ and a broken autoloader. Let it finish.
+concurrency:
+  group: deploy-cpanel-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Read from a repository variable, never hardcoded here: this file lives in a
+  # public repository, and a cPanel username written into it is permanent once
+  # pushed — a free gift to anyone brute-forcing the panel. The app path also
+  # contains that username by construction (/home/<user>/...), so there is no
+  # version of this default worth keeping.
+  DEPLOY_PATH: ${{ vars.CPANEL_PATH }}
+  HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || 'https://allseba.online' }}
+
+jobs:
+  # Emergency exit from maintenance mode. A deploy that dies between "enable"
+  # and "disable" leaves the lock on purpose — a readable page beats a fatal
+  # error — but that also means someone has to take the site back out of
+  # maintenance by hand, and SSH plus a human is a slow way to do it.
+  clear-maintenance:
+    name: clear maintenance lock
+    if: inputs.clear_maintenance == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Set up SSH
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_USER: ${{ secrets.CPANEL_USER }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_SSH_PORT: ${{ vars.CPANEL_SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$CPANEL_SSH_KEY" | sed -e 's/\r$//' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$CPANEL_SSH_PORT" "$CPANEL_HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host cpanel
+            HostName $CPANEL_HOST
+            User $CPANEL_USER
+            Port $CPANEL_SSH_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Remove the lock and confirm the site is live
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          set -euo pipefail
+          if [ -f "$DEPLOY_PATH/runtime/maintenance.lock" ]; then
+            rm -f "$DEPLOY_PATH/runtime/maintenance.lock"
+            echo "::notice::maintenance.lock removed"
+          else
+            echo "No maintenance.lock — nothing to clear."
+          fi
+          REMOTE
+          # A cleared lock is not proof of a healthy site: if the deploy that
+          # failed left a half-written vendor/, the real error only shows up
+          # here. Report it rather than calling it green.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -L "$HEALTH_URL" || echo 000)
+          echo "$HEALTH_URL → $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::The lock is cleared but the site does not answer — the previous deploy is still broken."
+            exit 1
+          fi
+
+  deploy:
+    name: build & ship
+    # Skipped when the operator asked only to clear the lock. On a push,
+    # `inputs` is null and `null != true` is true, so normal deploys run.
+    if: inputs.clear_maintenance != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Gives the job a place to hang a manual approval or restrict it to
+    # `main` branches, without editing this file.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify deploy secrets are set
+        # A missing secret here would otherwise surface as "Permission denied
+        # (publickey)" twenty steps later.
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_USER: ${{ secrets.CPANEL_USER }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_PATH: ${{ vars.CPANEL_PATH }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "$CPANEL_HOST" ]  || missing+=(secret CPANEL_HOST)
+          [ -n "$CPANEL_USER" ]  || missing+=(secret CPANEL_USER)
+          [ -n "$CPANEL_SSH_KEY" ] || missing+=(secret CPANEL_SSH_KEY)
+          # CPANEL_PATH has no default on purpose — see the env block above.
+          [ -n "$CPANEL_PATH" ] || missing+=(variable CPANEL_PATH)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing repository ${missing[*]}"
+            echo "::error::CPANEL_PATH must be the app root, e.g. /home/<cpanel-user>/<app>."
+            exit 1
+          fi
+          echo "Deploying as $CPANEL_USER@$CPANEL_HOST:$DEPLOY_PATH"
+
+      # ---------------------------------------------------------------- build
+
+      - name: Install PHP dependencies
+        uses: shivammathur/setup-php@v2
+        with:
+          # composer.json requires "php": "8.2 - 8.5"; 8.2 is the lowest, which
+          # is what a shared host is most likely to run.
+          php-version: '8.2'
+          # ext-filter/mbstring/openssl ship with the extension and are not
+          # installable by name.
+          extensions: pdo_mysql
+          tools: composer:v2
+          coverage: none
+
+      - name: Composer install (production autoloader)
+        run: composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-progress
+
+      - name: Build front-end assets
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # package-lock.json is committed, so the cache key is stable.
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Smoke-test the console application
+        # A build that produces files but cannot boot Yii is worthless as a
+        # deploy: it would only be discovered after rsync, when migrations run.
+        # `yii` with no arguments lists commands, which loads the DI container
+        # and every config file without touching the database.
+        run: php yii list
+
+      # ------------------------------------------------------------------ ssh
+
+      - name: Set up SSH
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_USER: ${{ secrets.CPANEL_USER }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_SSH_PORT: ${{ vars.CPANEL_SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          # GitHub secrets are text; a CRLF or a missing trailing newline makes
+          # ssh refuse the key with a confusing "invalid format" error.
+          printf '%s\n' "$CPANEL_SSH_KEY" | sed -e 's/\r$//' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # ssh-keyscan pins nothing on its own — it trusts whatever answers on
+          # port 22. The host still has to be yours (see note in the summary),
+          # but this avoids shipping a hard-coded host key that goes stale.
+          ssh-keyscan -p "$CPANEL_SSH_PORT" "$CPANEL_HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host cpanel
+            HostName $CPANEL_HOST
+            User $CPANEL_USER
+            Port $CPANEL_SSH_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh -o BatchMode=yes cpanel 'echo "SSH OK: $(pwd)"'
+
+      # ---------------------------------------------------------------- deploy
+
+      - name: Prepare the deploy directory on the server
+        run: |
+          set -euo pipefail
+          # The heredoc below is quoted, so nothing is expanded locally and the
+          # remote shell does the expanding. That means secrets have to be
+          # handed over on the ssh command line — printf %q keeps a value with
+          # quotes, spaces or a `$` in it intact instead of breaking the shell.
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          b64_q=$(printf '%q' "$CPANEL_ENV_B64")
+          ssh cpanel "DEPLOY_PATH=$env_q CPANEL_ENV_B64=$b64_q bash -s" <<'REMOTE'
+          set -euo pipefail
+          mkdir -p "$DEPLOY_PATH"
+          # rsync is the one dependency this host really needs; every cPanel
+          # image has it, but say so plainly instead of "rsync: not found".
+          command -v rsync >/dev/null || { echo "::error::rsync is not installed on the host"; exit 1; }
+
+          # Writable state that lives only on the server. Created up front so
+          # the app never has to guess, and so a half-empty first deploy still
+          # comes up (uploads, logs, cache, VAPID/secret scratch space).
+          mkdir -p "$DEPLOY_PATH"/{runtime/cache,runtime/logs,storage,cache,web/receipts,web/deliverables,web/releases}
+          chmod 750 "$DEPLOY_PATH/runtime" "$DEPLOY_PATH/runtime/logs" "$DEPLOY_PATH/runtime/cache" "$DEPLOY_PATH/storage" "$DEPLOY_PATH/cache"
+
+          # Seed .env on a first deploy only. Overwriting it on every run
+          # would silently revert a rotated DB password or APP_KEY.
+          if [ ! -f "$DEPLOY_PATH/.env" ] && [ -n "${CPANEL_ENV_B64:-}" ]; then
+            printf '%s' "$CPANEL_ENV_B64" | base64 --decode > "$DEPLOY_PATH/.env.tmp"
+            chmod 600 "$DEPLOY_PATH/.env.tmp"
+            mv "$DEPLOY_PATH/.env.tmp" "$DEPLOY_PATH/.env"
+            echo "Seeded .env from the CPANEL_ENV_B64 secret."
+          fi
+
+          # Report the web-root wiring without touching it. The symlink is a
+          # one-time manual cPanel step; this only tells us if it drifted.
+          link=$(readlink -f "$HOME/public_html" 2>/dev/null || echo "(not a symlink)")
+          case "$link" in
+            "$DEPLOY_PATH"/*|"$DEPLOY_PATH") echo "public_html -> $link" ;;
+            *) echo "::warning::public_html resolves to $link, which is outside $DEPLOY_PATH" ;;
+          esac
+          REMOTE
+        env:
+          # Empty string, not unset, when the secret is absent: the remote
+          # script's `${CPANEL_ENV_B64:-}` guard treats both the same.
+          CPANEL_ENV_B64: ${{ secrets.CPANEL_ENV_B64 }}
+
+      # Placed *after* the prepare step on purpose: the lock lives in
+      # runtime/, which is one of the directories that step creates, and there
+      # is no reason to hold the site while the runner builds assets either.
+      - name: Enable maintenance mode
+        env:
+          REASON: Deploying ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          reason_q=$(printf '%q' "$REASON")
+          ssh cpanel "DEPLOY_PATH=$env_q REASON=$reason_q bash -s" <<'REMOTE'
+          set -euo pipefail
+          mkdir -p "$DEPLOY_PATH/runtime"
+          # First line of this file is shown on the page, so keep it to one
+          # line: a printf without a newline would leave the site's shell
+          # prompt glued to the reason on a failed deploy.
+          printf '%s\n' "$REASON" > "$DEPLOY_PATH/runtime/maintenance.lock"
+          chmod 640 "$DEPLOY_PATH/runtime/maintenance.lock"
+          echo "Maintenance mode on: $(cat "$DEPLOY_PATH/runtime/maintenance.lock")"
+          REMOTE
+
+      - name: Rsync the release
+        run: |
+          set -euo pipefail
+          # Excluded paths are ALSO protected from --delete, which is the whole
+          # trick: .env, uploads and logs are not in git, so deleting "files
+          # that vanished from the repo" must not touch them.
+          #
+          # vendor/ and public/assets/* are the opposite case: gitignored,
+          # built above, and therefore wanted here.
+          rsync \
+            --archive \
+            --compress \
+            --delete \
+            --delete-delay \
+            --partial \
+            --human-readable \
+            --info=stats2 \
+            --timeout=600 \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.kilo/' \
+            --exclude='.freebuff/' \
+            --exclude='node_modules/' \
+            --exclude='.env' \
+            --exclude='runtime/' \
+            --exclude='storage/' \
+            --exclude='cache/' \
+            --exclude='web/receipts/' \
+            --exclude='web/deliverables/' \
+            --exclude='web/releases/' \
+            --exclude='android/' \
+            --exclude='twa/' \
+            --exclude='docs/' \
+            --exclude='tests/' \
+            --exclude='scripts/__pycache__/' \
+            --exclude='codeception.yml' \
+            --exclude='psalm.xml' \
+            --exclude='rector.php' \
+            --exclude='package.json' \
+            --exclude='package-lock.json' \
+            --exclude='tailwind.config.js' \
+            --exclude='.gitignore' \
+            --exclude='README.md' \
+            --exclude='*.log' \
+            ./ cpanel:"$DEPLOY_PATH/"
+
+      # ------------------------------------------------------------ aftercare
+
+      - name: Clear cache and run migrations
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          php_q=$(printf '%q' "$CPANEL_PHP_BIN")
+          ssh cpanel "DEPLOY_PATH=$env_q CPANEL_PHP_BIN=$php_q bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          # cPanel's default php is often 7.x. Probe the usual locations and
+          # fall back, so a wrong guess is a one-line override instead of a
+          # failed deploy.
+          PHP_BIN=""
+          for candidate in "${CPANEL_PHP_BIN:-}" /opt/cpanel/ea-php82/root/usr/bin/php /usr/local/bin/php /usr/bin/php; do
+            if [ -n "$candidate" ] && command -v "$candidate" >/dev/null 2>&1; then
+              PHP_BIN="$candidate"
+              break
+            fi
+          done
+          [ -n "$PHP_BIN" ] || { echo "::error::No PHP binary found on the host"; exit 1; }
+          echo "Using $PHP_BIN ($("$PHP_BIN" -r 'echo PHP_VERSION;'))"
+
+          # Config and route caches are stale the moment a file changed, and a
+          # stale config cache is the documented cause of "404 on every page
+          # after a deploy".
+          rm -rf runtime/cache/*
+
+          # migrate:up is idempotent — a deploy with no new migrations prints
+          # "Nothing to migrate" and exits 0. --no-interaction keeps a
+          # confirmation prompt from hanging a cron-less shell.
+          "$PHP_BIN" yii migrate:up --no-interaction
+
+          # The migration run itself recompiles config through the cache dir, so
+          # wipe it again afterwards. (There is no `cache/flush` command in this
+          # app — `php yii list` shows only migrate:*, app:*, serve and friends —
+          # so deleting the directory is the flush.)
+          rm -rf runtime/cache/*
+
+          # Code lands as the deploying user, so it is already correct, but the
+          # dirs recreated by the prepare step are not — without this a later
+          # rsync run and Apache disagree about who may write the logs. The
+          # mkdir -p is not paranoia: `set -e` turns a chmod on a directory
+          # that is somehow absent into a red deploy for a site that is
+          # otherwise perfectly healthy.
+          mkdir -p runtime/cache runtime/logs storage cache
+          chmod 750 runtime runtime/cache runtime/logs storage cache
+          REMOTE
+        env:
+          CPANEL_PHP_BIN: ${{ vars.CPANEL_PHP_BIN }}
+
+      - name: Verify the site answers
+        # Migrations can succeed and the app can still 500 (a bad .env, a
+        # missing extension, a half-synced vendor dir). The deploy is only
+        # green when the public URL really serves.
+        #
+        # The lock is removed first, so this runs against the live site rather
+        # than the maintenance page — and any deploy failure up to here has
+        # already left the lock in place, which is what keeps a broken
+        # half-deploy from being served to visitors.
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          set -euo pipefail
+          rm -f "$DEPLOY_PATH/runtime/maintenance.lock"
+          echo "Maintenance mode off."
+          REMOTE
+
+          # Three tries: the first request after a deploy can still lose a race
+          # with an opcache reset or a Cloudflare fetch, and locking the site
+          # again over a single flaky 502 would be worse than waiting.
+          ok=1
+          for attempt in 1 2 3; do
+            for path in / /login; do
+              url="$HEALTH_URL$path"
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -L "$url" || echo 000)
+              echo "[attempt $attempt] $url → $code"
+              if [ "$code" != "200" ]; then
+                ok=0
+                break
+              fi
+            done
+            [ "$ok" = "1" ] && break
+            sleep 10
+          done
+
+          if [ "$ok" != "1" ]; then
+            echo "::error::The site does not answer after the deploy."
+            exit 1
+          fi
+
+      - name: Restore maintenance mode if the deploy failed
+        # Every step above is allowed to fail loudly; this one decides what a
+        # visitor sees afterwards. Anything that dies before the lock is
+        # cleared leaves it in place already — writing it again is idempotent —
+        # and a deploy that dies during the health check gets it back, so the
+        # site is never left serving a fatal error while someone looks at it.
+        if: failure()
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          set -euo pipefail
+          mkdir -p "$DEPLOY_PATH/runtime"
+          printf '%s\n' "Deploy failed — the site is being repaired." \
+            > "$DEPLOY_PATH/runtime/maintenance.lock"
+          chmod 640 "$DEPLOY_PATH/runtime/maintenance.lock"
+          echo "Maintenance mode restored; the site shows the maintenance page."
+          REMOTE
+          echo "::error::Deploy failed. The site is in maintenance mode — re-run this workflow to retry, or clear it with the 'clear_maintenance' dispatch input."
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deployed to cPanel"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Target | \`${{ secrets.CPANEL_USER }}@${{ secrets.CPANEL_HOST }}:${{ env.DEPLOY_PATH }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Health | $HEALTH_URL |"
+          } >> "$GITHUB_STEP_SUMMARY"
