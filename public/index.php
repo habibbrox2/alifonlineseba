@@ -19,9 +19,11 @@ $root = dirname(__DIR__);
 // looking like it.
 if (PHP_SAPI === 'cli-server') {
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+
     if (is_file(__DIR__ . $path)) {
         return false;
     }
+
     $_SERVER['SCRIPT_NAME'] = '/index.php';
 }
 
@@ -49,6 +51,7 @@ if (PHP_SAPI === 'cli-server') {
  */
 if (is_file($root . '/runtime/maintenance.lock')) {
     require __DIR__ . '/maintenance.php';
+    exit;
 }
 
 require_once $root . '/src/bootstrap.php';

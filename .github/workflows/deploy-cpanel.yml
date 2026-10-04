@@ -631,6 +631,177 @@ jobs:
         env:
           CPANEL_PHP_BIN: ${{ vars.CPANEL_PHP_BIN }}
 
+      - name: Check the host meets the app's requirements
+        # A deploy can be green while the site is wrong in ways only the host
+        # can tell you: PHP below 8.2, curl disabled on the account (push then
+        # dead-letters forever, silently), a runtime/ the web user cannot write
+        # (sessions and cache die), or a .htaccess that never landed in public/
+        # (Apache 404s every page). None of it is visible from outside, and all
+        # of it is what an operator needs first — so it goes to the log *and*
+        # the job summary.
+        #
+        # Report-only by design, same philosophy as the health check below:
+        # the remote script always exits 0 and the checks annotate rather than
+        # fail. The app is built to degrade (no ext-curl stops push, not the
+        # site), so a red X here on a serving site would only teach people to
+        # ignore red Xes.
+        run: |
+          set -euo pipefail
+          env_q=$(printf '%q' "$DEPLOY_PATH")
+          php_q=$(printf '%q' "$CPANEL_PHP_BIN")
+          output=$(ssh cpanel "DEPLOY_PATH=$env_q CPANEL_PHP_BIN=$php_q bash -s" <<'REMOTE'
+          set -uo pipefail
+
+          # Report, never fail: every branch below falls through to exit 0.
+          # A check that aborts the script is a check that loses the four
+          # results after it.
+          if [ ! -d "$DEPLOY_PATH" ]; then
+            echo "::error::Deploy path $DEPLOY_PATH does not exist — nothing to check."
+            echo "::check::Deploy path|$DEPLOY_PATH|error"
+            exit 0
+          fi
+          cd "$DEPLOY_PATH"
+
+          # The same probe the migration step uses, deliberately: the report
+          # must describe the binary that runs the app, not whichever PHP sits
+          # first on PATH (cPanel accounts routinely have several).
+          PHP_BIN=""
+          for candidate in "${CPANEL_PHP_BIN:-}" /opt/cpanel/ea-php82/root/usr/bin/php /usr/local/bin/php /usr/bin/php; do
+            if [ -n "$candidate" ] && command -v "$candidate" >/dev/null 2>&1; then
+              PHP_BIN="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$PHP_BIN" ]; then
+            echo "::error::No PHP CLI on this host — the migrations above already needed one, so this is a broken account."
+            echo "::check::PHP CLI|not found|error"
+            exit 0
+          fi
+          echo "::check::PHP CLI|$PHP_BIN|ok"
+
+          # --- PHP version -------------------------------------------------
+          # Compared by PHP itself rather than by sort/awk, so the check does
+          # not depend on coreutils the account may not ship.
+          version=$("$PHP_BIN" -r 'echo PHP_VERSION;' 2>/dev/null || true)
+          if [ -n "$version" ] && "$PHP_BIN" -r 'exit(version_compare(PHP_VERSION, "8.2.0", ">=") ? 0 : 1);' 2>/dev/null; then
+            echo "::check::PHP version|$version|ok"
+          else
+            echo "::check::PHP version|${version:-unreadable} (8.2+ required)|error"
+            echo "::error::This host runs PHP ${version:-unknown}; composer.json allows 8.2 - 8.5 and the code uses 8.2 syntax."
+          fi
+
+          # --- ext-curl ----------------------------------------------------
+          # What FCM, Telegram and Web Push send through. Its absence does not
+          # stop the site — the channels dead-letter with this very reason —
+          # hence a warning, not a failure. Both functions are checked because
+          # hosts disable them selectively.
+          if "$PHP_BIN" -r 'exit(function_exists("curl_init") && function_exists("curl_exec") ? 0 : 1);' 2>/dev/null; then
+            echo "::check::ext-curl|present|ok"
+          else
+            echo "::check::ext-curl|missing or disabled|warn"
+            echo "::warning::ext-curl is not usable here: FCM/Telegram/Web Push cannot send, and every queued push will dead-letter with that reason. cPanel -> Select PHP Version -> Extensions."
+          fi
+
+          # --- runtime writability -----------------------------------------
+          # Probed by actually writing, not by reading mode bits: under
+          # suPHP/CageFS the shell user, the file mode and the process serving
+          # the page are one account, and a directory that looks writable but
+          # is not is exactly the failure worth catching (sessions and cache
+          # break while every other check stays green).
+          writability=$("$PHP_BIN" -r '
+          $bad = [];
+          foreach (["runtime", "runtime/cache", "runtime/logs"] as $dir) {
+              if (!is_dir($dir)) { $bad[] = $dir . " (missing)"; continue; }
+              $file = $dir . "/.writetest-" . getmypid();
+              if (@file_put_contents($file, "1") === false) { $bad[] = $dir . " (not writable)"; }
+              else { @unlink($file); }
+          }
+          echo $bad === [] ? "writable" : implode(", ", $bad);
+          ' 2>/dev/null || true)
+          case "$writability" in
+            writable)
+              echo "::check::runtime writability|runtime, runtime/cache, runtime/logs|ok"
+              ;;
+            '')
+              echo "::check::runtime writability|probe could not run|error"
+              echo "::error::Could not probe runtime/ writability — PHP itself failed to run, treat the PHP CLI result above as suspect."
+              ;;
+            *)
+              echo "::check::runtime writability|$writability|error"
+              echo "::error::The web user cannot write to: $writability. Sessions, cache and logs will fail while the rest of the deploy looks healthy."
+              ;;
+          esac
+
+          # --- .htaccess ----------------------------------------------------
+          # Checked as text because this is the one layer no runtime probe can
+          # see: a missing front controller is invisible to every HTTP check
+          # until the site is already 404ing, and it is the single most common
+          # "deploy succeeded, site shows nothing" cause on Apache.
+          # -F keeps the patterns literal so a bracket or caret in a rule is
+          # matched as itself rather than read as a regex.
+          ht="public/.htaccess"
+          if [ ! -f "$ht" ]; then
+            echo "::check::.htaccess|missing from public/|error"
+            echo "::error::public/.htaccess is missing — Apache has no front controller and will 404 every page."
+          else
+            problems=""
+            grep -qF 'RewriteEngine On' "$ht" || problems="${problems}RewriteEngine missing; "
+            grep -qF 'RewriteRule ^ index.php [L]' "$ht" || problems="${problems}front controller missing; "
+            if [ -z "$problems" ]; then
+              echo "::check::.htaccess|front controller present|ok"
+            else
+              echo "::check::.htaccess|$problems|error"
+              echo "::error::public/.htaccess is incomplete ($problems) — Apache cannot route to the app."
+            fi
+
+            # Softer, and separate because it only costs the TWA handshake:
+            # without this exemption Apache answers 403 for
+            # /.well-known/assetlinks.json before the app ever sees it.
+            if grep -qF 'RewriteRule ^\.well-known' "$ht"; then
+              echo "::check::/.well-known exemption|present|ok"
+            else
+              echo "::check::/.well-known exemption|absent|warn"
+              echo "::warning::public/.htaccess has no /.well-known/ exemption — assetlinks.json 403s at Apache and TWA verification can never succeed."
+            fi
+          fi
+
+          exit 0
+          REMOTE
+          )
+          # Same reason the prepare step replays its output: command
+          # substitution hides everything, and a hidden ::error:: is an
+          # annotation nobody ever sees. The ::check:: markers are consumed
+          # below; everything else is for the log, verbatim.
+          printf '%s\n' "$output" | grep -v '^::check::' || true
+
+          checks=$(printf '%s\n' "$output" | sed -n 's/^::check:://p')
+          {
+            echo "### Host checks"
+            echo
+            echo "| Check | Value | Result |"
+            echo "|---|---|---|"
+            printf '%s\n' "$checks" | while IFS='|' read -r name value status; do
+              case "$status" in
+                ok)    result="✅ ok" ;;
+                warn)  result="⚠️ warning" ;;
+                error) result="❌ failed" ;;
+                *)     result="$status" ;;
+              esac
+              echo "| $name | $value | $result |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          errors=$(printf '%s\n' "$checks" | grep -c '|error$' || true)
+          warnings=$(printf '%s\n' "$checks" | grep -c '|warn$' || true)
+          if [ "$errors" -gt 0 ] || [ "$warnings" -gt 0 ]; then
+            echo "::warning::Host checks: $errors failed, $warnings warning(s) — see the summary table."
+          else
+            echo "::notice::Host checks: all clear."
+          fi
+        env:
+          CPANEL_PHP_BIN: ${{ vars.CPANEL_PHP_BIN }}
+
       - name: Verify the site answers
         # Advisory only. Migrations can succeed and the app can still 500 (a
         # bad .env, a missing extension, a half-synced vendor dir), so it is

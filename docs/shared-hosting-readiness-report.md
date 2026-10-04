@@ -132,6 +132,26 @@
 | `php yii list` (deploy workflow-এর স্মোক) | চলে |
 | সব পরিবর্তিত PHP ফাইল `php -l` | পরিষ্কার |
 
+### ৫.৩ Deploy workflow-এর নতুন post-deploy ধাপ
+
+[.github/workflows/deploy-cpanel.yml](../.github/workflows/deploy-cpanel.yml)-এ `Check the host meets the app's requirements` ধাপ — migrations-এর পরে, health check-এর আগে। হোস্টে চলে: **PHP ভার্সন (8.2+), ext-curl, runtime-এর writability (আসলে লেখার চেষ্টা করে), `.htaccess` (front controller + `/.well-known` ব্যতিক্রম)**। ফল লগের annotation ও job summary-র টেবিল — দুটোতেই।
+
+**ডিজাইন সিদ্ধান্ত:** ধাপটি রিপোর্ট-ওনলি — রিমোট স্ক্রিপ্ট সবসময় `exit 0`, চেকগুলো annotation দেয়, ধাপ ব্যর্থ করে না। কারণ অ্যাপ ইচ্ছাকৃতভাবে degradation করে (curl নেই → পুশ থামে, সাইট নয়) এবং deploy ভাঙলে বলার দায়িত্ব health check-এর — সবুজ সাইটে লাল ক্রস দেখলে মানুষ লাল ক্রস দেখতে শিখে ফেলে।
+
+**যাচাই (স্থানীয়ভাবে, স্ক্রিপ্ট ফাইল থেকে awk দিয়ে বের করে চালিয়ে):**
+
+| কেস | ফল |
+|---|---|
+| YAML parse (`yaml.safe_load`) | ধাপটি ঠিক migrations-এর পরে, health check-এর আগে; `env` সঠিক |
+| পজিটিভ (আসল প্রজেক্ট + আসল PHP) | ৬টি marker, exit 0; **`runtime/logs (missing)` সত্যিই ধরেছে** |
+| `DEPLOY_PATH` অনুপস্থিত | error marker + annotation, exit 0 |
+| curl disabled (`-d disable_functions`) | `ext-curl \| missing or disabled \| warn` + warning, exit 0 |
+| PHP 7.4 (fake binary) | `PHP version \| 7.4.33 (8.2+ required) \| error`, exit 0 |
+| `.htaccess` অসম্পূর্ণ / অনুপস্থিত | `RewriteEngine missing; front controller missing` \| error, `/.well-known` absent \| warn |
+| runner-অংশ | summary টেবিল ৬ সারিতে দাঁড়ায়, `::check::` marker বাদ দিয়ে বাকিটা লগে রিপ্লে হয়, `1 failed, 0 warning(s)` কাউন্ট সঠিক, exit 0 |
+
+`bash -n` দুই অংশেই পরিষ্কার; Unit স্যুট পরেও পাস (179 tests / 2189 assertions)।
+
 ---
 
 ## ৬. যা ব্যর্থ বা চালানো যায়নি
@@ -158,7 +178,7 @@
 
 ## ৮. পরিবর্তিত ফাইল
 
-**সংশোধিত (৮টি):**
+**সংশোধিত (৯টি):**
 
 - `public/.htaccess`
 - `src/Console/NotificationWorkCommand.php`
@@ -168,6 +188,7 @@
 - `src/Repository/DeviceRepository.php`
 - `README.md`
 - `docs/deployment.md`
+- `.github/workflows/deploy-cpanel.yml` (§৫.৩)
 
 **নতুন (৫টি):**
 
@@ -177,13 +198,13 @@
 - `tests/Functional/NotificationWorkerIsolationTest.php`
 - `docs/shared-hosting-readiness-report.md` (এই ফাইল)
 
-`git diff --stat`: **8 files changed, 122 insertions(+), 24 deletions(-)** (নতুন ৫টি ফাইল আলাদা — তাই `git status`-এ `??` দেখাবে)।
+`git diff --stat`: আগের ১৩টি ফাইল (৮টি সংশোধিত + ৫টি নতুন, 760 insertions) **কমিট `75b552f`-এ তোলা হয়েছে**; বর্তমান pending পরিবর্তন একটিমাত্র ফাইল — `.github/workflows/deploy-cpanel.yml` (**171 insertions**)।
 
 ---
 
 ## ৯. পরবর্তী পরামর্শ
 
 1. `php yii app:hosting:check` ডায়াগনস্টিক কমান্ড — ext-curl, runtime/cache/storage writability, PHP ভার্সন, open_basedir, `.htaccess` একসাথে যাচাই।
-2. deploy workflow-এ post-deploy ধাপ — হোস্টের শর্ত যাচাই করে সামারিতে রিপোর্ট।
+2. ~~deploy workflow-এ post-deploy ধাপ~~ — **সম্পন্ন**, §৫.৩ দেখুন (`Check the host meets the app's requirements`)।
 3. `queryOne() === false` প্যাটার্নের পুনরাবৃত্তি রোধ — স্ট্যাটিক গার্ড বা rector rule (কারণ একই বাগ তিনবার এসেছে)।
 4. সাব-ডিরেক্টরি ইনস্টল সমর্থন (প্রয়োজন থাকলে)।

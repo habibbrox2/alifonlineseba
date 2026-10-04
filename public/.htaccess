@@ -1,50 +1,41 @@
-# TH Tools — Apache shared-hosting entry point (place inside public/).
-# If your host cannot point DocumentRoot at public/, see docs/deployment.md
-# for the root-level wrapper variant.
-
 Options -Indexes
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # /.well-known/ has no file behind it for assetlinks.json — that path is a
-    # route the app answers (AssetLinksAction). It is exempted here, *before*
-    # the dotfile deny below, because that deny matches any path starting with
-    # a dot and would answer 403 before the front controller ever saw it. The
-    # failure is invisible in development (the built-in server has no .htaccess)
-    # and reads exactly like "TWA is not configured" in production, so a real
-    # file landing here later — cPanel AutoSSL's HTTP validation drops one under
-    # .well-known/acme-challenge/ — still has to be served by Apache.
-    RewriteRule ^\.well-known(/|$) - [E=DOTFILE_ALLOWED:1]
+    # Allow well-known resources to reach Apache/front controller.
+    RewriteRule ^\.well-known/(?:assetlinks\.json|acme-challenge/) - [E=ALLOW_WELL_KNOWN:1]
 
-    # Dotfiles are denied whether or not they exist on disk, and this runs
-    # *before* the file passthrough below — the other order serves a stray
-    # .env or .user.ini sitting in the web root as plain text.
-    RewriteCond %{ENV:DOTFILE_ALLOWED} !1
-    RewriteRule (^\.|/\.) - [F]
+    # Block dotfiles except explicitly allowed .well-known resources.
+    RewriteCond %{ENV:ALLOW_WELL_KNOWN} !=1
+    RewriteRule (^|/)\. - [F,L]
 
-    # Allow direct access to real files/dirs (assets, favicon, etc.)
+    # Serve existing files/directories directly.
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
+    RewriteRule ^ - [END]
 
-    # Front controller
-    RewriteRule ^ index.php [L]
+    # Yii front controller.
+    RewriteRule ^ index.php [END]
 </IfModule>
 
-# Backstop for the rule above: if mod_rewrite is missing (the <IfModule> is
-# then skipped entirely) the deny never runs, and a dotfile in the web root is
-# served as text. Authorization does not depend on rewriting, so this holds.
+# Defense-in-depth for dotfiles.
 <FilesMatch "^\.">
     Require all denied
 </FilesMatch>
 
 <IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+    AddOutputFilterByType DEFLATE \
+        text/html \
+        text/css \
+        application/javascript \
+        application/json \
+        image/svg+xml
 </IfModule>
 
 <IfModule mod_expires.c>
     ExpiresActive On
+
     ExpiresByType text/css "access plus 7 days"
     ExpiresByType application/javascript "access plus 7 days"
     ExpiresByType image/svg+xml "access plus 30 days"
