@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Repository\UserRepository;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Definitions\Exception\NotFoundException;
@@ -77,11 +77,11 @@ final class AdminListTest extends \Codeception\Test\Unit
         assertSame($sortedDesc, $descBalances, 'Descending balance order must be numeric too.');
     }
 
-    public function testTransactionSortByReference(): void
+    public function testOrderSortByReference(): void
     {
-        $repo = new TransactionRepository($this->db);
+        $repo = new ServiceOrderRepository($this->db);
 
-        $asc = $repo->all(1, 20, '', '', 'reference', 'asc');
+        $asc = $repo->adminList(1, 20, '', '', 'reference', 'asc');
         $refs = array_map(static fn (array $r): string => (string) $r['reference'], $asc['rows']);
         $sorted = $refs;
         sort($sorted);
@@ -89,9 +89,11 @@ final class AdminListTest extends \Codeception\Test\Unit
 
         // The whitelist falls back to the default column but keeps the requested
         // direction, so compare against an explicit id sort at the same direction.
-        $invalid = $repo->all(1, 20, '', '', '1=1; --', 'asc');
+        // The injected `1=1; --` is the point: the ORDER BY is built from the
+        // whitelist, never from what the request asked for.
+        $invalid = $repo->adminList(1, 20, '', '', '1=1; --', 'asc');
         assertSame(
-            array_column($repo->all(1, 20, '', '', 'id', 'asc')['rows'], 'id'),
+            array_column($repo->adminList(1, 20, '', '', 'id', 'asc')['rows'], 'id'),
             array_column($invalid['rows'], 'id'),
             'Invalid sort column must fall back to the default column.',
         );

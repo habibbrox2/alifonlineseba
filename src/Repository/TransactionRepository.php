@@ -4,33 +4,156 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
-use App\Service\StatusPresenter;
 use Yiisoft\Db\Connection\ConnectionInterface;
 
+/**
+ * The money ledger: one row per movement of money, ever, for anybody.
+ *
+ * This table used to be the service-order queue as well, which meant "show me
+ * the money" and "show me the work" were the same query with a different
+ * filter. They are separate concerns now — orders live in
+ * {@see ServiceOrderRepository} — and what is left here is a strictly
+ * append-only record.
+ *
+ * Append-only is the design constraint, not a description of the code: no
+ * method here updates or deletes a row. A correction is a *new* pair of
+ * entries (the wrong one and its reversal), which is why `LedgerService`
+ * exists as the only way to write to this table and why every entry carries
+ * the balance before and after it. Reading the ledger top to bottom therefore
+ * reproduces the balance exactly, and an operator disputing a figure can be
+ * answered with the rows rather than with an assertion.
+ *
+ * `user_id` and `admin_id` are separate columns rather than one polymorphic
+ * `owner_id`: an account is one or the other, and a single indexed column per
+ * role is what makes "this admin's earnings" a cheap query instead of a scan
+ * with a type filter.
+ */
 final class TransactionRepository
 {
+    // --- Ledger entry types -------------------------------------------------
+    //
+    // A closed set, because these are the words a support answer is written
+    // with. `type` is indexed and filtered on, so adding a value here without
+    // a label is how a page ends up showing a raw English slug to a Bengali
+    // speaker.
+
+    /** Money arriving from outside: a recharge the platform verified. */
+    public const TYPE_TOPUP = 'topup';
+
+    /** Money leaving a user to pay for an order. */
+    public const TYPE_ORDER_DEBIT = 'order_debit';
+
+    /** Money arriving for an admin who approved an order. */
+    public const TYPE_ORDER_CREDIT = 'order_credit';
+
+    /** Money returning to a user because an order was cancelled or failed. */
+    public const TYPE_ORDER_REFUND = 'order_refund';
+
+    /** An admin taking their earnings out. Debited at request time. */
+    public const TYPE_WITHDRAW = 'withdraw';
+
+    /** A rejected withdrawal being given back to the admin. */
+    public const TYPE_WITHDRAW_REFUND = 'withdraw_refund';
+
+    /** A referral bonus, paid from the platform rather than from an order. */
+    public const TYPE_REFERRAL_BONUS = 'referral_bonus';
+
+    /** A deliberate, audited correction made by a super-admin. */
+    public const TYPE_ADJUSTMENT = 'adjustment';
+
+    public const DIRECTION_CREDIT = 'credit';
+    public const DIRECTION_DEBIT = 'debit';
+
+    /** type => [Bengali label, badge class]. */
+    private const TYPE_MAP = [
+        self::TYPE_TOPUP => ['রিচার্জ', 'badge-success'],
+        self::TYPE_ORDER_DEBIT => ['অর্ডার খরচ', 'badge-info'],
+        self::TYPE_ORDER_CREDIT => ['অর্ডার আয়', 'badge-success'],
+        self::TYPE_ORDER_REFUND => ['অর্ডার ফেরত', 'badge-warning'],
+        self::TYPE_WITHDRAW => ['উত্তোলন', 'badge-neutral'],
+        self::TYPE_WITHDRAW_REFUND => ['উত্তোলন বাতিল', 'badge-warning'],
+        self::TYPE_REFERRAL_BONUS => ['রেফারেল বোনাস', 'badge-success'],
+        self::TYPE_ADJUSTMENT => ['সমন্বয়', 'badge-neutral'],
+    ];
+
+    /**
+     * Every type, in the order a person reads their own statement: what came
+     * in, what went out, what came back.
+     */
+    public const TYPES = [
+        self::TYPE_TOPUP,
+        self::TYPE_REFERRAL_BONUS,
+        self::TYPE_ORDER_DEBIT,
+        self::TYPE_ORDER_REFUND,
+        self::TYPE_WITHDRAW,
+        self::TYPE_WITHDRAW_REFUND,
+        self::TYPE_ADJUSTMENT,
+        self::TYPE_ORDER_CREDIT,
+    ];
+
     public function __construct(private readonly ConnectionInterface $db) {}
 
-    public function create(array $row): int
+    /**
+     * Append one entry.
+     *
+     * `direction` is derived from the amount rather than passed separately: a
+     * caller that writes `amount = 50, direction = debit` has made a mistake,
+     * and the only defence would be a second thing to keep in step. The sign
+     * convention is that `$amount` is always a positive magnitude and the
+     * direction says which way it went.
+     *
+     * @param array{
+     *     type: string,
+     *     amount: float,
+     *     user_id?: int|null,
+     *     admin_id?: int|null,
+     *     service_order_id?: int|null,
+     *     direction?: string,
+     *     description?: string|null,
+     *     balance_before?: float|null,
+     *     balance_after?: float|null,
+     *     reference?: string|null,
+     *     status?: string,
+     *     metadata?: array<string, mixed>|null,
+     * } $row
+     *
+     * @return int the new entry's id
+     */
+    public function record(array $row): int
     {
         $now = date('Y-m-d H:i:s');
+        $amount = abs((float) $row['amount']);
+        $direction = (string) ($row['direction'] ?? self::DIRECTION_CREDIT);
+
         $this->db->createCommand()->insert('{{%transaction}}', [
-            'user_id' => (int) $row['user_id'],
-            'service_id' => isset($row['service_id']) ? (int) $row['service_id'] : null,
-            'reference' => $row['reference'],
-            'amount' => $row['amount'],
-            'status' => $row['status'] ?? 'pending',
-            'metadata' => isset($row['metadata']) ? json_encode($row['metadata'], JSON_UNESCAPED_UNICODE) : null,
+            'user_id' => isset($row['user_id']) && $row['user_id'] !== null ? (int) $row['user_id'] : null,
+            'admin_id' => isset($row['admin_id']) && $row['admin_id'] !== null ? (int) $row['admin_id'] : null,
+            'service_id' => null,
+            'service_order_id' => isset($row['service_order_id']) && $row['service_order_id'] !== null
+                ? (int) $row['service_order_id']
+                : null,
+            'type' => (string) $row['type'],
+            'direction' => $direction,
+            'amount' => $amount,
+            'reference' => (string) ($row['reference'] ?? self::generateReference()),
+            'status' => (string) ($row['status'] ?? 'completed'),
+            'description' => isset($row['description']) ? mb_substr((string) $row['description'], 0, 255) : null,
+            'balance_before' => isset($row['balance_before']) ? (float) $row['balance_before'] : null,
+            'balance_after' => isset($row['balance_after']) ? (float) $row['balance_after'] : null,
+            'metadata' => isset($row['metadata']) && $row['metadata'] !== []
+                ? json_encode($row['metadata'], JSON_UNESCAPED_UNICODE)
+                : null,
             'created_at' => $now,
             'updated_at' => $now,
         ])->execute();
+
         return (int) $this->db->getLastInsertID();
     }
 
-    public function update(int $id, array $values): void
+    /** AL-prefixed hex reference, so a ledger row is quotable over the phone. */
+    public static function generateReference(): string
     {
-        $values['updated_at'] = date('Y-m-d H:i:s');
-        $this->db->createCommand()->update('{{%transaction}}', $values, ['id' => $id])->execute();
+        return 'ALTX' . strtoupper(bin2hex(random_bytes(5)));
     }
 
     public function findById(int $id): ?array
@@ -39,560 +162,252 @@ final class TransactionRepository
             ->createCommand('SELECT * FROM {{%transaction}} WHERE [[id]] = :id LIMIT 1')
             ->bindValue(':id', $id)
             ->queryOne();
+
         return $row === false ? null : $row;
     }
 
     /**
-     * Every existing row behind a set of ids, in the order asked for.
+     * The signed amount of an entry, as a balance delta.
      *
-     * One query for the whole selection, because a bulk settle over a page of
-     * twenty orders that called `findById()` twenty times is twenty round trips
-     * to learn twenty things it could have been told once. Ids that do not
-     * exist are simply absent from the result — the caller maps the difference
-     * back to "skipped" rather than being handed a hole.
-     *
-     * No `service_id` filter here on purpose: telling a top-up apart from a
-     * service request is a *policy* decision about what may be settled, and it
-     * belongs with the service that settles, not hidden inside the fetch. See
-     * `ServiceRequestAdminService::settleMany()`.
-     *
-     * @param int[] $ids
-     *
-     * @return array<int, array<string, mixed>> id => row
+     * Everything that sums money reads this rather than `amount`, because a
+     * statement that adds up the magnitudes is a statement that is always
+     * positive and therefore always wrong.
      */
-    public function findManyByIds(array $ids): array
+    public static function signed(array $row): float
     {
-        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
-        if ($ids === []) {
-            return [];
-        }
+        $amount = abs((float) ($row['amount'] ?? 0));
 
-        // The placeholders are generated from the id count and numbered, so
-        // nothing a client sends can reach the SQL text — and they have to be
-        // distinct names, because two binds called `:id` would collapse into
-        // one and quietly search for a single id.
-        $placeholders = [];
-        $params = [];
-        foreach (array_values($ids) as $i => $id) {
-            $placeholders[] = ':id' . $i;
-            $params[':id' . $i] = $id;
-        }
+        return ((string) ($row['direction'] ?? self::DIRECTION_CREDIT)) === self::DIRECTION_DEBIT
+            ? -$amount
+            : $amount;
+    }
 
-        $rows = $this->db
-            ->createCommand(
-                'SELECT * FROM {{%transaction}} WHERE [[id]] IN (' . implode(', ', $placeholders) . ')',
-            )
-            ->bindValues($params)
-            ->queryAll();
+    public static function typeLabel(string $type): string
+    {
+        return self::TYPE_MAP[$type][0] ?? $type;
+    }
 
-        $byId = [];
-        foreach ($rows as $row) {
-            $byId[(int) $row['id']] = $row;
-        }
-
-        return $byId;
+    public static function typeBadge(string $type): string
+    {
+        return self::TYPE_MAP[$type][1] ?? 'badge-neutral';
     }
 
     /**
-     * The export view of a selection: the same rows `findManyByIds()` returns,
-     * plus the two joined names a spreadsheet needs and cannot derive.
+     * A user's own statement — the account "লেনদেন" page.
      *
-     * Deliberately a second method rather than a widened `findManyByIds()`.
-     * The join is the only difference, and the settle must not start carrying
-     * it: a bulk settle over a page of orders is asking "what may I change
-     * about these rows", and every extra joined column is another way for the
-     * two uses of the same table to drift into disagreeing about what a row is.
+     * Scoped by `user_id` in the WHERE clause rather than filtered afterwards,
+     * so an entry belonging to an admin's wallet can never reach a customer's
+     * page even if a filter were dropped.
      *
-     * Both joins are LEFT because a transaction can outlive the row it points
-     * at — an export of a deleted user's order should still export it, with a
-     * blank name, rather than silently shorten the file.
-     *
-     * @param int[] $ids
-     *
-     * @return array<int, array<string, mixed>> id => row
+     * @return array{rows: array<int, array<string, mixed>>, total: int}
      */
-    public function findManyForExport(array $ids): array
+    public function forUser(int $userId, int $page, int $perPage, string $type = ''): array
     {
-        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
-        if ($ids === []) {
-            return [];
-        }
-
-        $placeholders = [];
-        $params = [];
-        foreach ($ids as $i => $id) {
-            $placeholders[] = ':id' . $i;
-            $params[':id' . $i] = $id;
-        }
-
-        $rows = $this->db
-            ->createCommand(
-                'SELECT {{%transaction}}.*, {{%service}}.[[name]] AS service_name,'
-                . ' {{%user}}.[[username]], {{%user}}.[[phone]]'
-                . ' FROM {{%transaction}}'
-                . ' LEFT JOIN {{%user}} ON {{%user}}.[[id]] = {{%transaction}}.[[user_id]]'
-                . ' LEFT JOIN {{%service}} ON {{%service}}.[[id]] = {{%transaction}}.[[service_id]]'
-                . ' WHERE {{%transaction}}.[[id]] IN (' . implode(', ', $placeholders) . ')',
-            )
-            ->bindValues($params)
-            ->queryAll();
-
-        $byId = [];
-        foreach ($rows as $row) {
-            $byId[(int) $row['id']] = $row;
-        }
-
-        return $byId;
-    }
-
-    /** A request the given user owns, or null — the ownership check for every status action. */
-    public function findOwned(int $id, int $userId): ?array
-    {
-        $row = $this->db
-            ->createCommand('SELECT * FROM {{%transaction}} WHERE [[id]] = :id AND [[user_id]] = :uid LIMIT 1')
-            ->bindValues([':id' => $id, ':uid' => $userId])
-            ->queryOne();
-        return $row === false ? null : $row;
-    }
-
-    /**
-     * Read the JSON metadata column as an array.
-     *
-     * @return array<string, mixed>
-     */
-    public static function metadata(array $row): array
-    {
-        $raw = $row['metadata'] ?? null;
-        if ($raw === null || $raw === '') {
-            return [];
-        }
-        if (is_string($raw)) {
-            $raw = json_decode($raw, true);
-        }
-        return is_array($raw) ? $raw : [];
-    }
-
-    /**
-     * Attach a deliverable file to a service request, replacing any previous one.
-     *
-     * The path is a plain column rather than an entry in `metadata` because it
-     * is queried, not just displayed: the admin queue lists "has file / no file"
-     * and the history page polls for the moment it flips. JSON in a metadata blob
-     * cannot be indexed or filtered without a full scan of every request.
-     *
-     * The caller must delete the *previous* file from disk itself — this method
-     * only touches the database and has no idea where the bytes live. A
-     * deliberate contract, so a failed upload can never destroy the deliverable
-     * that is already there.
-     *
-     * @param array{path: string, name: string, mime: string, size: int} $file
-     * @param int $adminId who uploaded it, for audit.
-     */
-    public function attachDeliverable(int $id, array $file, int $adminId): void
-    {
-        $this->update($id, [
-            'deliverable_path' => $file['path'],
-            'deliverable_name' => $file['name'],
-            'deliverable_mime' => $file['mime'],
-            'deliverable_size' => (int) $file['size'],
-            'deliverable_uploaded_at' => date('Y-m-d H:i:s'),
-            'deliverable_uploaded_by' => $adminId,
-        ]);
-    }
-
-    /**
-     * Clear a request's deliverable columns and hand back the row as it was, so
-     * the caller can delete the now-orphaned file.
-     *
-     * Clearing is a real operation, not a status: an admin can attach a file to
-     * a request and then decide it was the wrong scan, while the request is
-     * still `processing`.
-     *
-     * @return array<string, mixed>|null the previous row, or null when there was nothing to clear.
-     */
-    public function detachDeliverable(int $id): ?array
-    {
-        $before = $this->findById($id);
-        if ($before === null || ($before['deliverable_path'] ?? null) === null) {
-            return null;
-        }
-
-        $this->update($id, [
-            'deliverable_path' => null,
-            'deliverable_name' => null,
-            'deliverable_mime' => null,
-            'deliverable_size' => null,
-            'deliverable_uploaded_at' => null,
-            'deliverable_uploaded_by' => null,
-        ]);
-
-        return $before;
-    }
-
-    /**
-     * The rows behind a set of ids, for one user, in the order asked for.
-     *
-     * This is what makes the history page's live update a *single* request per
-     * tick instead of fifteen: a page shows up to `PER_PAGE` requests, each of
-     * which is its own Alpine component, and one endpoint per row would mean a
-     * burst of near-identical queries every few seconds.
-     *
-     * Scoped by `user_id` in the WHERE clause, not filtered afterwards — same
-     * reason as `findOwned()`: a request belonging to somebody else must be
-     * invisible, not merely discarded, or the endpoint becomes a way to confirm
-     * that an id exists.
-     *
-     * @param int[] $ids
-     * @return array<int, array<string, mixed>> keyed by id, absent ids omitted.
-     */
-    public function watchForUser(array $ids, int $userId): array
-    {
-        $ids = array_values(array_unique(array_filter(
-            array_map(static fn ($id): int => (int) $id, $ids),
-            static fn (int $id): bool => $id > 0,
-        )));
-
-        if ($ids === []) {
-            return [];
-        }
-
-        // The list is rendered into the HTML and echoed back by the client, so it
-        // is untrusted input by the time it gets here. Only integers survive the
-        // cast above and the placeholders are built from the cleaned list, so
-        // there is nothing left to inject.
-        $placeholders = [];
+        $where = 't.[[user_id]] = :uid';
         $params = [':uid' => $userId];
-        foreach ($ids as $index => $id) {
-            $key = ':id' . $index;
-            $placeholders[] = $key;
-            $params[$key] = $id;
+        if ($type !== '' && in_array($type, self::TYPES, true)) {
+            $where .= ' AND t.[[type]] = :ty';
+            $params[':ty'] = $type;
         }
 
-        $rows = $this->db
-            ->createCommand(
-                'SELECT {{%transaction}}.*, {{%service}}.[[name]] AS service_name'
-                . ' FROM {{%transaction}}'
-                . ' LEFT JOIN {{%service}} ON {{%service}}.[[id]] = {{%transaction}}.[[service_id]]'
-                . ' WHERE {{%transaction}}.[[user_id]] = :uid'
-                . ' AND {{%transaction}}.[[id]] IN (' . implode(', ', $placeholders) . ')'
-            )
-            ->bindValues($params)
-            ->queryAll();
-
-        $keyed = [];
-        foreach ($rows as $row) {
-            $keyed[(int) $row['id']] = $row;
-        }
-
-        return $keyed;
+        return $this->paged($where, $params, $page, $perPage);
     }
-
-    /** Move a request to a new status, merging (not replacing) its metadata. */
-    public function setStatus(int $id, string $status, array $metadata = []): void
-    {
-        $values = ['status' => $status];
-        if ($metadata !== []) {
-            $existing = self::metadata($this->findById($id) ?? []);
-            $values['metadata'] = json_encode($metadata + $existing, JSON_UNESCAPED_UNICODE);
-        }
-        $this->update($id, $values);
-    }
-
-    public function forUser(int $userId, int $page, int $perPage, string $status = ''): array
-    {
-        $where = '{{%transaction}}.[[user_id]] = :uid';
-        $params = [':uid' => $userId];
-        if ($status !== '') {
-            $where .= ' AND {{%transaction}}.[[status]] = :st';
-            $params[':st'] = $status;
-        }
-        return $this->pagedJoin($where, $params, $page, $perPage);
-    }
-
-    /** Whitelisted sortable columns => SQL column expression. */
-    public const SORTABLE = [
-        'id' => '{{%transaction}}.[[id]]',
-        'reference' => '{{%transaction}}.[[reference]]',
-        'amount' => '{{%transaction}}.[[amount]]',
-        'status' => '{{%transaction}}.[[status]]',
-        'created_at' => '{{%transaction}}.[[created_at]]',
-        'username' => '{{%user}}.[[username]]',
-    ];
 
     /**
-     * The admin order queue.
+     * One admin's ledger.
      *
-     * `$servicesOnly` exists because a service request and a top-up live in
-     * the same table: `service_id` is what tells them apart. The operator
-     * working a queue of requests to deliver does not want recharge rows
-     * interleaved with them — those have their own admin page — so the queue
-     * can be narrowed to rows that actually have a service on them.
+     * @return array{rows: array<int, array<string, mixed>>, total: int}
      */
-    public function all(
-        int $page,
-        int $perPage,
-        string $status = '',
-        string $q = '',
-        string $sort = 'id',
-        string $dir = 'desc',
-        bool $servicesOnly = false,
-    ): array {
-        $where = '1=1';
-        $params = [];
-        if ($servicesOnly) {
-            $where .= ' AND {{%transaction}}.[[service_id]] IS NOT NULL';
+    public function forAdmin(int $adminId, int $page, int $perPage, string $type = ''): array
+    {
+        $where = 't.[[admin_id]] = :aid';
+        $params = [':aid' => $adminId];
+        if ($type !== '' && in_array($type, self::TYPES, true)) {
+            $where .= ' AND t.[[type]] = :ty';
+            $params[':ty'] = $type;
         }
-        if ($status !== '') {
-            $where .= ' AND {{%transaction}}.[[status]] = :st';
-            $params[':st'] = $status;
-        }
-        if ($q !== '') {
-            $where .= ' AND ({{%transaction}}.[[reference]] LIKE :q OR {{%user}}.[[username]] LIKE :q OR {{%user}}.[[phone]] LIKE :q)';
-            $params[':q'] = "%{$q}%";
-        }
-        return $this->pagedJoin($where, $params, $page, $perPage, $sort, $dir);
+
+        return $this->paged($where, $params, $page, $perPage);
     }
 
-    private function pagedJoin(string $where, array $params, int $page, int $perPage, string $sort = 'id', string $dir = 'desc'): array
+    /**
+     * The platform-wide ledger, for a super-admin.
+     *
+     * @return array{rows: array<int, array<string, mixed>>, total: int}
+     */
+    public function all(int $page, int $perPage, string $type = '', string $q = ''): array
+    {
+        $where = ['1=1'];
+        $params = [];
+
+        if ($type !== '' && in_array($type, self::TYPES, true)) {
+            $where[] = 't.[[type]] = :ty';
+            $params[':ty'] = $type;
+        }
+        if (trim($q) !== '') {
+            $where[] = '(t.[[reference]] LIKE :q OR cu.[[username]] LIKE :q OR au.[[username]] LIKE :q)';
+            $params[':q'] = '%' . trim($q) . '%';
+        }
+
+        return $this->paged(implode(' AND ', $where), $params, $page, $perPage);
+    }
+
+    /**
+     * Totals for one owner, by type.
+     *
+     * @return array<string, array{credit: float, debit: float, count: int}>
+     */
+    public function totalsForUser(int $userId): array
+    {
+        return $this->totals('t.[[user_id]] = :id', [':id' => $userId]);
+    }
+
+    /** @return array<string, array{credit: float, debit: float, count: int}> */
+    public function totalsForAdmin(int $adminId): array
+    {
+        return $this->totals('t.[[admin_id]] = :id', [':id' => $adminId]);
+    }
+
+    /**
+     * Every admin's earnings, for the super-admin's staff screen.
+     *
+     * Summed in SQL rather than by paging through `forAdmin()` per person: the
+     * answer to "who has earned what" is one grouped query, and looping would
+     * make the staff page cost one round trip per admin on it.
+     *
+     * @return array<int, array{id: int, username: string, earned: float, withdrawn: float, orders: int}>
+     */
+    public function adminEarnings(): array
+    {
+        $rows = $this->db
+            ->createCommand(
+                'SELECT u.[[id]], u.[[username]],'
+                . " COALESCE(SUM(CASE WHEN t.[[type]] = 'order_credit' THEN t.[[amount]] ELSE 0 END), 0) AS earned,"
+                . " COALESCE(SUM(CASE WHEN t.[[type]] = 'withdraw' THEN t.[[amount]] ELSE 0 END), 0) AS withdrawn,"
+                . " COALESCE(SUM(CASE WHEN t.[[type]] = 'order_credit' THEN 1 ELSE 0 END), 0) AS orders"
+                . ' FROM {{%user}} u'
+                . ' LEFT JOIN {{%transaction}} t ON t.[[admin_id]] = u.[[id]]'
+                . " WHERE u.[[role]] IN ('admin','staff','superadmin')"
+                . ' GROUP BY u.[[id]], u.[[username]]'
+                . ' ORDER BY earned DESC',
+            )
+            ->queryAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'id' => (int) $row['id'],
+                'username' => (string) $row['username'],
+                'earned' => (float) $row['earned'],
+                'withdrawn' => (float) $row['withdrawn'],
+                'orders' => (int) $row['orders'],
+                // What is still in the admin's wallet, as the ledger sees it.
+                'available' => (float) $row['earned'] - (float) $row['withdrawn'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array{rows: array<int, array<string, mixed>>, total: int}
+     */
+    private function paged(string $where, array $params, int $page, int $perPage): array
     {
         $offset = max(0, ($page - 1) * $perPage);
+
         $total = (int) $this->db
-            ->createCommand(
-                'SELECT COUNT(*) FROM {{%transaction}} LEFT JOIN {{%user}} ON {{%user}}.[[id]] = {{%transaction}}.[[user_id]] WHERE ' . $where
-            )
+            ->createCommand("SELECT COUNT(*) FROM {{%transaction}} t WHERE {$where}")
             ->bindValues($params)
             ->queryScalar();
+
         $rows = $this->db
             ->createCommand(
-                'SELECT {{%transaction}}.*, {{%service}}.[[name]] AS service_name, {{%user}}.[[username]], {{%user}}.[[phone]]'
-                . ' FROM {{%transaction}}'
-                . ' LEFT JOIN {{%user}} ON {{%user}}.[[id]] = {{%transaction}}.[[user_id]]'
-                . ' LEFT JOIN {{%service}} ON {{%service}}.[[id]] = {{%transaction}}.[[service_id]]'
-                . ' WHERE ' . $where
-                . ' ORDER BY ' . $this->sortClause($sort, $dir)
-                . " LIMIT {$perPage} OFFSET {$offset}"
+                'SELECT t.*, cu.[[username]] AS user_name, au.[[username]] AS admin_name,'
+                . ' o.[[reference]] AS order_reference, s.[[name]] AS service_name'
+                . ' FROM {{%transaction}} t'
+                . ' LEFT JOIN {{%user}} cu ON cu.[[id]] = t.[[user_id]]'
+                . ' LEFT JOIN {{%user}} au ON au.[[id]] = t.[[admin_id]]'
+                . ' LEFT JOIN {{%service_order}} o ON o.[[id]] = t.[[service_order_id]]'
+                . ' LEFT JOIN {{%service}} s ON s.[[id]] = o.[[service_id]]'
+                . " WHERE {$where}"
+                . ' ORDER BY t.[[id]] DESC'
+                . " LIMIT {$perPage} OFFSET {$offset}",
             )
             ->bindValues($params)
             ->queryAll();
+
         return ['rows' => $rows, 'total' => $total];
     }
 
     /**
-     * The dashboard's "recent searches" panel.
-     *
-     * A "search" here is a service request — that is the only thing in this
-     * product that carries a query, and it already stores the submitted input in
-     * its metadata, so there is no second table to keep in sync and nothing to
-     * log on a path that might not run.
-     *
-     * Each row comes back ready for the template: the service slug (so the
-     * re-run button can link straight back to the form), the label of the field
-     * the user actually typed into, and the value itself. Top-ups have no
-     * service and are filtered out — a recharge is not a search.
-     *
-     * @return array<int, array<string, mixed>>
+     * @param array<string, mixed> $params
+     * @return array<string, array{credit: float, debit: float, count: int}>
      */
-    public function recentSearches(int $userId, int $limit = 5): array
+    private function totals(string $where, array $params): array
     {
-        $limit = max(1, min(20, $limit));
-
         $rows = $this->db
             ->createCommand(
-                'SELECT {{%transaction}}.[[id]], {{%transaction}}.[[reference]],'
-                . ' {{%transaction}}.[[status]], {{%transaction}}.[[created_at]],'
-                . ' {{%transaction}}.[[metadata]], {{%service}}.[[name]] AS service_name,'
-                . ' {{%service}}.[[slug]] AS service_slug'
-                . ' FROM {{%transaction}}'
-                . ' INNER JOIN {{%service}} ON {{%service}}.[[id]] = {{%transaction}}.[[service_id]]'
-                . ' WHERE {{%transaction}}.[[user_id]] = :uid'
-                . ' AND {{%service}}.[[deleted_at]] IS NULL'
-                . ' ORDER BY {{%transaction}}.[[id]] DESC'
-                . " LIMIT {$limit}"
+                'SELECT t.[[type]],'
+                . " COALESCE(SUM(CASE WHEN t.[[direction]] = 'credit' THEN t.[[amount]] ELSE 0 END), 0) AS credit,"
+                . " COALESCE(SUM(CASE WHEN t.[[direction]] = 'debit' THEN t.[[amount]] ELSE 0 END), 0) AS debit,"
+                . ' COUNT(*) AS c'
+                . " FROM {{%transaction}} t WHERE {$where}"
+                . ' GROUP BY t.[[type]]',
             )
-            ->bindValue(':uid', $userId)
+            ->bindValues($params)
             ->queryAll();
 
-        $searches = [];
+        $totals = [];
         foreach ($rows as $row) {
-            $metadata = self::metadata($row);
-            $input = is_array($metadata['input'] ?? null) ? $metadata['input'] : [];
-
-            // The first configured field is the one users think of as "the
-            // search" (NID, mobile, username…). Fall back to whatever is there
-            // so a request made with an unusual form still renders a value.
-            $label = null;
-            $value = null;
-            foreach ($input as $key => $raw) {
-                $value = (string) $raw;
-                if ($value !== '') {
-                    $label = (string) $key;
-                    break;
-                }
-            }
-            if ($value === null || $value === '') {
-                continue; // Nothing to re-run; skip rather than show a dead row.
-            }
-
-            $searches[] = [
-                'id' => (int) $row['id'],
-                'reference' => (string) $row['reference'],
-                'service_name' => (string) ($row['service_name'] ?? 'সার্ভিস'),
-                'service_slug' => (string) ($row['service_slug'] ?? ''),
-                'field' => (string) $label,
-                'value' => $value,
-                'status' => (string) $row['status'],
-                'created_at' => (string) $row['created_at'],
+            $totals[(string) $row['type']] = [
+                'credit' => (float) $row['credit'],
+                'debit' => (float) $row['debit'],
+                'count' => (int) $row['c'],
             ];
         }
 
-        return $searches;
+        return $totals;
     }
 
     /**
-     * Build a safe "expr dir" ORDER BY fragment from the SORTABLE whitelist.
-     */
-    private function sortClause(string $sort, string $dir): string
-    {
-        $col = self::SORTABLE[$sort] ?? self::SORTABLE['id'];
-        $direction = strtolower($dir) === 'asc' ? 'ASC' : 'DESC';
-        return "{$col} {$direction}";
-    }
-
-    /**
-     * The user's requests grouped by the *service category* the ordered
-     * service belongs to — the order-type chips on the history page
-     * (ফুল NID / লোকেশন / বায়োমেট্রিক / …). Top-ups have no service, so they
-     * land under `null` and are excluded; the "all" chip counts from statusCounts().
+     * Headline numbers for the account page: how much came in, how much went
+     * out, and how many entries there are.
      *
-     * @return array<string, int> slug => count
+     * @return array{total: int, credit: float, debit: float}
      */
-    public function categoryCounts(int $userId): array
-    {
-        $rows = $this->db
-            ->createCommand(
-                'SELECT {{%service_category}}.[[slug]] AS slug, COUNT(*) AS c'
-                . ' FROM {{%transaction}}'
-                . ' JOIN {{%service}} ON {{%service}}.[[id]] = {{%transaction}}.[[service_id]]'
-                . ' JOIN {{%service_category}} ON {{%service_category}}.[[id]] = {{%service}}.[[category_id]]'
-                . ' WHERE {{%transaction}}.[[user_id]] = :uid'
-                . ' GROUP BY {{%service_category}}.[[slug]]'
-            )
-            ->bindValue(':uid', $userId)
-            ->queryAll();
-
-        $counts = [];
-        foreach ($rows as $row) {
-            $counts[(string) $row['slug']] = (int) $row['c'];
-        }
-        return $counts;
-    }
-
-    /**
-     * Filter a user's requests by service-category slug (order-type chip).
-     */
-    public function forUserByCategory(int $userId, int $page, int $perPage, string $categorySlug): array
-    {
-        $where = '{{%transaction}}.[[user_id]] = :uid'
-            . ' AND {{%service_category}}.[[slug]] = :slug';
-        $params = [':uid' => $userId, ':slug' => $categorySlug];
-        return $this->pagedJoin($where, $params, $page, $perPage);
-    }
-
-    /** The user's orders of ONE service (the per-service table under the order form). */
-    public function forUserByService(int $userId, int $serviceId, int $page = 1, int $perPage = 5): array
-    {
-        $where = '{{%transaction}}.[[user_id]] = :uid'
-            . ' AND {{%transaction}}.[[service_id]] = :sid';
-        $params = [':uid' => $userId, ':sid' => $serviceId];
-        return $this->pagedJoin($where, $params, $page, $perPage);
-    }
-
-    /**
-     * How many requests the user has in each status, keyed by status.
-     *
-     * @return array<string, int>
-     */
-    public function statusCounts(int $userId): array
-    {
-        $rows = $this->db
-            ->createCommand(
-                'SELECT [[status]], COUNT(*) AS [[c]] FROM {{%transaction}}'
-                . ' WHERE [[user_id]] = :uid GROUP BY [[status]]'
-            )
-            ->bindValue(':uid', $userId)
-            ->queryAll();
-
-        $counts = [];
-        foreach ($rows as $row) {
-            $counts[(string) $row['status']] = (int) $row['c'];
-        }
-        return $counts;
-    }
-
     public function statsForUser(int $userId): array
     {
         return $this->stats('[[user_id]] = :uid', [':uid' => $userId]);
     }
 
-    /** Completed-request count for the dashboard "সফল অনুসন্ধান" card. */
-    public function completedCount(int $userId): int
-    {
-        $value = $this->db
-            ->createCommand(
-                "SELECT COUNT(*) FROM {{%transaction}} WHERE [[user_id]] = :uid AND [[status]] = 'completed'"
-            )
-            ->bindValue(':uid', $userId)
-            ->queryScalar();
-
-        return (int) $value;
-    }
-
+    /** @return array{total: int, credit: float, debit: float} */
     public function statsAll(): array
     {
         return $this->stats('1=1', []);
     }
 
     /**
-     * Service requests still waiting on an operator — `pending` or
-     * `processing`, and only rows that actually have a service on them.
-     *
-     * This is the admin dashboard's "work waiting" number, and it deliberately
-     * excludes top-ups: those have their own queue (`TopupRepository::stats()`)
-     * and their own card, so counting both here would let one backlog inflate
-     * the other card and hide the queue that is actually unattended.
-     *
-     * @return array{count: int, amount: float}
+     * @param array<string, mixed> $params
+     * @return array{total: int, credit: float, debit: float}
      */
-    public function openServiceOrders(): array
-    {
-        $row = $this->db
-            ->createCommand(
-                'SELECT COUNT(*) AS c, COALESCE(SUM([[amount]]),0) AS amount FROM {{%transaction}}'
-                . ' WHERE [[service_id]] IS NOT NULL AND [[status]] IN (:pending, :processing)'
-            )
-            ->bindValues([
-                ':pending' => StatusPresenter::PENDING,
-                ':processing' => StatusPresenter::PROCESSING,
-            ])
-            ->queryOne();
-
-        return [
-            'count' => (int) ($row['c'] ?? 0),
-            'amount' => (float) ($row['amount'] ?? 0),
-        ];
-    }
-
     private function stats(string $where, array $params): array
     {
         $row = $this->db
             ->createCommand(
-                "SELECT COUNT(*) AS total, COALESCE(SUM([[amount]]),0) AS amount FROM {{%transaction}} WHERE {$where}"
+                "SELECT COUNT(*) AS total,"
+                . " COALESCE(SUM(CASE WHEN [[direction]] = 'credit' THEN [[amount]] ELSE 0 END), 0) AS credit,"
+                . " COALESCE(SUM(CASE WHEN [[direction]] = 'debit' THEN [[amount]] ELSE 0 END), 0) AS debit"
+                . " FROM {{%transaction}} WHERE {$where}",
             )
             ->bindValues($params)
             ->queryOne();
+
         return [
             'total' => (int) ($row['total'] ?? 0),
-            'amount' => (float) ($row['amount'] ?? 0),
+            'credit' => (float) ($row['credit'] ?? 0),
+            'debit' => (float) ($row['debit'] ?? 0),
         ];
     }
 }

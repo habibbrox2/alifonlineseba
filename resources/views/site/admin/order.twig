@@ -1,0 +1,313 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}সার্ভিস অর্ডার #{{ order.id }} — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    {% include 'components/status-badge.twig' with { status: order.status } %}
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'সার্ভিস অর্ডার #' ~ order.id,
+    description: 'রেফারেন্স: ' ~ order.reference ~ ' · জমার সময়: ' ~ (order.created_at|bndate)
+        ~ (order.updated_at != order.created_at ? ' · শেষ হালনাগাদ: ' ~ (order.updated_at|bndate) : ''),
+    backUrl: '/admin/orders',
+    backLabel: 'অর্ডার তালিকায় ফিরে যান',
+    actions: headActions,
+} %}
+
+{# Whose desk this is, stated before anything else on the page.
+
+   The claim already happened — loading this URL took the order. What this
+   banner reports is whether *you* got it, because the answer decides which of
+   the decision forms below exist at all. Showing the buttons on somebody
+   else's order and letting them fail would teach operators to press things
+   that do not work. #}
+{% if isOpen %}
+    <div class="mb-5 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3
+                {{ claimer and claimer.id != identity.id ? 'border-info-200 bg-info-50' : 'border-primary-200 bg-primary-50' }}">
+        <span class="inline-flex items-center gap-2 text-sm font-semibold
+                     {{ claimer and claimer.id != identity.id ? 'text-info-800' : 'text-primary-800' }}">
+            {{ icon('hand', 'w-4 h-4') }}
+            {% if claimer and claimer.id == identity.id %}
+                এই অর্ডারটি এখন আপনার নামে ধরা — সিদ্ধান্ত দেওয়ার আগে অন্য কোনো অ্যাডমিন এটি দেখতে পাবেন না।
+            {% elseif claimer %}
+                এই অর্ডারটি {{ claimer.username }} ধরে আছেন। আপনি দেখতে পাচ্ছেন, কিন্তু সিদ্ধান্ত দিতে পারবেন না।
+            {% else %}
+                অর্ডারটি আপনার নামে ধরা হয়েছে।
+            {% endif %}
+        </span>
+        {% if order.claimed_at %}
+            <span class="text-xs text-neutral-500">ধরা হয়েছে: {{ order.claimed_at|bndate }}</span>
+        {% endif %}
+
+        {# Only the holder can hand it back — otherwise "release" would be a
+           way for one admin to yank a row out of another admin's queue. #}
+        {% if claimer and claimer.id == identity.id %}
+            <form method="post" action="/admin/orders/{{ order.id }}" class="ml-auto">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                <button type="submit" name="do" value="release" class="btn btn-ghost btn-sm">
+                    {{ icon('undo-2', 'w-3.5 h-3.5') }} তালিকায় ফিরিয়ে দিন
+                </button>
+            </form>
+        {% endif %}
+    </div>
+{% elseif approver %}
+    {# The order is decided *and* somebody was paid for it. That pairing is the
+       one an operator most often gets wrong, so it is spelled out rather than
+       left for them to infer from two columns. #}
+    <div class="mb-5 rounded-xl border border-success-200 bg-success-50 px-4 py-3 text-sm text-success-800">
+        <span class="inline-flex items-center gap-2 font-semibold">
+            {{ icon('check-circle', 'w-4 h-4') }}
+            {{ approver.username }} এই অর্ডারটি অনুমোদন করেছেন
+            {% if order.approved_at %} · {{ order.approved_at|bndate }}{% endif %} —
+            {{ order.amount|money }} তাঁর ব্যালেন্সে যোগ হয়েছে, তাই এখন ইউজারকে ফেরত দেওয়া যাবে না।
+        </span>
+    </div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-2">
+    <!-- What was ordered -->
+    <div class="space-y-6">
+        <section class="card p-6">
+            <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('user-circle', 'w-5 h-5 text-primary-600') }} ইউজার ও অর্ডার
+            </h2>
+
+            <dl class="space-y-3.5">
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">ইউজার</dt>
+                    <dd class="text-right text-sm font-semibold text-neutral-800">
+                        {{ user.username ?? '—' }}
+                        <span class="block text-xs font-normal text-neutral-400">{{ user.phone ?? '' }}</span>
+                    </dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">সার্ভিস</dt>
+                    <dd class="text-right text-sm font-semibold text-neutral-800">
+                        {{ metadata.service_name ?? '—' }}
+                        {% if metadata.variant %}
+                            <span class="block text-xs font-normal text-neutral-400">{{ metadata.variant }}</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">পরিমাণ</dt>
+                    <dd class="text-right text-lg font-extrabold text-primary-700">{{ order.amount|money }}</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">বর্তমান অবস্থা</dt>
+                    <dd class="text-right">{% include 'components/status-badge.twig' with { status: order.status } %}</dd>
+                </div>
+                {% if metadata.provider %}
+                    <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                        <dt class="text-sm text-neutral-500">প্রদানক</dt>
+                        <dd class="text-right font-mono text-xs text-neutral-600">{{ metadata.provider }}</dd>
+                    </div>
+                {% endif %}
+                {% if metadata.attempts %}
+                    <div class="flex items-baseline justify-between gap-4">
+                        <dt class="text-sm text-neutral-500">চেষ্টা</dt>
+                        <dd class="text-right text-sm text-neutral-800">{{ metadata.attempts }}</dd>
+                    </div>
+                {% endif %}
+            </dl>
+
+            {% if metadata.input is defined and metadata.input %}
+                {# What the user actually typed. This is the field the operator
+                   has to check the result against, so it is shown verbatim
+                   rather than summarised. #}
+                <div class="mt-5 border-t border-neutral-100 pt-4">
+                    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">ইনপুট</h3>
+                    <dl class="space-y-1.5">
+                        {% for key, value in metadata.input %}
+                            <div class="flex items-baseline justify-between gap-4 text-sm">
+                                <dt class="text-neutral-500">{{ key }}</dt>
+                                <dd class="select-all break-all text-right font-medium text-neutral-800">{{ value }}</dd>
+                            </div>
+                        {% endfor %}
+                    </dl>
+                </div>
+            {% endif %}
+
+            {% if metadata.error %}
+                <div class="mt-4 rounded-lg bg-danger-50 px-3.5 py-3 text-sm text-danger-700">
+                    {{ metadata.error }}
+                </div>
+            {% endif %}
+
+            {% if order.cancel_reason %}
+                <div class="mt-4 rounded-lg bg-neutral-100 px-3.5 py-3 text-sm text-neutral-700">
+                    <span class="font-semibold">বাতিলের কারণ:</span> {{ order.cancel_reason }}
+                </div>
+            {% endif %}
+        </section>
+
+        {% if resultEntries %}
+            <section class="card p-6">
+                <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('file-text', 'w-5 h-5 text-primary-600') }} স্বয়ংক্রিয় ফলাফল
+                </h2>
+                <dl class="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                    {% for entry in resultEntries %}
+                        <div class="flex flex-col items-start gap-0.5 border-b border-dashed border-neutral-200 py-1
+                                    sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                            <dt class="text-xs text-neutral-500">{{ entry.label }}</dt>
+                            <dd class="break-all text-sm font-medium text-neutral-800 sm:text-right">{{ entry.value }}</dd>
+                        </div>
+                    {% endfor %}
+                </dl>
+            </section>
+        {% endif %}
+    </div>
+
+    <!-- Decisions + deliverable -->
+    <div class="space-y-6">
+        {# The approve form is the only thing on this page that pays anybody,
+           so it is drawn first and drawn on its own — separated from the
+           reject form rather than sharing one <form> with a dropdown, so that
+           the amount of money on the button is unambiguous. #}
+        {% if canDecide and isOpen %}
+            <section class="card border-primary-200 p-6">
+                <h2 class="mb-1 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('badge-check', 'w-5 h-5 text-primary-600') }} সিদ্ধান্ত
+                </h2>
+                <p class="mb-5 text-xs text-neutral-500">
+                    কাজ শেষ হলে "অনুমোদন" চাপুন — {{ order.amount|money }} আপনার ব্যালেন্সে যোগ হবে।
+                    একবার অনুমোদন করলে আর ফেরত দেওয়া যাবে না, তাই ফাইল দেওয়ার পরেই চাপুন।
+                </p>
+
+                <form method="post" action="/admin/orders/{{ order.id }}" class="space-y-4">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                    <div>
+                        <label for="ao_note" class="form-label">অ্যাডমিন নোট</label>
+                        <textarea id="ao_note" name="admin_note" rows="2" class="form-input" maxlength="500"
+                                  placeholder="যেমন: NID ভেরিফায়েড, ফাইল আপলোড করা হয়েছে">{{ order.admin_note ?? '' }}</textarea>
+                    </div>
+
+                    <button type="submit" name="do" value="approve" class="btn btn-primary w-full"
+                            onclick="return confirm('অর্ডার #{{ order.id }} অনুমোদন করবেন?\n\nআপনার ব্যালেন্সে {{ order.amount|money }} যোগ হবে এবং ইউজারকে আর ফেরত দেওয়া যাবে না।');">
+                        {{ icon('check-check', 'w-4 h-4') }} অনুমোদন করুন — {{ order.amount|money }} আয়
+                    </button>
+                </form>
+            </section>
+
+            <section class="card p-6">
+                <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('rotate-ccw', 'w-5 h-5 text-primary-600') }} অন্য অবস্থায় দিন
+                </h2>
+
+                {# Separate <form> from the upload below: a status change must not
+                   re-post the deliverable file, and vice versa. #}
+                <form method="post" action="/admin/orders/{{ order.id }}" class="space-y-4">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                    <div>
+                        <label for="ao_status" class="form-label">অবস্থা</label>
+                        <select id="ao_status" name="status" class="form-input" required>
+                            <option value="processing">প্রসেসিং — কাজ চলছে, টাকা আপনার ব্যালেন্সে যাবে না</option>
+                            <option value="cancelled">বাতিল — ইউজারের ব্যালেন্সে টাকা ফেরত যাবে</option>
+                            <option value="failed">ব্যর্থ — ইউজারের ব্যালেন্সে টাকা ফেরত যাবে</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="ao_reason" class="form-label">কারণ</label>
+                        <input id="ao_reason" name="reason" class="form-input" maxlength="500"
+                               placeholder="বাতিল/ব্যর্থ করলে কারণ লেখা ভালো — ইউজার এটি দেখবেন">
+                    </div>
+
+                    <button type="submit" name="do" value="reject" class="btn btn-ghost w-full"
+                            onclick="return confirm('অর্ডারটি বদলাবেন? বাতিল/ব্যর্থ হলে {{ order.amount|money }} ইউজারের ব্যালেন্সে ফেরত যাবে।');">
+                        {{ icon('save', 'w-4 h-4') }} অবস্থা প্রয়োগ করুন
+                    </button>
+                </form>
+            </section>
+        {% endif %}
+
+        <section class="card p-6">
+            <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('file-down', 'w-5 h-5 text-primary-600') }} ডেলিভারি ফাইল
+            </h2>
+
+            {% if not order.deliverable_path %}
+                <p class="rounded-lg bg-warning-50 px-3.5 py-3 text-sm text-warning-800">
+                    এখনো কোনো ফাইল আপলোড করা হয়নি। ফাইল দিলে ইউজার তার সার্ভিস হিস্ট্রি পাতা থেকে ডাউনলোড করতে পারবে।
+                </p>
+            {% elseif not hasFile %}
+                {# The row points at a path but the bytes are gone. Say so loudly
+                   rather than showing a broken preview — the operator needs to
+                   know the file has to be re-collected. #}
+                <p class="rounded-lg bg-danger-50 px-3.5 py-3 text-sm text-danger-700">
+                    ফাইলটি সার্ভারে পাওয়া যাচ্ছে না — নতুন করে আপলোড করতে হবে।
+                </p>
+            {% elseif isImage %}
+                <a href="/service-requests/{{ order.id }}/file" target="_blank" rel="noopener" class="block">
+                    <img src="/service-requests/{{ order.id }}/file" alt="ডেলিভারি ফাইল"
+                         class="w-full rounded-xl border border-neutral-200 object-contain" loading="lazy">
+                </a>
+                <p class="mt-2.5 text-center text-xs text-neutral-400">বড় করে দেখতে ছবিতে ক্লিক করুন</p>
+            {% else %}
+                <div class="rounded-xl border border-neutral-200 bg-neutral-50 p-6 text-center">
+                    <p class="text-sm text-neutral-600">{{ order.deliverable_mime ?? 'ফাইল' }}</p>
+                    <a href="/service-requests/{{ order.id }}/file" class="btn btn-primary btn-sm mt-3"
+                       target="_blank" rel="noopener">
+                        {{ icon('arrow-down', 'w-4 h-4') }} ডাউনলোড করে দেখুন
+                    </a>
+                </div>
+            {% endif %}
+
+            {% if order.deliverable_name %}
+                <p class="mt-3 truncate text-xs text-neutral-400">
+                    {{ order.deliverable_name }}{% if fileSize %} · {{ fileSize }}{% endif %}
+                    {% if order.deliverable_uploaded_at %} · {{ order.deliverable_uploaded_at|bndate }}{% endif %}
+                </p>
+            {% endif %}
+
+            <form method="post" action="/admin/orders/{{ order.id }}" enctype="multipart/form-data"
+                  class="mt-5 space-y-4 border-t border-neutral-100 pt-5" x-data="{ busy: false, tooBig: false }"
+                  @submit="if (busy) { $event.preventDefault(); return; } busy = true;">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                <div>
+                    <label for="ao_file" class="form-label">
+                        {{ order.deliverable_path ? 'ফাইল বদলান (পুরনোটি মুছে যাবে)' : 'ফাইল আপলোড করুন' }}
+                    </label>
+                    <input id="ao_file" type="file" name="deliverable" required
+                           accept="{{ acceptTypes }}"
+                           class="form-input file:mr-3 file:rounded-lg file:border-0 file:bg-primary-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-primary-700"
+                           @change="const f = $event.target.files[0];
+                                    if (f && f.size > {{ maxBytes }}) { $event.target.value = ''; tooBig = true; }
+                                    else { tooBig = false; }">
+                    <p class="form-help">
+                        সর্বোচ্চ {{ (maxBytes / 1024 / 1024)|round(0) }} MB —
+                        {{ allowedExtensions|join(', ')|upper }} গ্রহণযোগ্য।
+                    </p>
+                    <p class="form-error" role="alert" x-show="tooBig" x-cloak>
+                        ফাইলটি {{ (maxBytes / 1024 / 1024)|round(0) }} MB-এর বড় — ছোট করে আবার চেষ্টা করুন।
+                    </p>
+                </div>
+
+                <button type="submit" name="do" value="attach" class="btn btn-primary w-full" :disabled="busy">
+                    <span x-show="!busy" class="inline-flex items-center gap-2">
+                        {{ icon('upload', 'w-4 h-4') }} আপলোড করুন
+                    </span>
+                    <span x-show="busy" x-cloak class="inline-flex items-center gap-2">
+                        {{ icon('loader', 'w-4 h-4 animate-spin') }} আপলোড হচ্ছে…
+                    </span>
+                </button>
+            </form>
+
+            {% if order.deliverable_path %}
+                <form method="post" action="/admin/orders/{{ order.id }}" class="mt-3">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+                    <button type="submit" name="do" value="detach" class="btn btn-ghost w-full text-danger-600"
+                            onclick="return confirm('ফাইলটি স্থায়ীভাবে মুছে ফেলবেন? ইউজার আর ডাউনলোড করতে পারবে না।');">
+                        {{ icon('trash-2', 'w-4 h-4') }} ফাইলটি মুছে ফেলুন
+                    </button>
+                </form>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

@@ -11,6 +11,7 @@ use App\Repository\SettingsRepository;
 use App\Repository\TopupRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
+use App\Tests\Support\TestGraph;
 use App\Service\ReceiptStorage;
 use App\Service\TopupService;
 use App\Web\Account\ReceiptAction;
@@ -98,7 +99,7 @@ final class RechargeTest extends \Codeception\Test\Unit
         $this->service = new TopupService(
             $this->topups,
             $this->users,
-            new TransactionRepository($this->db),
+            TestGraph::ledger($this->db, $this->users),
             new NotificationRepository($this->db),
             new ActivityLogRepository($this->db),
             new SettingsRepository($this->db),
@@ -143,7 +144,7 @@ final class RechargeTest extends \Codeception\Test\Unit
         foreach ($this->userIds as $id) {
             $this->db->createCommand()->delete('{{%topup_request}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
-            $this->db->createCommand()->delete('{{%transaction}}', ['user_id' => $id])->execute();
+            TestGraph::purgeUser($this->db, $id);
             // Deliveries reference queue rows (FK), which reference the user —
             // both must go before the user row or the delete is refused.
             $this->db
@@ -468,7 +469,7 @@ final class RechargeTest extends \Codeception\Test\Unit
 
         $approved = (array) $this->topups->findById((int) $row['id']);
         $tx = $this->db->createCommand(
-            'SELECT [[reference]], [[amount]], [[status]], [[metadata]] FROM {{%transaction}} WHERE [[id]] = :id',
+            'SELECT [[reference]], [[amount]], [[status]], [[type]], [[metadata]] FROM {{%transaction}} WHERE [[id]] = :id',
         )
             ->bindValue(':id', (int) $approved['transaction_id'])
             ->queryOne();
@@ -476,7 +477,14 @@ final class RechargeTest extends \Codeception\Test\Unit
         $this->assertNotNull($tx);
         $this->assertEquals(self::AMOUNT, (float) $tx['amount']);
         $this->assertSame('completed', $tx['status']);
-        $this->assertStringContainsString('"type":"topup"', (string) $tx['metadata']);
+        // `type` is a column of its own now, not a key inside `metadata`: it is
+        // what the ledger page filters and sums by, so it has to be indexable.
+        $this->assertSame(TransactionRepository::TYPE_TOPUP, (string) $tx['type']);
+        $this->assertStringContainsString(
+            (string) ($tx['metadata'] !== null ? 'topup_id' : ''),
+            (string) $tx['metadata'],
+            'The metadata keeps the receipt details the audit needs.',
+        );
     }
 
     public function testRejectRequiresAReason(): void
@@ -703,7 +711,7 @@ final class RechargeTest extends \Codeception\Test\Unit
         $absolute = (string) $this->receipts->absolutePath((string) $row['receipt_path']);
         $originalBytes = (string) file_get_contents($absolute);
 
-        $stamped = $this->receipts->watermark($absolute, 'ALIF TOOLS | TOPUP #1');
+        $stamped = $this->receipts->watermark($absolute, 'ALL SEBA | TOPUP #1');
 
         $this->assertNotNull($stamped, 'A PNG receipt is watermarked');
         $this->assertNotSame($absolute, $stamped, 'The stamp goes on a copy, never on the evidence');

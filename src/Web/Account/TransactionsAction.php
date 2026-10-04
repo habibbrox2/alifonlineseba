@@ -23,17 +23,25 @@ final readonly class TransactionsAction
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
         $page = max(1, (int) ($route->getArgument('page', '1')));
-        $status = (string) ($request->getQueryParams()['status'] ?? '');
-        $perPage = 15;
 
-        $data = $this->transactions->forUser($identity->id, $page, $perPage, $status);
+        // The filter is a ledger `type`, not an order status: this page is a
+        // statement of what happened to the balance, and "completed" is not a
+        // thing that happened to money. An unrecognised type falls back to "all"
+        // rather than to an empty list, so a stale link shows the statement
+        // instead of claiming there is nothing in it.
+        $requested = (string) ($request->getQueryParams()['type'] ?? '');
+        $type = in_array($requested, TransactionRepository::TYPES, true) ? $requested : '';
+
+        $perPage = 15;
+        $data = $this->transactions->forUser($identity->id, $page, $perPage, $type);
 
         return $this->view->render('site/account/transactions.twig', [
             'rows' => $data['rows'],
             'total' => $data['total'],
             'page' => $page,
             'perPage' => $perPage,
-            'status' => $status,
+            'type' => $type,
+            'types' => TransactionRepository::TYPES,
             'identity' => $identity,
         ]);
     }

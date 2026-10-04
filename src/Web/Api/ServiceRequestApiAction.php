@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Api;
 
 use App\Auth\Identity;
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Service\Api;
 use App\Service\ServiceManager;
 use App\Service\RequestRowPresenter;
@@ -26,7 +26,7 @@ final readonly class ServiceRequestApiAction
 
     public function __construct(
         private ServiceManager $manager,
-        private TransactionRepository $transactions,
+        private ServiceOrderRepository $orders,
         private RequestRowPresenter $presenter,
     ) {}
 
@@ -42,7 +42,7 @@ final readonly class ServiceRequestApiAction
             return Api::fail('Unknown action.', [], 404);
         }
 
-        $request_row = $this->transactions->findOwned($id, $identity->id);
+        $request_row = $this->orders->findOwned($id, $identity->id);
         if ($request_row === null) {
             // Also covers someone else's request — never leak that it exists.
             return Api::fail('অনুরোধটি পাওয়া যায়নি।', [], 404);
@@ -57,7 +57,7 @@ final readonly class ServiceRequestApiAction
             'retry' => $this->manager->retry($request_row, $identity, $ip, $userAgent),
         };
 
-        $fresh = $this->transactions->findById($id);
+        $fresh = $this->orders->findById($id);
         $row = $fresh === null ? $request_row : $fresh;
 
         if (!$result->success) {

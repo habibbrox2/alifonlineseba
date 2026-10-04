@@ -1,6 +1,6 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}রেফারেল — Alif Tools{% endblock %}
+{% block title %}রেফারেল — All Seba{% endblock %}
 
 {% block dashboard_content %}
 <div class="mb-6">
@@ -52,10 +52,16 @@
         <li class="flex gap-2">
             <span class="flex-none font-bold text-primary-600">৩.</span>
             <span>
-                বন্ধু {% if minRecharge > 0 %}ন্যূনতম {{ minRecharge|money }} করে{% else %}প্রথমবার{% endif %}
-                রিচার্জ করলে এবং সেটি অনুমোদিত হলে —
-                আপনি <strong class="text-neutral-800">{{ referrerBonus|money }}</strong>,
+                বন্ধু {% if minRecharge > 0 %}ন্যূনতম {{ minRecharge|money }} করে{% endif %}
+                <strong class="text-neutral-800">{{ requiredRecharges }}টি রিচার্জ</strong> করবেন এবং প্রতিটি অনুমোদিত হবে —
+                তারপর আপনি <strong class="text-neutral-800">{{ referrerBonus|money }}</strong>,
                 বন্ধু <strong class="text-neutral-800">{{ refereeBonus|money }}</strong> ব্যালেন্স পাবেন।
+            </span>
+        </li>
+        <li class="flex gap-2">
+            <span class="flex-none font-bold text-primary-600">৪.</span>
+            <span>
+                পেন্ডিং, বাতিল বা ব্যর্থ রিচার্জ <em>গোনা হয় না</em> — শুধু অনুমোদিত রিচার্জই।
             </span>
         </li>
     </ol>
@@ -79,7 +85,7 @@
 {% if summary.pending_earned > 0 %}
     <p class="mb-4 rounded-xl border border-info-200 bg-info-50 px-4 py-3 text-sm text-info-800">
         {{ icon('info', 'w-4 h-4 inline') }}
-        আরও <strong>{{ summary.pending_earned|money }}</strong> অপেক্ষমাণ আছে — বন্ধুর প্রথম রিচার্জ অনুমোদিত হলে যোগ হবে।
+        আরও <strong>{{ summary.pending_earned|money }}</strong> অপেক্ষমাণ আছে — নিচের প্রতিটি বন্ধুর রিচার্জ শেষ হলে যোগ হবে।
     </p>
 {% endif %}
 
@@ -101,7 +107,7 @@
                     <tr>
                         <th>বন্ধু</th>
                         <th>যোগদানের তারিখ</th>
-                        <th>ট্রিগার রিচার্জ</th>
+                        <th>রিচার্জের অগ্রগতি</th>
                         <th class="text-right">আপনার বোনাস</th>
                         <th>অবস্থা</th>
                     </tr>
@@ -115,10 +121,43 @@
                             </td>
                             <td class="whitespace-nowrap text-neutral-500">{{ r.created_at|bndate }}</td>
                             <td class="whitespace-nowrap text-neutral-600">
-                                {% if r.trigger_amount %}
-                                    {{ r.trigger_amount|money }}
+                                {# The progress bar is the whole point of the page: a
+                                   friend who has done two of five recharges should be
+                                   able to see that at a glance, without asking. The
+                                   numbers are printed next to it so the bar is never
+                                   the only thing carrying the information. #}
+                                {% if r.status == 'paid' %}
+                                    <span class="inline-flex items-center gap-1.5 text-success-700">
+                                        {{ icon('check-circle', 'w-4 h-4') }}
+                                        <span class="font-semibold">{{ r.completed_count }}/{{ r.required_count }}</span>
+                                        সম্পন্ন
+                                    </span>
+                                    {% if r.trigger_amount %}
+                                        <span class="mt-0.5 block text-xs text-neutral-400">
+                                            শেষ রিচার্জ {{ r.trigger_amount|money }}
+                                        </span>
+                                    {% endif %}
+                                {% elseif r.status == 'rejected' %}
+                                    <span class="text-xs text-neutral-300">বাতিলকৃত</span>
                                 {% else %}
-                                    <span class="text-xs text-neutral-300">অপেক্ষমাণ</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="h-1.5 w-20 overflow-hidden rounded-full bg-neutral-200">
+                                            <span class="block h-full rounded-full bg-primary-500"
+                                                  style="width: {{ r.progress }}%"></span>
+                                        </span>
+                                        <span class="text-xs font-semibold text-neutral-700">
+                                            {{ r.completed_count }}/{{ r.required_count }}
+                                        </span>
+                                    </div>
+                                    {% if r.remaining > 0 %}
+                                        <span class="mt-0.5 block text-xs text-neutral-500">
+                                            আরও {{ r.remaining }}টি রিচার্জ দরকার
+                                        </span>
+                                    {% else %}
+                                        <span class="mt-0.5 block text-xs text-success-700">
+                                            শর্ত পূরণ হয়েছে — বোনাস পাঠানো হচ্ছে
+                                        </span>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td class="whitespace-nowrap text-right font-semibold text-primary-700">

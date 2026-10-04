@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Web\FlashMiddleware;
 use App\Web\ForwardedProtoMiddleware;
+use App\Web\JsonBodyMiddleware;
 use App\Web\NotFound\NotFoundHandler;
 use App\Web\SecurityHeadersMiddleware;
 use Yiisoft\Csrf\CsrfTokenMiddleware;
@@ -38,6 +39,9 @@ return [
                         SessionMiddleware::class,
                         FlashMiddleware::class,
                         CsrfTokenMiddleware::class,
+                        // After CSRF so a request with no valid token is turned
+                        // away before we spend anything reading its body.
+                        JsonBodyMiddleware::class,
                         Router::class,
                     ],
                 ],

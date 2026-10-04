@@ -8,8 +8,9 @@ use App\Auth\Identity;
 use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceRepository;
-use App\Repository\TransactionRepository;
+use App\Tests\Support\TestGraph;
 use App\Repository\UserRepository;
+use App\Service\OrderWindowService;
 use App\Service\ServiceManager;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Di\Container;
@@ -50,7 +51,8 @@ final class ServiceVariantsTest extends \Codeception\Test\Unit
         $this->users = new UserRepository($this->db);
         $this->manager = new ServiceManager(
             $this->services,
-            new TransactionRepository($this->db),
+            TestGraph::orders($this->db),
+            TestGraph::ledger($this->db, $this->users),
             $this->users,
             new ActivityLogRepository($this->db),
             new NotificationRepository($this->db),
@@ -64,6 +66,9 @@ final class ServiceVariantsTest extends \Codeception\Test\Unit
                 $this->users,
                 $this->db,
             ),
+            // The default window is a real, clock-dependent gate; these tests assert
+            // on order behaviour, not on the hour of the day they happen to run.
+            OrderWindowService::alwaysOpen(),
         );
 
         // Fan-out rows land on users outside our own list (the real admin gets
@@ -105,11 +110,11 @@ final class ServiceVariantsTest extends \Codeception\Test\Unit
 
         foreach ($this->userIds as $id) {
             $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
-            $this->db->createCommand()->delete('{{%transaction}}', ['user_id' => $id])->execute();
+            TestGraph::purgeUser($this->db, $id);
             $this->db->createCommand()->delete('{{%notification}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%user}}', ['id' => $id])->execute();
         }
-        $this->db->createCommand()->delete('{{%transaction}}', ['service_id' => $this->serviceId])->execute();
+        TestGraph::purgeServiceOrders($this->db, $this->serviceId);
         $this->db->createCommand()->delete('{{%service}}', ['id' => $this->serviceId])->execute();
         $this->userIds = [];
         // In-app fan-out rows that landed on users outside our list.
@@ -169,7 +174,7 @@ final class ServiceVariantsTest extends \Codeception\Test\Unit
         $result = $this->manager->submit($service, $user, ['nid_number' => '1990123456789', 'date_of_birth' => '1990-05-04'], '127.0.0.1', 'codecept');
         assertTrue($result->success, (string) $result->message);
         $tx = (array) $this->db
-            ->createCommand('SELECT [[amount]], [[metadata]] FROM {{%transaction}} WHERE [[user_id]] = :u ORDER BY [[id]] DESC LIMIT 1')
+            ->createCommand('SELECT [[amount]], [[metadata]] FROM {{%service_order}} WHERE [[user_id]] = :u ORDER BY [[id]] DESC LIMIT 1')
             ->bindValue(':u', $user->id)
             ->queryOne();
         assertSame(self::PRICE, (float) $tx['amount'], 'Without a variant the base price applies.');
@@ -178,11 +183,11 @@ final class ServiceVariantsTest extends \Codeception\Test\Unit
         $result = $this->manager->submit($service, $user, ['nid_number' => '1990123456789', 'date_of_birth' => '1990-05-04', 'variant' => 'v1'], '127.0.0.1', 'codecept');
         assertTrue($result->success, (string) $result->message);
         $tx = (array) $this->db
-            ->createCommand('SELECT [[amount]], [[metadata]] FROM {{%transaction}} WHERE [[user_id]] = :u ORDER BY [[id]] DESC LIMIT 1')
+            ->createCommand('SELECT [[amount]], [[metadata]] FROM {{%service_order}} WHERE [[user_id]] = :u ORDER BY [[id]] DESC LIMIT 1')
             ->bindValue(':u', $user->id)
             ->queryOne();
         assertSame(60.0, (float) $tx['amount'], 'The variant price is what gets charged.');
-        $meta = TransactionRepository::metadata($tx);
+        $meta = TestGraph::orders($this->db)->metadata($tx);
         assertSame('স্মার্ট কার্ড কপি', $meta['variant'], 'The chosen variant label is recorded.');
 
         // An unknown variant id must not charge anything at all.
@@ -212,7 +217,7 @@ final class ServiceVariantsTest extends \Codeception\Test\Unit
         $service = $this->service();
         $this->manager->submit($service, $user, ['nid_number' => '1990123456789', 'date_of_birth' => '1990-05-04'], '127.0.0.1', 'codecept');
 
-        $history = (new TransactionRepository($this->db))->forUserByService($user->id, $this->serviceId);
+        $history = TestGraph::orders($this->db)->forUserByService($user->id, $this->serviceId);
         assertSame(1, $history['total'], 'Only this service\'s own orders are listed.');
         assertSame(self::PRICE, (float) $history['rows'][0]['amount'], 'Base price, since no variant was sent.');
 
@@ -236,11 +241,11 @@ final class ServiceVariantsTest extends \Codeception\Test\Unit
                 '127.0.0.1',
                 'codecept',
             );
-            $history = (new TransactionRepository($this->db))->forUserByService($user->id, $this->serviceId);
+            $history = TestGraph::orders($this->db)->forUserByService($user->id, $this->serviceId);
             assertSame(1, $history['total'], 'The per-service table stays scoped to its own service.');
-            assertSame(2, (new TransactionRepository($this->db))->forUser($user->id, 1, 10)['total']);
+            assertSame(2, TestGraph::orders($this->db)->forUser($user->id, 1, 10)['total']);
         } finally {
-            $this->db->createCommand()->delete('{{%transaction}}', ['service_id' => $otherId])->execute();
+            TestGraph::purgeServiceOrders($this->db, $otherId);
             $this->db->createCommand()->delete('{{%service}}', ['id' => $otherId])->execute();
         }
     }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Api;
 
 use App\Auth\Identity;
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Service\Api;
 use App\Service\StatusPresenter;
 use Psr\Http\Message\ResponseInterface;
@@ -20,19 +20,19 @@ use Yiisoft\Router\CurrentRoute;
  */
 final readonly class ServiceRequestDetailApiAction
 {
-    public function __construct(private TransactionRepository $transactions) {}
+    public function __construct(private ServiceOrderRepository $orders) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
     {
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
 
-        $row = $this->transactions->findOwned((int) $route->getArgument('id', '0'), $identity->id);
+        $row = $this->orders->findOwned((int) $route->getArgument('id', '0'), $identity->id);
         if ($row === null) {
             return Api::fail('অনুরোধটি পাওয়া যায়নি।', [], 404);
         }
 
-        $metadata = TransactionRepository::metadata($row);
+        $metadata = ServiceOrderRepository::metadata($row);
 
         return Api::ok([
             'id' => (int) $row['id'],

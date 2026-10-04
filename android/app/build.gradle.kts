@@ -32,7 +32,7 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8099/\"")
         }
         release {
-            buildConfigField("String", "API_BASE_URL", "\"https://onlinesheba.broxlab.online/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://allseba.online/\"")
             isMinifyEnabled = false
         }
     }

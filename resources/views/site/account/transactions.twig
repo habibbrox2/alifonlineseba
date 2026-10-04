@@ -1,22 +1,18 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}লেনদেন — Alif Tools{% endblock %}
+{% block title %}লেনদেন — All Seba{% endblock %}
 
 {% block dashboard_content %}
-<h1 class="mb-6 text-2xl font-extrabold text-neutral-900">আমার লেনদেন</h1>
+<h1 class="mb-2 text-2xl font-extrabold text-neutral-900">আমার লেনদেন</h1>
+<p class="mb-6 text-sm text-neutral-500">
+    প্রতিটি লেনদেনের হিসাব — কোথা থেকে টাকা এসেছে, কোথায় গেছে এবং লেনদেনের পর ব্যালেন্স কত ছিল।
+</p>
 
-<!-- Status filter chips -->
+<!-- Type filter chips -->
 <div class="mb-5 flex flex-wrap gap-2">
-    {% set filters = [
-        ['', 'সব'], ['completed', 'সম্পন্ন'], ['pending', 'পেন্ডিং'],
-        ['processing', 'প্রসেসিং'], ['failed', 'ব্যর্থ'], ['cancelled', 'বাতিল'],
-    ] %}
-    {% for filter in filters %}
-        {% set value = filter[0] %}{% set label = filter[1] %}
-        <a href="/transactions{% if value %}?status={{ value }}{% endif %}"
-           class="chip {{ (status == value) ? 'chip-active' }}">
-            {{ label }}
-        </a>
+    <a href="/transactions" class="chip {{ type == '' ? 'chip-active' }}">সব</a>
+    {% for t in types %}
+        <a href="/transactions?type={{ t }}" class="chip {{ type == t ? 'chip-active' }}">{{ t|ledgertype }}</a>
     {% endfor %}
 </div>
 
@@ -26,9 +22,12 @@
     {% if rows is empty %}
         <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
             <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
-                {{ icon('inbox', 'w-6 h-6') }}
+                {{ icon('receipt', 'w-6 h-6') }}
             </span>
-            <p class="text-sm text-neutral-500">কোনো লেনদেন পাওয়া যায়নি।</p>
+            <p class="text-sm text-neutral-500">
+                {% if type %}এই ধরনের কোনো লেনদেন নেই।
+                {% else %}কোনো লেনদেন নেই। সার্ভিস অর্ডার বা রিচার্জ করলে এখানে দেখা যাবে।{% endif %}
+            </p>
             <a href="/services" class="btn btn-primary btn-sm mt-2">সার্ভিস দেখুন</a>
         </div>
     {% else %}
@@ -37,9 +36,10 @@
                 <thead>
                     <tr>
                         <th>রেফারেন্স</th>
-                        <th>সার্ভিস</th>
-                        <th>পরিমাণ</th>
-                        <th>স্ট্যাটাস</th>
+                        <th>ধরন</th>
+                        <th>বিবরণ</th>
+                        <th class="text-right">পরিমাণ</th>
+                        <th class="text-right">ব্যালেন্স</th>
                         <th>তারিখ</th>
                     </tr>
                 </thead>
@@ -47,9 +47,27 @@
                     {% for tx in rows %}
                         <tr>
                             <td class="font-mono text-xs">{{ tx.reference }}</td>
-                            <td class="font-medium">{{ tx.service_name ?? '—' }}</td>
-                            <td class="font-semibold text-primary-700">{{ tx.amount|money }}</td>
-                            <td>{% include 'components/status-badge.twig' with { status: tx.status } %}</td>
+                            <td><span class="badge {{ tx.type|ledgerbadge }}">{{ tx.type|ledgertype }}</span></td>
+                            <td class="text-sm text-neutral-600">
+                                {{ tx.description ?? (tx.service_name ?? '—') }}
+                                {# Order-linked rows link to the order, not to the
+                                   transaction: the customer is trying to remember
+                                   a *purchase*, and that is what they can act on. #}
+                                {% if tx.service_order_id %}
+                                    <a href="/service-history" class="block text-[11px] text-primary-600 hover:underline">
+                                        অর্ডার #{{ tx.service_order_id }} দেখুন
+                                    </a>
+                                {% endif %}
+                            </td>
+                            {# The sign is drawn, not implied by the colour: a
+                               statement where every number is positive cannot
+                               be balanced by the reader, and this one has to be. #}
+                            <td class="text-right font-semibold {{ tx.direction == 'debit' ? 'text-danger-600' : 'text-success-700' }}">
+                                {{ tx.direction == 'debit' ? '−' : '+' }}{{ tx.amount|money }}
+                            </td>
+                            <td class="text-right text-sm text-neutral-500">
+                                {{ tx.balance_after !== null ? tx.balance_after|money : '—' }}
+                            </td>
                             <td class="whitespace-nowrap text-neutral-500">{{ tx.created_at|bndate }}</td>
                         </tr>
                     {% endfor %}
@@ -61,6 +79,6 @@
 
 {% include 'components/pagination.twig' with {
     page: page, perPage: perPage, total: total,
-    baseUrl: '/transactions?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ 'page=',
+    baseUrl: '/transactions?' ~ (type ? 'type=' ~ type ~ '&' : '') ~ 'page=',
 } %}
 {% endblock %}

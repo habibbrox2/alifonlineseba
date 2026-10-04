@@ -1,6 +1,6 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}ড্যাশবোর্ড — Alif Tools{% endblock %}
+{% block title %}ড্যাশবোর্ড — All Seba{% endblock %}
 
 {% block page_scripts %}
     <script type="module" src="/assets/js/dashboard.js"></script>
@@ -10,10 +10,10 @@
 <!-- Welcome banner -->
 <section class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary-900 via-primary-800 to-primary-700 p-6 text-white sm:p-8">
     <div class="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent-500/10"></div>
-    <p class="text-xs font-semibold uppercase tracking-wider text-accent-300">ALIF TOOLS HUB</p>
+    <p class="text-xs font-semibold uppercase tracking-wider text-accent-300">ALL SEBA HUB</p>
     <h1 class="mt-1.5 text-2xl font-extrabold sm:text-3xl">স্বাগতম, {{ identity.username }}!</h1>
     <p class="mt-2 max-w-xl text-sm leading-relaxed text-white/80">
-        Alif Tools এর মাধ্যমে আমাদের সকল ডিজিটাল ও সরকারি তথ্য সেবা সম্পূর্ণ চালু রয়েছে।
+        All Seba এর মাধ্যমে আমাদের সকল ডিজিটাল ও সরকারি তথ্য সেবা সম্পূর্ণ চালু রয়েছে।
     </p>
     <div class="mt-5 flex flex-wrap gap-2.5">
         <a href="/recharge" class="btn btn-accent btn-sm">{{ icon('wallet', 'w-4 h-4') }} রিচার্জ করুন</a>
@@ -29,7 +29,7 @@
         <span class="badge badge-warning w-fit">{{ icon('sparkles', 'w-3.5 h-3.5') }} অফার</span>
         <h2 class="mt-3 text-base font-extrabold text-neutral-800">Gemini AI Pro</h2>
         <p class="mt-1.5 flex-1 text-sm leading-relaxed text-neutral-500">
-            Unlimited Image, 5TB Storage &amp; Veo 3 Credits সরাসরি ইমেইলে! (ডেমো অফার)
+            Unlimited Image, 5TB Storage &amp; Veo 3 Credits সরাসরি ইমেইলে!
         </p>
         <a href="{{ site.telegram_url ?: 'https://t.me/' }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm mt-4 w-fit">
             {{ icon('send', 'w-4 h-4') }} ইনবক্স
@@ -39,7 +39,7 @@
         <span class="badge badge-info w-fit">{{ icon('code', 'w-3.5 h-3.5') }} সোর্স কোড</span>
         <h2 class="mt-3 text-base font-extrabold text-neutral-800">নিজস্ব ওয়েবসাইট বানান</h2>
         <p class="mt-1.5 flex-1 text-sm leading-relaxed text-neutral-500">
-            কম খরচে রেডিমেড স্ক্রিপ্ট বা থিম কিনুন। (ডেমো শপ)
+            কম খরচে রেডিমেড স্ক্রিপ্ট বা থিম কিনুন।
         </p>
         <a href="/services" class="btn btn-ghost btn-sm mt-4 w-fit">
             {{ icon('shopping-bag', 'w-4 h-4') }} শপ দেখুন

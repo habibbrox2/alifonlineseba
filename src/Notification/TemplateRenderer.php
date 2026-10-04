@@ -26,11 +26,34 @@ final class TemplateRenderer
      */
     public function render(string $event, string $channel, array $params): array
     {
-        $template = $this->fromDatabase($event, $channel) ?? MessageTemplates::forEvent($event)[$channel] ?? null;
+        $seeded = MessageTemplates::forEvent($event);
+        $template = $this->fromDatabase($event, $channel)
+            // `webpush` borrows the fcm copy rather than duplicating it. The
+            // two channels address the same person through different clients,
+            // so an order-completes message that reads one way on the phone
+            // and another way in the browser is a bug the user has to notice
+            // and work around. Re-pointing the fcm row in the admin template
+            // editor would leave webpush behind, so the borrow is here.
+            ?? $seeded[$channel]
+            // `$seeded['fcm'] ?? $seeded['telegram']` rather than a bare
+            // `$seeded['fcm']` read: three events carry webpush but no fcm copy
+            // at all (topup.requested, topup.cancelled, system.alert), and
+            // reading a missing key raises a warning on the way to the in_app
+            // fallback that was always meant to catch it. In production that
+            // warning is a log line nobody reads; in the test suite it fails the
+            // dispatch outright.
+            //
+            // The telegram step matters for those three. They are the
+            // admins-only events, so their telegram copy is the wording meant
+            // for the recipient — and their recipients are staff, on the web.
+            // Falling through to in_app would push "your recharge was
+            // submitted, awaiting verification" at an admin who is waiting for
+            // somebody else's recharge.
+            ?? ($channel === 'webpush' ? ($seeded['fcm'] ?? $seeded['telegram'] ?? null) : null);
         if ($template === null) {
             // Unknown channel for a known event (or vice versa) is a config
             // bug; rather than throwing mid-dispatch, degrade to the in-app copy.
-            $template = MessageTemplates::forEvent($event)['in_app'] ?? ['title' => 'নোটিফিকেশন', 'body' => ''];
+            $template = $seeded['in_app'] ?? ['title' => 'নোটিফিকেশন', 'body' => ''];
         }
 
         $params += [
@@ -41,7 +64,7 @@ final class TemplateRenderer
             'service' => 'সার্ভিস',
             'method' => '',
             'user_id' => '',
-            'site_name' => $this->settings->get('site_tagline', 'Alif Tools'),
+            'site_name' => $this->settings->get('site_tagline', 'All Seba'),
         ];
 
         return [

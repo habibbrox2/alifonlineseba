@@ -32,6 +32,7 @@ final class IdentityViewInjection implements CommonParametersInjectionInterface
             'unread' => $identity !== null ? $this->notifications->unreadCount($identity->id) : 0,
             'flash_success' => $request->getAttribute('flash_success'),
             'flash_error' => $request->getAttribute('flash_error'),
+            'flash_undo' => $request->getAttribute('flash_undo'),
             'currentPath' => $request->getUri()->getPath(),
             'siteUrl' => rtrim((string) Env::get('APP_URL', ''), '/'),
         ];

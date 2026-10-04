@@ -159,7 +159,7 @@ object UpdateChecker {
         val id = try {
             manager.enqueue(
                 DownloadManager.Request(Uri.parse(url)).apply {
-                    setTitle("Alif Tools আপডেট ডাউনলোড হচ্ছে")
+                    setTitle("All Seba আপডেট ডাউনলোড হচ্ছে")
                     setDescription("$fileName ইনস্টল করার জন্য প্রস্তুত হচ্ছে")
                     setNotificationVisibility(
                         DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,

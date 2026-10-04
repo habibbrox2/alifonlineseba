@@ -30,7 +30,7 @@ sealed interface DeepLink {
 
         private fun fromUri(uri: Uri): DeepLink? = when (uri.host) {
             "requests" -> uri.lastPathSegment?.toLongOrNull()?.let { ServiceRequest(it) }
-            "onlinesheba.broxlab.online" -> fromPath(uri.path)
+            "allseba.online" -> fromPath(uri.path)
             else -> null
         }
 

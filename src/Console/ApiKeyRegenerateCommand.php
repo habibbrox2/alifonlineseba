@@ -14,7 +14,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Yiisoft\Db\Connection\ConnectionInterface;
 
 /**
- * Rewrite legacy API keys into the current Alif Tools format.
+ * Rewrite legacy API keys into the current All Seba format.
  *
  * Accounts created before the rebrand carry a `TH_…` key. Anything the outside
  * world has cached — an integration, a shell script, a shared key in a support

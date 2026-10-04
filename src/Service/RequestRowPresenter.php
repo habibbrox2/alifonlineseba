@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 
 /**
  * Builds the single row payload used by every surface that shows a service
@@ -21,12 +21,12 @@ use App\Repository\TransactionRepository;
 final class RequestRowPresenter
 {
     /**
-     * @param array<string, mixed> $row a raw `transaction` row (joined with `service`).
+     * @param array<string, mixed> $row a raw `service_order` row (joined with `service`).
      * @return array<string, mixed>
      */
     public function present(array $row): array
     {
-        $metadata = TransactionRepository::metadata($row);
+        $metadata = ServiceOrderRepository::metadata($row);
         $status = (string) $row['status'];
         $result = is_array($metadata['result'] ?? null) ? $metadata['result'] : null;
 

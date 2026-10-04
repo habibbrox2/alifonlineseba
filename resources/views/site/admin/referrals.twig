@@ -100,7 +100,7 @@
                         <th>বন্ধু</th>
                         <th>কোড</th>
                         {% include 'components/sortable-header.twig' with {
-                            label: 'ট্রিগার রিচার্জ', column: 'trigger_amount', sort: sort, dir: dir, right: true,
+                            label: 'অগ্রগতি', column: 'completed_count', sort: sort, dir: dir,
                             base: '/admin/referrals?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ (query ? 'q=' ~ query|url_encode ~ '&' : ''),
                         } %}
                         <th class="text-right">রেফারকারী</th>
@@ -127,8 +127,22 @@
                                 </a>
                             </td>
                             <td class="font-mono text-xs text-neutral-500">{{ r.code }}</td>
-                            <td class="whitespace-nowrap text-right text-neutral-600">
-                                {% if r.trigger_amount %}{{ r.trigger_amount|money }}{% else %}<span class="text-xs text-neutral-300">—</span>{% endif %}
+                            <td class="whitespace-nowrap text-neutral-600">
+                                {# "3/5" is what an operator triaging this queue
+                                   actually needs: who is close to paying out.
+                                   The winning recharge is only interesting once
+                                   the row is settled, so it moves down to the
+                                   amount column. #}
+                                <span class="font-semibold text-neutral-800">
+                                    {{ r.completed_count }}/{{ r.required_count }}
+                                </span>
+                                {% if r.trigger_amount %}
+                                    <span class="mt-0.5 block text-xs text-neutral-400">
+                                        শেষ {{ r.trigger_amount|money }}
+                                    </span>
+                                {% elseif r.status == 'pending' and r.remaining is defined and r.remaining > 0 %}
+                                    <span class="mt-0.5 block text-xs text-neutral-400">আরও {{ r.remaining }}টি দরকার</span>
+                                {% endif %}
                             </td>
                             <td class="whitespace-nowrap text-right font-semibold text-primary-700">{{ r.referrer_amount|money }}</td>
                             <td class="whitespace-nowrap text-right font-semibold text-accent-600">{{ r.referee_amount|money }}</td>

@@ -48,6 +48,8 @@ final readonly class AdminUsersAction
                 $row = $this->users->findById($userId);
 
                 if ($row !== null) {
+                    $temporaryPassword = null;
+
                     match ($action) {
                         'toggle' => $this->users->update($userId, [
                             'status' => $row['status'] === 'active' ? 'disabled' : 'active',
@@ -55,12 +57,16 @@ final readonly class AdminUsersAction
                         'role' => $this->users->update($userId, [
                             'role' => in_array($input['role'] ?? '', ['user', 'staff', 'admin'], true) ? $input['role'] : 'user',
                         ]),
-                        'reset' => $this->users->update($userId, [
-                            'password_hash' => password_hash('Demo1234!', PASSWORD_DEFAULT),
-                        ]),
+                        'reset' => $temporaryPassword = $this->resetPassword($userId),
                         default => null,
                     };
-                    $this->session->set('flash_success', 'ইউজার আপডেট হয়েছে।');
+
+                    $this->session->set(
+                        'flash_success',
+                        $temporaryPassword === null
+                            ? 'ইউজার আপডেট হয়েছে।'
+                            : "পাসওয়ার্ড রিসেট হয়েছে। নতুন পাসওয়ার্ড: {$temporaryPassword} — এটি একবারই দেখানো হবে, তাই এখনই কপি করে ব্যবহারকারীকে জানান।"
+                    );
                 }
             }
 
@@ -85,6 +91,36 @@ final readonly class AdminUsersAction
             'deletedFilter' => $deleted,
             'trashedCount' => $this->users->countTrashed(),
         ]);
+    }
+
+    /**
+     * Replace a user's password with a fresh random value and return the
+     * plaintext so it can be shown once. A fixed default would hand every
+     * reset account the same guessable password, which is worse than no
+     * reset at all on a public deployment.
+     */
+    private function resetPassword(int $userId): string
+    {
+        $temporary = self::generatePassword();
+        $this->users->update($userId, [
+            'password_hash' => password_hash($temporary, PASSWORD_DEFAULT),
+        ]);
+
+        return $temporary;
+    }
+
+    /** Ambiguous glyphs (0/O, 1/l) are left out so the value can be read aloud. */
+    private static function generatePassword(int $length = 14): string
+    {
+        $alphabet = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
+        $max = strlen($alphabet) - 1;
+        $password = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            $password .= $alphabet[random_int(0, $max)];
+        }
+
+        return $password;
     }
 
     /** Map the ?trashed= query value onto a UserRepository filter. */

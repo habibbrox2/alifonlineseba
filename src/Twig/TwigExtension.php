@@ -9,6 +9,7 @@ use App\Service\CategoryAccent;
 use App\Service\IconLibrary;
 use App\Service\PaymentBrand;
 use App\Service\StatusPresenter;
+use App\Repository\TransactionRepository;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
@@ -240,7 +241,29 @@ final class TwigExtension extends AbstractExtension
             new TwigFilter('bndate', [$this, 'bngDate']),
             new TwigFilter('statusbadge', [$this, 'statusBadge'], ['is_safe' => ['html']]),
             new TwigFilter('statuslabel', [$this, 'statusLabel']),
+            // Ledger entry type, as a word and as a badge. Two filters rather
+            // than one returning HTML, so a type can be used as text (in an
+            // <option>, an aria-label) without escaping surprises.
+            new TwigFilter('ledgertype', [$this, 'ledgerTypeLabel']),
+            new TwigFilter('ledgerbadge', [$this, 'ledgerTypeBadge']),
         ];
+    }
+
+    /**
+     * Bengali name for a ledger entry type.
+     *
+     * Falls back to the raw key rather than to an empty string, so a type this
+     * build does not know about is visible on the page as `new_type` instead of
+     * rendering as a blank cell that reads like "amount: —".
+     */
+    public function ledgerTypeLabel(string $type): string
+    {
+        return TransactionRepository::typeLabel($type);
+    }
+
+    public function ledgerTypeBadge(string $type): string
+    {
+        return TransactionRepository::typeBadge($type);
     }
 
     /**

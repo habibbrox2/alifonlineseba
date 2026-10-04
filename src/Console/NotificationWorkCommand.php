@@ -6,6 +6,7 @@ namespace App\Console;
 
 use App\Notification\Channel\FcmChannel;
 use App\Notification\Channel\TelegramChannel;
+use App\Notification\Channel\WebPushChannel;
 use App\Notification\QueueRepository;
 use App\Repository\DeviceRepository;
 use App\Repository\BotConnectionRepository;
@@ -31,6 +32,7 @@ final class NotificationWorkCommand extends Command
         private readonly QueueRepository $queue,
         private readonly FcmChannel $fcm,
         private readonly TelegramChannel $telegram,
+        private readonly WebPushChannel $webpush,
     ) {
         parent::__construct();
     }
@@ -65,6 +67,10 @@ final class NotificationWorkCommand extends Command
             $result = match ($channel) {
                 'fcm' => $this->fcm->send($userId, $payload),
                 'telegram' => $this->telegram->send($userId, $payload),
+                // One job, one user, every browser they have left watching —
+                // the fan-out is inside WebPushChannel, so this is the same
+                // shape as the two above.
+                'webpush' => $this->webpush->send($userId, $payload),
                 // Unknown/disabled channel: dead-letter with a clear reason
                 // instead of retrying something that can never succeed.
                 default => \App\Notification\Channel\DeliveryResult::permanent("Unknown channel '{$channel}'."),

@@ -1,0 +1,151 @@
+name: Android APK (TWA)
+
+# The TWA cannot be built from a plain checkout: it needs a JDK and the Android
+# SDK, and neither belongs in the PHP runtime that serves the site. This workflow
+# is therefore both the release path and the *only* validation of twa/ -- a green
+# run is what proves the hand-written Gradle, manifest and resources actually
+# link. If you have Android Studio locally, `twa/` opens as a project there too.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'twa/**'
+      - '.github/workflows/android-apk.yml'
+  pull_request:
+    paths:
+      - 'twa/**'
+      - '.github/workflows/android-apk.yml'
+
+# One build at a time per branch. Cancelling the older run saves runner minutes
+# and avoids two jobs writing the same artifact name.
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Read by twa/app/build.gradle.kts. Left empty here on purpose: a fork's PR
+  # must not be able to touch the release keystore, and `if: secrets.X != ''`
+  # below already tests them without printing them.
+  TWA_STORE_PASSWORD: ${{ secrets.TWA_STORE_PASSWORD }}
+  TWA_KEY_ALIAS: ${{ secrets.TWA_KEY_ALIAS }}
+  TWA_KEY_PASSWORD: ${{ secrets.TWA_KEY_PASSWORD }}
+
+jobs:
+  build:
+    name: assemble
+    # ubuntu-latest is deliberate: the TWA has no native code and no NDK, so the
+    # JVM runners are ~4x faster per minute than the image runners, and the
+    # produced APK is platform-independent.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        # twa/ is its own Gradle root (its own settings.gradle.kts, wrapper and
+        # daemon cache), so the shell steps must start inside it. Upload-artifact
+        # is not affected by this and uses workspace-relative paths.
+        working-directory: twa
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          # AGP 8.13.x requires JDK 17 exactly. A newer JDK fails with an
+          # unhelpful "Unsupported class file major version" during
+          # configuration; 11 fails the AGP minimum outright.
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+
+      # AGP would auto-download these (android.builder.sdkDownload defaults to
+      # true), but doing it here fails fast with a readable error instead of a
+      # license prompt buried in the Gradle log.
+      - name: Install SDK platform and build tools
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+          gradle-home-cache-cleanup: true
+
+      - name: Decode release keystore
+        id: signing
+        env:
+          # Base64 of the .jks, not the file itself: repository secrets are
+          # text and newlines in a binary secret corrupt the keystore.
+          TWA_KEYSTORE_BASE64: ${{ secrets.TWA_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TWA_KEYSTORE_BASE64}" ]; then
+            echo "No TWA_KEYSTORE_BASE64 secret: release will build UNSIGNED."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # $RUNNER_TEMP is outside the workspace, so the .jks can never be
+          # picked up by a later `git add` or leaked into an artifact.
+          key="$RUNNER_TEMP/twa-release.jks"
+          printf '%s' "$TWA_KEYSTORE_BASE64" | base64 --decode > "$key"
+          # Fail here rather than deep inside Gradle's signing task, where a
+          # wrong password looks like a Gradle bug.
+          keytool -list -v -keystore "$key" \
+            -storepass "$TWA_STORE_PASSWORD" -alias "$TWA_KEY_ALIAS" > /dev/null
+          echo "TWA_STORE_FILE=$key" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      # Debug is always built: it is signed with the stock debug key, so it needs
+      # no secrets and works on a fork's PR. Install it and the TWA runs
+      # immediately -- but a debug-signed build can never be assetlinks-verified
+      # against a published fingerprint, so it shows a browser Custom Tab with
+      # an address bar and no notifications. That is expected, not a bug.
+      - name: Assemble debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Assemble release APK
+        if: steps.signing.outputs.signed == 'true'
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Lint
+        # checkReleaseBuilds is off in build.gradle.kts, so lint cannot fail the
+        # build above; run it separately and upload the report either way.
+        continue-on-error: true
+        run: ./gradlew --no-daemon :app:lintDebug
+
+      - name: Fingerprints of the CI-built release APK
+        # The whole point of the workflow: the cert that just signed the APK is
+        # what must be published in /.well-known/assetlinks.json. Print it so it
+        # can be pasted into TWA_FINGERPRINTS without hunting for keytool.
+        if: steps.signing.outputs.signed == 'true'
+        run: |
+          keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk \
+            | grep -iE 'SHA-?256|Owner|Valid from'
+
+      # `warn`, not `error`: a red X here would sit on top of the red X that the
+      # failed Gradle step already put on this job. The job fails either way.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: twa-apk
+          path: twa/app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: twa-lint
+          path: twa/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 7

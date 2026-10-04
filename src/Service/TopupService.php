@@ -49,7 +49,7 @@ final class TopupService
     public function __construct(
         private readonly TopupRepository $topups,
         private readonly UserRepository $users,
-        private readonly TransactionRepository $transactions,
+        private readonly LedgerService $ledger,
         private readonly NotificationRepository $notifications,
         private readonly ActivityLogRepository $logs,
         private readonly SettingsRepository $settings,
@@ -229,22 +229,23 @@ final class TopupService
         $amount = (float) $topup['amount'];
         $userId = (int) $topup['user_id'];
 
-        $reference = 'AL' . strtoupper(bin2hex(random_bytes(5)));
-        $txId = $this->transactions->create([
-            'user_id' => $userId,
-            'reference' => $reference,
-            'amount' => $amount,
-            'status' => 'completed',
+        // Credit first, then stamp the row. If the credit fails the request
+        // stays open and the next reviewer gets a clean attempt; the other
+        // order round would leave an approved request with no money in it.
+        [$credited, $failure, , $txId] = $this->ledger->creditUser($userId, $amount, [
+            'type' => TransactionRepository::TYPE_TOPUP,
+            'description' => sprintf('রিচার্জ %s', (string) ($topup['reference'] ?? '')),
             'metadata' => [
-                'type' => 'topup',
                 'topup_id' => (int) $topup['id'],
                 'method' => $topup['method'],
                 'sender_number' => $topup['sender_number'],
                 'trx_id' => $topup['reference'],
             ],
         ]);
+        if (!$credited) {
+            return [false, $failure];
+        }
 
-        $this->users->adjustBalance($userId, +$amount);
         $this->topups->update((int) $topup['id'], [
             'status' => TopupRepository::APPROVED,
             'reviewed_by' => $reviewerId,

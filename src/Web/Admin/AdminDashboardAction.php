@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Admin;
 
 use App\Repository\ActivityLogRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\TopupRepository;
 use App\Repository\TransactionRepository;
@@ -18,6 +19,7 @@ final readonly class AdminDashboardAction
         private WebViewRenderer $view,
         private UserRepository $users,
         private ServiceRepository $services,
+        private ServiceOrderRepository $orders,
         private TransactionRepository $transactions,
         private ActivityLogRepository $logs,
         private TopupRepository $topups,
@@ -32,7 +34,7 @@ final readonly class AdminDashboardAction
             'categoryCount' => count($this->services->allCategories(false)),
             'serviceCount' => count($this->services->servicesByCategory()),
             'txStats' => $this->transactions->statsAll(),
-            'openOrders' => $this->transactions->openServiceOrders(),
+            'openOrders' => $this->orders->openOrders(),
             'recentLogs' => $this->logs->all(1, 8)['rows'],
             'topupStats' => $stats,
             // What still needs a human: claimed (`review`) and unclaimed

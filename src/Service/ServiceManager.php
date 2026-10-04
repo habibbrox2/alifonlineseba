@@ -9,6 +9,7 @@ use App\Notification\NotificationEvent;
 use App\Notification\NotificationManager;
 use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
@@ -24,16 +25,28 @@ use App\ServiceProvider\ServiceResult;
  */
 final class ServiceManager
 {
+    /**
+     * The operator's service-order queue — `/admin/orders`.
+     *
+     * Not `/admin/services`: that route is the service *catalogue* (create,
+     * edit, price), and an order waiting for a decision is not in it. The
+     * approve / reject / cancel controls the notification is meant to reach all
+     * live on the order queue and its per-order desk.
+     */
+    public const ADMIN_QUEUE = '/admin/orders';
+
     /** @var array<string, ServiceProviderInterface> */
     private array $providers;
 
     public function __construct(
         private readonly ServiceRepository $services,
-        private readonly TransactionRepository $transactions,
+        private readonly ServiceOrderRepository $orders,
+        private readonly LedgerService $ledger,
         private readonly UserRepository $users,
         private readonly ActivityLogRepository $logs,
         private readonly NotificationRepository $notifications,
         private readonly NotificationManager $notify,
+        private readonly OrderWindowService $window,
     ) {
         $mocks = [new MockNidService(), new MockVoterService(), new MockTinService()];
         $this->providers = [];
@@ -306,13 +319,21 @@ final class ServiceManager
     }
 
     /**
-     * Charge the user and open a request in `pending`.
+     * Charge the user and open an order in `pending`.
      *
-     * The request is deliberately *not* executed here: the history page owns the
-     * lifecycle, so a user can cancel a pending request and get the money back.
+     * The order is deliberately *not* executed here: the history page owns the
+     * lifecycle, so a user can cancel a pending order and get the money back.
      */
     public function submit(array $service, Identity $user, array $input, string $ip, string $userAgent): ServiceResult
     {
+        // The operator's daily intake window (default 08:00–22:00 Bangladesh
+        // time) gates *placing* an order and nothing else. start()/retry() stay
+        // reachable overnight on purpose: those requests are already paid for,
+        // and refusing to run one would hold the user's money until morning.
+        if (!$this->window->isOpen()) {
+            return ServiceResult::fail($this->window->closedMessage());
+        }
+
         $provider = $this->providerFor($service);
         if ($provider === null) {
             return ServiceResult::fail('This service is not available for automated execution.');
@@ -348,10 +369,14 @@ final class ServiceManager
             return ServiceResult::fail('Validation failed.', $missing);
         }
 
-        $this->users->adjustBalance($user->id, -$price);
-
+        // The charge is a ledger entry, not a bare column update: the order
+        // sitting in the queue has to be explainable as "this much left this
+        // account at this moment", and that is only true if there is a row
+        // saying so. The order row is written first so the entry has something
+        // to point at — a debit with no order reference is money that vanished.
         $reference = self::newReference();
-        $txId = $this->transactions->create([
+
+        $orderId = $this->orders->create([
             'user_id' => $user->id,
             'service_id' => (int) $service['id'],
             'reference' => $reference,
@@ -368,47 +393,77 @@ final class ServiceManager
             ],
         ]);
 
+        if ($price > 0) {
+            [$charged] = $this->ledger->debitUser($user->id, $price, [
+                'type' => TransactionRepository::TYPE_ORDER_DEBIT,
+                'service_order_id' => $orderId,
+                'description' => sprintf('সার্ভিস অর্ডার %s', $reference),
+                'metadata' => ['service_name' => (string) ($service['name'] ?? '')],
+            ]);
+            if (!$charged) {
+                // The order row exists but nothing was taken for it. Remove it
+                // rather than leaving a queue entry nobody is going to fulfil
+                // and cannot be cancelled for a refund (there is no money).
+                $this->orders->update($orderId, ['status' => StatusPresenter::CANCELLED]);
+                return ServiceResult::fail('অর্ডারটি গ্রহণ করা যায়নি — ব্যালেন্স পরিবর্তন হয়নি।');
+            }
+        }
+
+        // Two audiences, two landing pages. The customer wants the row that
+        // was just created; staff want the queue entry that needs a decision,
+        // pre-filtered to this reference so the order is on screen rather than
+        // somewhere in page two. Without the admin link every staff copy —
+        // in-app, push and Telegram alike — pointed at the customer's own
+        // history page, which staff do not have.
         $this->notify->dispatch(
             NotificationEvent::SERVICE_REQUEST_CREATED,
             $user->id,
             ['service' => (string) ($service['name'] ?? 'Service'), 'reference' => $reference, 'user_id' => $user->id],
             '/service-history',
-            ['reference' => $reference, 'tx_id' => $txId],
+            ['reference' => $reference, 'tx_id' => $orderId],
+            self::ADMIN_QUEUE . '?q=' . rawurlencode($reference),
         );
         $this->log($user, 'service.submit', ($service['name'] ?? 'Service') . ' requested', $ip, $userAgent, $service, $reference);
 
         return new ServiceResult(
             true,
             'অনুরোধটি গ্রহণ করা হয়েছে। এখন সার্ভিস হিস্ট্রি থেকে চালু করতে পারবেন।',
-            ['_reference' => $reference, '_request_id' => $txId, '_status' => StatusPresenter::PENDING],
+            ['_reference' => $reference, '_request_id' => $orderId, '_status' => StatusPresenter::PENDING],
             [],
         );
     }
 
     /**
-     * Run a pending request through its provider and settle the final status.
+     * Run a pending order through its provider and store the result.
      *
-     * On failure the charged amount is refunded, so a failed request is always
+     * Note where it stops: at `processing`, not `completed`. Completion is the
+     * admin's decision and it is the edge on which money changes hands — an
+     * operator's earnings exist because they approved the order. Letting the
+     * customer finish their own order would close the order with nobody paid
+     * and nothing left for an admin to approve, so the button that used to
+     * "finish" it now means "start it", which is also the honest label.
+     *
+     * On failure the charged amount is refunded, so a failed order is always
      * retryable without the user topping up again.
      */
     public function start(array $request, Identity $user, string $ip, string $userAgent): ServiceResult
     {
         // Re-read: a caller may hand us a row it read before someone else moved
-        // the request on, and re-running a settled request would charge twice.
+        // the order on, and re-running a settled order would charge twice.
         $request = $this->fresh($request);
         $id = (int) $request['id'];
         if ((string) $request['status'] !== StatusPresenter::PENDING) {
-            return ServiceResult::fail('এই অনুরোধটি ইতিমধ্যে প্রক্রিয়া করা হয়েছে।');
+            return ServiceResult::fail('এই অর্ডারটি ইতিমধ্যে প্রক্রিয়া করা হয়েছে।');
         }
 
-        $metadata = TransactionRepository::metadata($request);
+        $metadata = ServiceOrderRepository::metadata($request);
         $provider = $this->providers[(string) ($metadata['provider'] ?? '')] ?? null;
         if ($provider === null) {
             $this->fail($request, $user, $ip, $userAgent, 'সার্ভিস প্রদানক পাওয়া যায়নি।');
             return ServiceResult::fail('সার্ভিস প্রদানক পাওয়া যায়নি।');
         }
 
-        $this->transactions->setStatus($id, StatusPresenter::PROCESSING);
+        $this->orders->setStatus($id, StatusPresenter::PROCESSING);
 
         $result = $provider->execute((array) ($metadata['input'] ?? []));
         if (!$result->success) {
@@ -416,18 +471,18 @@ final class ServiceManager
             return $result;
         }
 
-        $this->transactions->setStatus($id, StatusPresenter::COMPLETED, ['result' => $result->data]);
+        $this->orders->setStatus($id, StatusPresenter::PROCESSING, ['result' => $result->data]);
 
         $reference = (string) $request['reference'];
         $serviceName = (string) ($metadata['service_name'] ?? 'Service');
         $this->notify->dispatch(
-            NotificationEvent::SERVICE_REQUEST_COMPLETED,
+            NotificationEvent::SERVICE_REQUEST_PROCESSING,
             $user->id,
             ['service' => $serviceName, 'reference' => $reference],
             '/service-history',
             ['reference' => $reference, 'tx_id' => $id],
         );
-        $this->log($user, 'service.complete', $serviceName . ' completed', $ip, $userAgent, null, $reference);
+        $this->log($user, 'service.complete', $serviceName . ' started', $ip, $userAgent, null, $reference);
 
         return new ServiceResult(
             true,
@@ -435,29 +490,44 @@ final class ServiceManager
             $result->data + [
                 '_reference' => $reference,
                 '_request_id' => $id,
-                '_status' => StatusPresenter::COMPLETED,
+                '_status' => StatusPresenter::PROCESSING,
             ],
             [],
         );
     }
 
-    /** Cancel a still-pending request and refund it. */
+    /** Cancel a still-pending order and refund it. */
     public function cancel(array $request, Identity $user, string $ip, string $userAgent): ServiceResult
     {
         $request = $this->fresh($request);
         $id = (int) $request['id'];
         if ((string) $request['status'] !== StatusPresenter::PENDING) {
-            return ServiceResult::fail('শুধুমাত্র পেন্ডিং অনুরোধ বাতিল করা যায়।');
+            return ServiceResult::fail('শুধুমাত্র পেন্ডিং অর্ডার বাতিল করা যায়।');
         }
 
-        $this->transactions->setStatus($id, StatusPresenter::CANCELLED);
-        $this->refund($request);
+        $amount = abs((float) $request['amount']);
+
+        // Refund first. If it fails the order stays open and the customer can
+        // try again; the opposite order would close the order with their money
+        // still held and nothing left to retry.
+        if ($amount > 0) {
+            [$refunded, $message] = $this->ledger->creditUser((int) $request['user_id'], $amount, [
+                'type' => TransactionRepository::TYPE_ORDER_REFUND,
+                'service_order_id' => $id,
+                'description' => sprintf('অর্ডার %s বাতিল — টাকা ফেরত', (string) $request['reference']),
+            ]);
+            if (!$refunded) {
+                return ServiceResult::fail($message);
+            }
+        }
+
+        $this->orders->setStatus($id, StatusPresenter::CANCELLED);
 
         $reference = (string) $request['reference'];
         $this->notify->dispatch(
             NotificationEvent::SERVICE_REQUEST_CANCELLED,
             $user->id,
-            ['reference' => $reference, 'amount' => number_format((float) $request['amount'], 2)],
+            ['reference' => $reference, 'amount' => number_format($amount, 2)],
             '/service-history',
             ['reference' => $reference, 'tx_id' => $id],
         );
@@ -465,14 +535,14 @@ final class ServiceManager
 
         return new ServiceResult(
             true,
-            'অনুরোধটি বাতিল হয়েছে এবং টাকা ফেরত দেওয়া হয়েছে।',
+            'অর্ডারটি বাতিল হয়েছে এবং টাকা ফেরত দেওয়া হয়েছে।',
             ['_reference' => $reference, '_request_id' => $id, '_status' => StatusPresenter::CANCELLED],
             [],
         );
     }
 
     /**
-     * Re-charge a failed or cancelled request and run it again.
+     * Re-charge a failed or cancelled order and run it again.
      *
      * Cancelling and failing both refund, so the retry pays the price again.
      */
@@ -482,27 +552,42 @@ final class ServiceManager
         $id = (int) $request['id'];
         $status = (string) $request['status'];
         if (!in_array($status, [StatusPresenter::FAILED, StatusPresenter::CANCELLED], true)) {
-            return ServiceResult::fail('শুধুমাত্র ব্যর্থ বা বাতিল অনুরোধ পুনরায় চালানো যায়।');
+            return ServiceResult::fail('শুধুমাত্র ব্যর্থ বা বাতিল অর্ডার পুনরায় চালানো যায়।');
         }
 
         $price = (float) $request['amount'];
-        if (!$this->hasBalance($user->id, $price)) {
+        if ($price > 0 && !$this->hasBalance($user->id, $price)) {
             return ServiceResult::fail('পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজনীয়: ৳' . number_format($price, 2));
         }
 
-        $attempts = (int) (TransactionRepository::metadata($request)['attempts'] ?? 0) + 1;
-        $this->users->adjustBalance($user->id, -$price);
-        $this->transactions->setStatus($id, StatusPresenter::PENDING, ['attempts' => $attempts]);
+        $attempts = (int) (ServiceOrderRepository::metadata($request)['attempts'] ?? 0) + 1;
+
+        // The order is reopened *after* the charge lands, for the same reason
+        // everywhere else in this class: a failed debit must leave the order
+        // closed, not open and unpaid.
+        if ($price > 0) {
+            [$charged, $message] = $this->ledger->debitUser($user->id, $price, [
+                'type' => TransactionRepository::TYPE_ORDER_DEBIT,
+                'service_order_id' => $id,
+                'description' => sprintf('অর্ডার %s পুনরায় চালানো', (string) $request['reference']),
+                'metadata' => ['attempt' => $attempts],
+            ]);
+            if (!$charged) {
+                return ServiceResult::fail($message);
+            }
+        }
+
+        $this->orders->setStatus($id, StatusPresenter::PENDING, ['attempts' => $attempts]);
         $this->log($user, 'service.retry', 'Request retried (attempt ' . $attempts . ')', $ip, $userAgent, null, (string) $request['reference']);
 
-        // start() re-reads the row, so it now sees the request in its pending state.
+        // start() re-reads the row, so it now sees the order in its pending state.
         return $this->start($request, $user, $ip, $userAgent);
     }
 
-    /** The current database state of a request, falling back to what we were given. */
+    /** The current database state of an order, falling back to what we were given. */
     private function fresh(array $request): array
     {
-        return $this->transactions->findById((int) $request['id']) ?? $request;
+        return $this->orders->findById((int) $request['id']) ?? $request;
     }
 
     private function hasBalance(int $userId, float $price): bool
@@ -511,16 +596,19 @@ final class ServiceManager
         return $fresh !== null && (float) $fresh['balance'] >= $price;
     }
 
-    private function refund(array $request): void
-    {
-        $this->users->adjustBalance((int) $request['user_id'], abs((float) $request['amount']));
-    }
-
     private function fail(array $request, Identity $user, string $ip, string $userAgent, string $reason): void
     {
         $id = (int) $request['id'];
-        $this->transactions->setStatus($id, StatusPresenter::FAILED, ['error' => $reason]);
-        $this->refund($request);
+        $this->orders->setStatus($id, StatusPresenter::FAILED, ['error' => $reason]);
+
+        $amount = abs((float) $request['amount']);
+        if ($amount > 0) {
+            $this->ledger->creditUser((int) $request['user_id'], $amount, [
+                'type' => TransactionRepository::TYPE_ORDER_REFUND,
+                'service_order_id' => $id,
+                'description' => sprintf('অর্ডার %s ব্যর্থ — টাকা ফেরত', (string) $request['reference']),
+            ]);
+        }
 
         $reference = (string) $request['reference'];
         $this->notify->dispatch(

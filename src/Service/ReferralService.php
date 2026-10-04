@@ -39,13 +39,16 @@ final class ReferralService
     /** A referral bonus larger than this is a settings typo, not an offer. */
     private const HARD_MAX_BONUS = 100000.0;
 
-    /** Defensive: the very first recharge of an account, for the trigger check. */
-    private const FIRST_RECHARGE_CHECK = 1;
+    /** A run this long is a settings typo, not a loyalty programme. */
+    private const HARD_MAX_RECHARGES = 1000;
+
+    /** The rule when settings are absent or nonsensical. */
+    private const DEFAULT_REQUIRED = 5;
 
     public function __construct(
         private readonly ReferralRepository $referrals,
         private readonly UserRepository $users,
-        private readonly TransactionRepository $transactions,
+        private readonly LedgerService $ledger,
         private readonly SettingsRepository $settings,
         private readonly NotificationManager $notify,
         private readonly ActivityLogRepository $logs,
@@ -71,10 +74,52 @@ final class ReferralService
      * The smallest first recharge that unlocks the bonus. Zero disables the
      * threshold, which is a legitimate choice — it just means any approved
      * recharge counts.
+     *
+     * @deprecated Kept for the settings form and for referrals created before
+     *             the qualifying-recharge rule existed. The live floor is
+     *             {@see minQualifyingRecharge()}; this is only the fallback
+     *             used when that key has not been set on this installation.
      */
     public function minFirstRecharge(): float
     {
         $value = (float) $this->settings->get('referral_min_first_recharge', '100');
+        return $value > 0 ? min($value, self::HARD_MAX_BONUS) : 0.0;
+    }
+
+    /**
+     * How many qualifying recharges a friend must complete before either side
+     * is paid.
+     *
+     * Clamped to at least 1: a rule of zero would qualify on signup, which is
+     * precisely the signup bonus this programme was built not to pay. A
+     * settings value that is not a positive integer falls back to the default
+     * rather than silently switching the programme off.
+     */
+    public function requiredRecharges(): int
+    {
+        $value = (int) $this->settings->get('referral_required_recharges', (string) self::DEFAULT_REQUIRED);
+
+        return $value >= 1 ? min($value, self::HARD_MAX_RECHARGES) : self::DEFAULT_REQUIRED;
+    }
+
+    /**
+     * The floor each of those recharges has to clear.
+     *
+     * Zero disables the floor, which is a legitimate operator choice: it means
+     * any approved recharge counts towards the run.
+     */
+    public function minQualifyingRecharge(): float
+    {
+        $raw = $this->settings->get('referral_min_qualifying_recharge', '');
+        if ($raw === '') {
+            // An installation that has not had the new key seeded yet falls
+            // back to the old single-recharge threshold, so upgrading does not
+            // change the meaning of an existing setting.
+            return $this->minFirstRecharge();
+        }
+
+        $value = (float) $raw;
+
         return $value > 0 ? min($value, self::HARD_MAX_BONUS) : 0.0;
     }
 
@@ -92,14 +137,17 @@ final class ReferralService
     {
         $referrer = number_format($this->referrerBonus(), 0);
         $referee = number_format($this->refereeBonus(), 0);
-        $min = $this->minFirstRecharge();
-        $unlock = $min > 0
-            ? sprintf('ন্যূনতম ৳%s রিচার্জ অনুমোদিত হলে', number_format($min, 0))
-            : 'প্রথম রিচার্জ অনুমোদিত হলে';
+        $required = $this->requiredRecharges();
+        $min = $this->minQualifyingRecharge();
+
+        $perRecharge = $min > 0
+            ? sprintf('ন্যূনতম ৳%s করে', number_format($min, 0))
+            : '';
 
         return sprintf(
-            'আপনার বন্ধু যখন %s যোগ করে প্রথমবার রিচার্জ করবেন, তখন আপনি ৳%s এবং আপনার বন্ধু ৳%s ব্যালেন্স বোনাস পাবেন।',
-            $unlock,
+            'আপনার বন্ধু যখন %s %dটি রিচার্জ অনুমোদিত করবেন, তখন আপনি ৳%s এবং আপনার বন্ধু ৳%s ব্যালেন্স বোনাস পাবেন।',
+            $perRecharge,
+            $required,
             $referrer,
             $referee,
         );
@@ -160,6 +208,11 @@ final class ReferralService
             'code' => $code,
             'referrer_amount' => $this->referrerBonus(),
             'referee_amount' => $this->refereeBonus(),
+            // Snapshot the qualification rule alongside the promised amounts, so
+            // this referral is finished by the terms that were on offer when the
+            // friend signed up.
+            'required_count' => $this->requiredRecharges(),
+            'min_amount' => $this->minQualifyingRecharge(),
         ]);
 
         $this->logs->create([
@@ -176,14 +229,27 @@ final class ReferralService
      * Referral trigger, called from TopupService once a recharge is approved.
      *
      * The topup row is already `approved` and the balance already credited by
-     * the time this runs, so the "is this the first one?" question is answered
-     * by counting approved recharges: if the count is not exactly one, this
-     * was not the friend's first purchase and no bonus is due.
+     * the time this runs, so this method does two things: it moves the run's
+     * progress counter, and it pays out if that recharge finished the run.
      *
-     * A referral that simply does not pay is NOT an error — no referral, a
-     * disabled programme, a second recharge or a below-threshold first
-     * recharge are all normal outcomes. The caller gets [false, reason] and
-     * moves on; the only failure worth surfacing to the user is success.
+     * ## What counts
+     *
+     * `qualifyingRechargeCount()` is the single definition of a qualifying
+     * recharge — approved, and at least the referral's own `min_amount`. This
+     * method deliberately does not add "and the amount of this particular
+     * recharge" to it: the count is derived from the recharge table, so it is
+     * already true of committed data by the time it is read, and re-deriving it
+     * from a hand-passed amount would be a second source of truth for the same
+     * number. The `$amount` argument is therefore only ever used for the
+     * human-readable message and for the `trigger_amount` the winning recharge
+     * records.
+     *
+     * ## What does not pay
+     *
+     * A referral that simply does not qualify is NOT an error — no referral, a
+     * disabled programme, an already-settled run, or a recharge below the floor
+     * are all normal outcomes. The caller gets [false, reason] and moves on; the
+     * only outcome worth surfacing to the user is a completed payout.
      *
      * @return array{0: bool, 1: string} [paid, message]
      */
@@ -201,18 +267,30 @@ final class ReferralService
             return [false, 'এই রেফারেল আগেই প্রক্রিয়া করা হয়েছে।'];
         }
 
-        $approvedCount = (int) $this->db
-            ->createCommand('SELECT COUNT(*) FROM {{%topup_request}} WHERE [[user_id]] = :u AND [[status]] = :s')
-            ->bindValues([':u' => $refereeId, ':s' => 'approved'])
-            ->queryScalar();
+        $required = max(1, (int) $referral['required_count']);
+        $min = (float) $referral['min_amount'];
 
-        if ($approvedCount !== self::FIRST_RECHARGE_CHECK) {
-            return [false, 'এটি বন্ধুর প্রথম রিচার্জ নয় — বোনাস প্রযোজ্য নয়।'];
-        }
+        // Counted across the whole recharge history rather than incremented, so
+        // the counter is correct even if an earlier approval ran before this
+        // column existed or after a row was corrected by hand.
+        $completed = $this->referrals->qualifyingRechargeCount($refereeId, $min);
 
-        $min = $this->minFirstRecharge();
-        if ($min > 0 && $amount < $min) {
-            return [false, sprintf('প্রথম রিচার্জ ৳%s এর কম হওয়ায় বোনাস দেওয়া হয়নি।', number_format($min, 0))];
+        // Progress first, and it is written even when the run is not finished.
+        // The referral page reads this column, so without it a user with four of
+        // five approved recharges would be told they have made no progress.
+        // `recordProgress()` is a guarded `pending -> pending` update, so it
+        // cannot resurrect a run that was just paid or just voided.
+        $this->referrals->recordProgress((int) $referral['id'], $completed);
+
+        if ($completed < $required) {
+            $remaining = $required - $completed;
+
+            return [false, sprintf(
+                'বন্ধুর %dটির মধ্যে %dটি রিচার্জ হয়েছে — আরও %dটি দরকার।',
+                $required,
+                $completed,
+                $remaining,
+            )];
         }
 
         $paid = $this->pay(
@@ -220,6 +298,8 @@ final class ReferralService
             [
                 'trigger_topup_id' => $topupId,
                 'trigger_amount' => $amount,
+                'completed_count' => $required,
+                'qualified_at' => date('Y-m-d H:i:s'),
             ],
         );
 
@@ -346,9 +426,20 @@ final class ReferralService
     /**
      * Credit both sides and flip the row, atomically.
      *
-     * `transition()` is called FIRST and only pays if it won. That ordering is
-     * the whole idempotency story: the loser of a race never reaches the
-     * balance code at all.
+     * Two independent guards make this safe to call twice, and they cover
+     * different failures:
+     *
+     * - The `pending -> paid` transition at the end is a guarded UPDATE, so
+     *   only one caller can win it. If this call loses, it returns false and
+     *   the enclosing transaction rolls the credits back with it — a referral
+     *   nobody can see in the ledger never keeps a balance it cannot explain.
+     * - Each credit carries a deterministic ledger reference, so even a caller
+     *   that somehow reached the balance code twice cannot mint a second
+     *   ৳50: `transaction.reference` is UNIQUE and the insert is refused.
+     *
+     * Credits are written before the status flip rather than after, because a
+     * flip that fails must be able to undo them. Doing it the other way round
+     * would leave a `paid` referral whose money was never written.
      */
     private function pay(int $referralId, array $context): bool
     {
@@ -364,33 +455,36 @@ final class ReferralService
             $refereeAmount = (float) $referral['referee_amount'];
             $refereeName = $this->username($refereeId);
 
-            $referrerTx = $referrerAmount > 0
-                ? $this->credit($referrerId, $referrerAmount, [
-                    'type' => 'referral_bonus',
-                    'direction' => 'referrer',
-                    'referral_id' => $referralId,
-                    'referee' => $refereeName,
-                    'code' => (string) $referral['code'],
-                ])
-                : null;
+            $referrerTx = $this->credit($referrerId, $referrerAmount, [
+                'type' => 'referral_bonus',
+                'direction' => 'referrer',
+                'referral_id' => $referralId,
+                'referee' => $refereeName,
+                'code' => (string) $referral['code'],
+            ], ReferralRepository::bonusReference($referralId, 'referrer'));
 
-            $refereeTx = $refereeAmount > 0
-                ? $this->credit($refereeId, $refereeAmount, [
-                    'type' => 'referral_bonus',
-                    'direction' => 'referee',
-                    'referral_id' => $referralId,
-                    'referrer' => $this->username($referrerId),
-                    'code' => (string) $referral['code'],
-                ])
-                : null;
+            $refereeTx = $this->credit($refereeId, $refereeAmount, [
+                'type' => 'referral_bonus',
+                'direction' => 'referee',
+                'referral_id' => $referralId,
+                'referrer' => $this->username($referrerId),
+                'code' => (string) $referral['code'],
+            ], ReferralRepository::bonusReference($referralId, 'referee'));
 
             $won = $this->referrals->transition(
                 $referralId,
                 ReferralRepository::PENDING,
                 ReferralRepository::PAID,
                 $context + [
-                    'referrer_transaction_id' => $referrerTx,
-                    'referee_transaction_id' => $refereeTx,
+                    'referrer_transaction_id' => $referrerTx > 0 ? $referrerTx : null,
+                    'referee_transaction_id' => $refereeTx > 0 ? $refereeTx : null,
+                    // What was actually credited, as opposed to the amount that
+                    // was promised at signup. They differ when an admin pays a
+                    // reduced goodwill bonus, and the ledger should say which
+                    // of the two happened rather than leaving the reader to
+                    // assume they are the same number.
+                    'paid_referrer_amount' => $referrerAmount,
+                    'paid_referee_amount' => $refereeAmount,
                 ]
             );
 
@@ -448,19 +542,45 @@ final class ReferralService
         });
     }
 
-    /** Ledger row + balance credit. Both sides of a referral payout go through here. */
-    private function credit(int $userId, float $amount, array $metadata): int
+    /**
+     * Ledger row + balance credit. Both sides of a referral payout go through here.
+     *
+     * Routed through {@see LedgerService} rather than writing the row and the
+     * balance separately, so the two can never disagree — and so the entry
+     * carries `balance_before`/`balance_after` like every other movement. That
+     * matters here specifically: the caller wraps this in a transaction and
+     * credits *two* accounts, and a row written outside the ledger's own
+     * transaction would be the one record of that payout with no audit trail.
+     *
+     * Returns the ledger entry id so the referral row can point at it.
+     *
+     * Credit one side of a referral bonus, exactly once.
+     *
+     * The ledger reference is the idempotency key. `transaction.reference` has
+     * a UNIQUE index, so if this row has already been credited — by an earlier
+     * approval, a replayed request, or an admin who paid manually and then had
+     * a recharge approved — the insert is refused by the database instead of
+     * minting a second ৳50. That guarantee does not depend on any check
+     * happening to run first, which is the only kind that survives concurrency.
+     *
+     * Returns 0 when the credit was refused, and the caller treats a 0 as "this
+     * side is already paid" rather than as a failure: the money is already
+     * there, so the referral is still correctly `paid`.
+     */
+    private function credit(int $userId, float $amount, array $metadata, string $reference): int
     {
-        $txId = $this->transactions->create([
-            'user_id' => $userId,
-            'reference' => 'AL' . strtoupper(bin2hex(random_bytes(5))),
-            'amount' => $amount,
-            'status' => 'completed',
+        if ($amount <= 0) {
+            return 0;
+        }
+
+        [$ok, , , $txId] = $this->ledger->creditUser($userId, $amount, [
+            'type' => TransactionRepository::TYPE_REFERRAL_BONUS,
+            'description' => 'রেফারেল বোনাস',
+            'reference' => $reference,
             'metadata' => $metadata,
         ]);
-        $this->users->adjustBalance($userId, $amount);
 
-        return $txId;
+        return $ok ? (int) $txId : 0;
     }
 
     private function amount(string $key, float $default): float

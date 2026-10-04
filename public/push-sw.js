@@ -57,7 +57,7 @@ function isSafeUrl(raw) {
  * still gives the person something rather than a silent failure.
  */
 function readPayload(event) {
-  const fallback = { title: 'Alif Tools', body: 'আপনার জন্য একটি নতুন আপডেট আছে।', url: null };
+  const fallback = { title: 'All Seba', body: 'আপনার জন্য একটি নতুন আপডেট আছে।', url: null };
 
   if (!event.data) {
     return fallback;
@@ -74,11 +74,11 @@ function readPayload(event) {
   try {
     parsed = JSON.parse(text);
   } catch (e) {
-    return { title: 'Alif Tools', body: String(text).slice(0, 400), url: null };
+    return { title: 'All Seba', body: String(text).slice(0, 400), url: null };
   }
 
   return {
-    title: String(parsed.title || 'Alif Tools').slice(0, 200),
+    title: String(parsed.title || 'All Seba').slice(0, 200),
     body: String(parsed.body || '').slice(0, 400),
     url: isSafeUrl(parsed.data && parsed.data.url),
   };

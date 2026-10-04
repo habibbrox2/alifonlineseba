@@ -1,0 +1,154 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}স্টাফ পরিচালনা — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    <a href="/admin/withdraws" class="btn btn-sm btn-ghost">{{ icon('send', 'w-4 h-4') }} উত্তোলন অনুরোধ</a>
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'স্টাফ পরিচালনা',
+    description: 'কারা অর্ডার অনুমোদন করতে পারবে, কারা টাকা উত্তোলনের সিদ্ধান্ত নিতে পারবে — এবং কে কত আয় করেছেন',
+    actions: headActions,
+} %}
+
+{# The two roles that are not interchangeable, stated once at the top.
+
+   An `admin` earns money by approving orders. A `superadmin` additionally
+   decides payouts and appoints staff. Keeping them apart is what stops one
+   person approving their own withdrawal — see AdminWithdrawService::approve(). #}
+<div class="mb-6 rounded-xl border border-info-200 bg-info-50 px-4 py-3 text-sm text-info-900">
+    <p class="font-semibold">ভূমিকা কী বোঝায়:</p>
+    <ul class="mt-1.5 list-inside list-disc space-y-0.5 text-[13px]">
+        <li><strong>এডমিন</strong> — অর্ডার যাচাই ও অনুমোদন করতে পারে, অনুমোদনে টাকা আয় হয়, নিজে উত্তোলনের অনুরোধ করতে পারে।</li>
+        <li><strong>স্টাফ</strong> — অর্ডার যাচাই করতে পারে, কিন্তু অনুমোদনে টাকা আয় হয় না।</li>
+        <li><strong>সুপারএডমিন</strong> — সবকিছুর পাশাপাশি উত্তোলন অনুমোদন ও স্টাফ নিয়োগ/পদমুক্তির ক্ষমতা।</li>
+    </ul>
+</div>
+
+<div class="card overflow-hidden">
+    {# Empty state outside the <table>: .table-base carries a 640px min-width,
+       so a centred message inside it would sit off-screen on a phone. #}
+    {% if staff is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('users', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">কোনো স্টাফ অ্যাকাউন্ট নেই।</p>
+        </div>
+    {% else %}
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr>
+                    <th>অ্যাকাউন্ট</th>
+                    <th>ভূমিকা</th>
+                    <th class="text-right">ব্যালেন্স</th>
+                    <th class="text-right">আয়</th>
+                    <th class="text-right">উত্তোলন</th>
+                    <th>অবস্থা</th>
+                    <th class="text-right">ব্যবস্থাপনা</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for member in staff %}
+                    {% set money = earnings[member.id] ?? { earned: 0, withdrawn: 0, orders: 0 } %}
+                    <tr class="{{ member.deleted_at ? 'opacity-50' : '' }}">
+                        <td>
+                            <p class="font-medium text-neutral-800">
+                                {{ member.username }}
+                                {# Your own row has no controls, so the reason is
+                                   visible in the table rather than being a
+                                   mystery on a form that refuses to submit. #}
+                                {% if member.id == identity.id %}
+                                    <span class="ml-1 text-[10px] text-neutral-400">(আপনি)</span>
+                                {% endif %}
+                            </p>
+                            <p class="text-xs text-neutral-400">{{ member.phone }}</p>
+                        </td>
+                        <td>
+                            {% if member.role == 'superadmin' %}
+                                <span class="badge badge-primary">{{ icon('crown', 'w-3 h-3') }} {{ roleLabels[member.role] }}</span>
+                            {% else %}
+                                <span class="badge badge-neutral">{{ roleLabels[member.role] ?? member.role }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-semibold text-neutral-800">{{ member.balance|money }}</td>
+                        <td class="text-right text-success-700">{{ money.earned|money }}</td>
+                        <td class="text-right text-neutral-600">{{ money.withdrawn|money }}</td>
+                        <td>
+                            {% include 'components/status-badge.twig' with { status: member.status } %}
+                            {% if member.deleted_at %}
+                                <span class="mt-1 block text-[10px] text-danger-600">ট্র্যাশে</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if member.id == identity.id %}
+                                <span class="text-xs text-neutral-400">—</span>
+                            {% else %}
+                                {# Role and status are separate forms rather than one
+                                   combined control: they are separate decisions with
+                                   separate consequences, and a single dropdown would
+                                   let a typo demote somebody and suspend them at
+                                   the same time. #}
+                                <div class="flex flex-col items-end gap-1.5">
+                                    <form method="post" action="/admin/staff" class="flex items-center gap-1.5">
+                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                        <input type="hidden" name="id" value="{{ member.id }}">
+                                        <select name="role" class="form-input form-input-sm py-1 text-xs"
+                                                aria-label="{{ member.username }} এর ভূমিকা"
+                                                onchange="this.form.requestSubmit()">
+                                            {% for role in ['superadmin', 'admin', 'staff', 'user'] %}
+                                                <option value="{{ role }}" {{ member.role == role ? 'selected' }}>
+                                                    {{ roleLabels[role] }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                        <noscript><button type="submit" class="btn btn-ghost btn-sm">সংরক্ষণ</button></noscript>
+                                    </form>
+
+                                    <form method="post" action="/admin/staff">
+                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                        <input type="hidden" name="id" value="{{ member.id }}">
+                                        <input type="hidden" name="status"
+                                               value="{{ member.status == 'active' ? 'suspended' : 'active' }}">
+                                        <button type="submit" name="do" value="status" class="btn btn-ghost btn-sm">
+                                            {% if member.status == 'active' %}
+                                                {{ icon('user-x', 'w-3.5 h-3.5') }} নিষ্ক্রিয় করুন
+                                            {% else %}
+                                                {{ icon('user-check', 'w-3.5 h-3.5') }} সক্রিয় করুন
+                                            {% endif %}
+                                        </button>
+                                    </form>
+
+                                    {# Password reset is a recovery path, not a
+                                       convenience: without it the panel drifts
+                                       towards shared logins, which defeats having
+                                       roles at all. It is a <details> so it does
+                                       not sit on the table as an invitation. #}
+                                    <details class="text-right">
+                                        <summary class="cursor-pointer text-[11px] text-neutral-400 hover:text-neutral-600">
+                                            পাসওয়ার্ড সেট করুন
+                                        </summary>
+                                        <form method="post" action="/admin/staff" class="mt-1.5 flex items-center gap-1.5">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="id" value="{{ member.id }}">
+                                            <input type="password" name="password" minlength="8" required
+                                                   class="form-input py-1 text-xs" placeholder="কমপক্ষে ৮ অক্ষর"
+                                                   aria-label="{{ member.username }} এর নতুন পাসওয়ার্ড">
+                                            <button type="submit" name="do" value="password" class="btn btn-ghost btn-sm">
+                                                {{ icon('key', 'w-3.5 h-3.5') }}
+                                            </button>
+                                        </form>
+                                    </details>
+                                </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

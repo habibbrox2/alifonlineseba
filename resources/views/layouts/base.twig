@@ -4,11 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="_csrf" content="{{ csrf }}">
+    {# The VAPID *public* key, so push-subscribe.js can ask for permission from
+       any page. Injected by PushViewInjection; empty when the deployment has no
+       keys, which push-prompt.js reads as "never ask". #}
+    <meta name="vapid-public-key" content="{{ vapidPublicKey|default('') }}">
 
     {# ————— SEO core ————— #}
     {% set seoUrl = siteUrl is defined and siteUrl ? siteUrl : 'http://localhost:8099' %}
-    {% set seoTitle = block('title')|default('Alif Tools — ডিজিটাল সেবা হাব (ডেমো)')|trim %}
-    {% set seoDesc = block('description') is defined ? block('description')|trim : 'Alif Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম (ডেমো)।' %}
+    {% set seoTitle = block('title')|default('All Seba — ডিজিটাল সার্ভিস প্ল্যাটফর্ম')|trim %}
+    {% set seoDesc = block('description') is defined ? block('description')|trim : 'All Seba — ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম।' %}
     {% set seoRobots = block('robots') is defined ? block('robots')|trim : 'index, follow' %}
     {% set seoCanonical = block('canonical_url') is defined ? block('canonical_url')|trim : seoUrl ~ currentPath %}
 
@@ -38,7 +42,7 @@
     <meta property="og:title" content="{{ seoTitle }}">
     <meta property="og:description" content="{{ seoDesc }}">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
-    <meta property="og:site_name" content="Alif Tools">
+    <meta property="og:site_name" content="All Seba">
     <meta property="og:url" content="{{ seoCanonical }}">
     <meta property="og:locale" content="bn_BD">
     {% block og_image %}
@@ -46,12 +50,12 @@
     <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Alif Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস হাব">
+    <meta property="og:image:alt" content="All Seba — ইনস্ট্যান্ট ডিজিটাল সার্ভিস হাব">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ seoTitle }}">
     <meta name="twitter:description" content="{{ seoDesc }}">
     <meta name="twitter:image" content="{{ seoUrl }}/assets/img/og-cover.png">
-    <meta name="twitter:image:alt" content="Alif Tools — ইনস্ট্যান্ট ডিজিটাল সার্ভিস হাব">
+    <meta name="twitter:image:alt" content="All Seba — ইনস্ট্যান্ট ডিজিটাল সার্ভিস হাব">
     {% endblock %}
 
     {# ————— Structured data (site identity + WebSite) ————— #}
@@ -59,9 +63,9 @@
     {
         "@context": "https://schema.org",
         "@type": "WebSite",
-        "name": "Alif Tools",
+        "name": "All Seba",
         "url": "{{ seoUrl }}/",
-        "description": "ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম (ডেমো)",
+        "description": "ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম",
         "inLanguage": "bn-BD"
     }
     </script>
@@ -80,6 +84,12 @@
         import { initAppInstall } from '{{ asset('/assets/js/app-install.js') }}';
         initAppInstall();
     </script>
+    {# Likewise site-wide: the browser permission prompt must not require a trip
+       to /app first. #}
+    <script type="module">
+        import { initPushPrompt } from '{{ asset('/assets/js/push-prompt.js') }}';
+        initPushPrompt();
+    </script>
     {% block page_scripts %}{% endblock %}
     <script defer src="/assets/js/alpine.min.js"></script>
     {% block scripts %}{% endblock %}
@@ -90,5 +100,6 @@
     {# Outside `block body` on purpose: this ships on public pages, signed-in
        pages and the app page alike. #}
     {% include 'partials/app-install.twig' %}
+    {% include 'partials/push-prompt.twig' %}
 </body>
 </html>

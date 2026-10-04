@@ -1,10 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Alif Tools">
-  <!-- Alif Tools mark: rounded dark-green tile, golden alif stroke with a dot, white baseline bar -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="All Seba">
+  <!-- All Seba mark: the service promise in two shapes.
+
+       A gold bolt for speed and a white tick for "verified and done". The old
+       mark was a single Arabic alif stroke with a dot and a baseline, which
+       spelled "Alif Tools" and nothing about what the site actually does.
+       This one keeps the two brand colours (primary-900 tile, accent-500
+       bolt) so the green-and-gold palette the whole UI is built on does not
+       have to change, and reads at 16px in the tab bar: the tile is a rounded
+       square, the bolt is a solid silhouette, and the tick is the only
+       stroke, so at favicon size it is the only part that has to survive.
+
+       The tick is drawn twice on purpose: once in the tile colour at a wider
+       stroke, then in white on top. That halo is what keeps the tick legible
+       where it passes close to the bolt, and it is the same reason the light
+       lockup gives its tile a faint white edge.
+
+       Geometry lives in one place only: scripts/build-brand-icons.php holds
+       the same coordinates and renders every PNG and ICO from them. Change a
+       number here and you must change it there, or the app icons and the
+       header logo stop being the same picture. -->
   <rect width="64" height="64" rx="14" fill="#083f31"/>
-  <!-- golden alif: a vertical stroke that leans like the Arabic letter ا -->
-  <path d="M36.5 12 L31 12 L23.5 47.5 L29 47.5 Z" fill="#f5b301"/>
-  <!-- dot over the alif -->
-  <circle cx="36.5" cy="15.5" r="4" fill="#ffffff"/>
-  <!-- baseline -->
-  <rect x="17" y="51" width="30" height="4" rx="2" fill="#ffffff"/>
+
+  <!-- bolt: speed. Four points, no curves, so it stays sharp at any size. -->
+  <path d="M34 7 L17 37 L27 37 L24 57 L43 27 L32 27 Z" fill="#f5b301"/>
+
+  <!-- tick: verified. Halo first, then the white stroke over it. -->
+  <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#083f31" stroke-width="11"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#ffffff" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

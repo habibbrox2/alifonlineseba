@@ -13,10 +13,12 @@ use App\Repository\BulkJobRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\SettingsRepository;
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
+use App\Tests\Support\TestGraph;
 use App\Repository\UserRepository;
 use App\Service\BulkJobService;
 use App\Service\OrderExportService;
+use App\Service\OrderWindowService;
 use App\Service\ServiceManager;
 use App\Service\ServiceRequestAdminService;
 use App\Service\StatusPresenter;
@@ -66,7 +68,8 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
 
     private ConnectionInterface $db;
     private UserRepository $users;
-    private TransactionRepository $transactions;
+    private ServiceOrderRepository $orders;
+    private \App\Service\LedgerService $ledger;
     private ServiceRepository $services;
     private ServiceManager $manager;
     private ServiceRequestAdminService $admin;
@@ -87,7 +90,8 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
         ));
         $this->db = $container->get(ConnectionInterface::class);
         $this->users = new UserRepository($this->db);
-        $this->transactions = new TransactionRepository($this->db);
+        $this->orders = TestGraph::orders($this->db);
+        $this->ledger = TestGraph::ledger($this->db, $this->users);
         $this->services = new ServiceRepository($this->db);
         $this->jobs = new BulkJobRepository($this->db);
 
@@ -101,15 +105,20 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
 
         $this->manager = new ServiceManager(
             $this->services,
-            $this->transactions,
+            $this->orders,
+            $this->ledger,
             $this->users,
             new ActivityLogRepository($this->db),
             new NotificationRepository($this->db),
             $notify,
+            // The default window is a real, clock-dependent gate; these tests assert
+            // on order behaviour, not on the hour of the day they happen to run.
+            OrderWindowService::alwaysOpen(),
         );
 
         $this->admin = new ServiceRequestAdminService(
-            $this->transactions,
+            $this->orders,
+            $this->ledger,
             $this->users,
             \App\Service\DeliverableStorage::fromProjectRoot(),
             $notify,
@@ -117,7 +126,7 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
         );
 
         $this->bulk = new BulkJobService($this->jobs, $this->admin);
-        $this->exporter = new OrderExportService($this->transactions);
+        $this->exporter = new OrderExportService($this->orders);
 
         // `claimNext()` is a plain FIFO over the whole queue — it takes no
         // selector, because a worker has no business knowing which batch it is
@@ -162,7 +171,11 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
 
         foreach ($this->userIds as $id) {
             $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
-            $this->db->createCommand()->delete('{{%transaction}}', ['user_id' => $id])->execute();
+            // Ledger rows pointing at this user's orders have to go *before* the
+            // orders: a ledger entry references the order that moved the money,
+            // and the FK refuses the other order. Deleting by join rather than by
+            // id list, because the ids are not known here.
+            TestGraph::purgeUser($this->db, $id);
             $this->db
                 ->createCommand('DELETE FROM {{%notification_delivery}} WHERE [[queue_id]] IN (SELECT [[id]] FROM {{%notification_queue}} WHERE [[user_id]] = :u)')
                 ->bindValue(':u', $id)
@@ -171,7 +184,7 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
             $this->db->createCommand()->delete('{{%notification}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%user}}', ['id' => $id])->execute();
         }
-        $this->db->createCommand()->delete('{{%transaction}}', ['service_id' => $this->serviceId])->execute();
+        TestGraph::purgeServiceOrders($this->db, $this->serviceId);
         $this->db->createCommand()->delete('{{%service}}', ['id' => $this->serviceId])->execute();
         $this->db
             ->createCommand('DELETE FROM {{%notification}} WHERE created_at >= :from')
@@ -504,30 +517,24 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
         );
     }
 
-    public function testATopUpIsTypedAsARechargeAndAnIdThatNoLongerExistsIsSimplyAbsent(): void
+    public function testAnIdThatNoLongerExistsIsSimplyAbsent(): void
     {
         $user = $this->makeUser('mix');
-        $this->submitOrders($user, 1);
+        $this->submitOrders($user, 2);
         $orders = $this->ordersFor($user);
 
-        // The one shape the order page never shows: a row sharing the table
-        // with a null service_id, which is what makes a transaction a top-up.
-        $topUpId = (int) $this->transactions->create([
-            'user_id' => $user->id,
-            'service_id' => null,
-            'reference' => 'RC' . strtoupper($this->suffix),
-            'amount' => 50.0,
-            'status' => 'completed',
-            'metadata' => ['method' => 'test'],
-        ]);
-
-        $result = $this->exporter->csv([$topUpId, $orders[0], 999999999]);
+        // A recharge used to be exportable from here, because it shared the
+        // table and the file had a "রিচার্জ" type column for it. It does not
+        // any more: recharges are ledger entries and have their own page, so
+        // the only thing left to prove is that a selection outlives the rows it
+        // names without breaking the file.
+        $result = $this->exporter->csv([$orders[0], 999999999, $orders[1]]);
 
         assertSame(2, $result['exported'], 'A ticked id deleted a moment ago is absent from the file, not an error and not a blank row.');
         $rows = $this->csvRows($result['body']);
-        assertSame('রিচার্জ', $rows[1][7], 'A null service_id IS the top-up, so the file must not call it a service.');
+        assertCount(3, $rows, 'A header and the two orders that still exist; the vanished id contributes no row at all.');
+        assertSame('সার্ভিস', $rows[1][7], 'Every row is an order now, so the file must not type any of them as a recharge.');
         assertSame('সার্ভিস', $rows[2][7]);
-        assertCount(3, $rows, 'The vanished id contributes no row at all.');
     }
 
     // ---- Fixtures ---------------------------------------------------------
@@ -576,7 +583,7 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
         return array_map(
             'intval',
             (array) $this->db
-                ->createCommand('SELECT [[id]] FROM {{%transaction}} WHERE [[user_id]] = :u ORDER BY [[id]] ASC')
+                ->createCommand('SELECT [[id]] FROM {{%service_order}} WHERE [[user_id]] = :u ORDER BY [[id]] ASC')
                 ->bindValue(':u', $user->id)
                 ->queryColumn(),
         );
@@ -626,7 +633,7 @@ final class BulkJobSettleTest extends \Codeception\Test\Unit
 
     private function row(int $id): array
     {
-        $row = $this->transactions->findById($id);
+        $row = $this->orders->findById($id);
         assertNotNull($row, 'The fixture order must still exist.');
 
         return $row;

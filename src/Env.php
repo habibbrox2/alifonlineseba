@@ -59,6 +59,17 @@ final class Env
         // Set to 0 to take /app/apk offline (e.g. while a build is broken)
         // without unpublishing the release record.
         'APP_DOWNLOADS_ENABLED' => 'true',
+
+        // --- Trusted Web Activity (the /app APK) ---
+        // Without both of these, /.well-known/assetlinks.json answers 404 and
+        // the installed app runs in a Custom Tab with a browser bar instead of
+        // full screen. TWA_ORIGIN must be the bare https origin — no path, no
+        // trailing slash — and is never taken from the request's Host header.
+        'TWA_ORIGIN' => '',
+        // `package@SHA256:AA:BB:…` pairs, comma or newline separated; the same
+        // package may appear more than once (debug + release certificates).
+        // Run `php yii app:twa:fingerprints` to produce the value.
+        'TWA_FINGERPRINTS' => '',
     ];
 
     public static function get(string $name, ?string $default = null): ?string

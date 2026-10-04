@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Api;
 
 use App\Auth\Identity;
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Service\Api;
 use App\Service\RequestRowPresenter;
 use stdClass;
@@ -43,7 +43,7 @@ final readonly class ServiceRequestsWatchApiAction
     private const MAX_IDS = 50;
 
     public function __construct(
-        private TransactionRepository $transactions,
+        private ServiceOrderRepository $orders,
         private RequestRowPresenter $presenter,
     ) {}
 
@@ -68,7 +68,7 @@ final readonly class ServiceRequestsWatchApiAction
         }
 
         $rows = $this->presenter->presentMany(
-            $this->transactions->watchForUser($ids, $identity->id)
+            $this->orders->watchForUser($ids, $identity->id)
         );
 
         // Forced to an object: `presentMany()` returns a PHP array, and an empty

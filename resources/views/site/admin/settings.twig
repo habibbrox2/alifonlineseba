@@ -23,7 +23,7 @@
             </div>
             <div>
                 <label for="f-footer-note" class="form-label">ফুটার নোট</label>
-                <textarea id="f-footer-note" name="footer_note" rows="2" class="form-input" maxlength="500" placeholder="ডেমো নোট বা ছোট বিবরণী">{{ settings.footer_note }}</textarea>
+                <textarea id="f-footer-note" name="footer_note" rows="2" class="form-input" maxlength="500" placeholder="ফুটারে দেখানো নোট বা ছোট বিবরণী">{{ settings.footer_note }}</textarea>
                 {% if errors.footer_note is defined %}<p class="form-error">{{ errors.footer_note }}</p>{% endif %}
             </div>
         </div>
@@ -187,7 +187,7 @@
         </h2>
         <p class="mb-4 text-xs text-neutral-500">
             ইউজার নিবন্ধনের সময় <code class="rounded bg-neutral-100 px-1 py-0.5 text-[11px]">?ref=কোড</code> লিংক থেকে আসে।
-            বন্ধুর <strong>প্রথম অনুমোদিত রিচার্জের</strong> পর দুই পাশেই বোনাস ব্যালেন্সে যোগ হয় — নিবন্ধনের সময় নয়।
+            বন্ধু যখন <strong>নির্ধারিত সংখ্যক অনুমোদিত রিচার্জ</strong> সম্পন্ন করবেন, তখন দুই পাশেই বোনাস ব্যালেন্সে যোগ হয় — নিবন্ধনের সময় নয়।
             <a href="/admin/referrals" class="font-semibold text-primary-600 hover:underline">রেফারেল তালিকা দেখুন →</a>
         </p>
         <div class="space-y-4">
@@ -203,6 +203,28 @@
                 </span>
             </label>
 
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="f-ref-required" class="form-label">প্রয়োজনীয় সফল রিচার্জ সংখ্যা</label>
+                    <input type="number" id="f-ref-required" name="referral_required_recharges" min="1" max="1000" step="1"
+                           value="{{ settings.referral_required_recharges }}" class="form-input" placeholder="5">
+                    <p class="mt-1 text-xs text-neutral-400">
+                        বন্ধুর যতটি অনুমোদিত রিচার্জ এই সংখ্যক হবে, ততটি হলেই বোনাস দুই পাশেই পরিশোধ হবে।
+                        ১ দিলে প্রথম অনুমোদিত রিচার্জেই বোনাস দেওয়া হবে।
+                    </p>
+                    {% if errors.referral_required_recharges is defined %}<p class="form-error">{{ errors.referral_required_recharges }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="f-ref-qualmin" class="form-label">প্রতিটি রিচার্জ সর্বনিম্ন (৳)</label>
+                    <input type="number" id="f-ref-qualmin" name="referral_min_qualifying_recharge" min="0" max="1000000" step="0.01"
+                           value="{{ settings.referral_min_qualifying_recharge }}" class="form-input" placeholder="100">
+                    <p class="mt-1 text-xs text-neutral-400">
+                        এই পরিমাণের বেশি রিচার্জগুলোই গোনা হবে। ০ দিলে যেকোনো অনুমোদিত রিচার্জই গোনা হবে।
+                    </p>
+                    {% if errors.referral_min_qualifying_recharge is defined %}<p class="form-error">{{ errors.referral_min_qualifying_recharge }}</p>{% endif %}
+                </div>
+            </div>
+
             <div class="grid gap-4 sm:grid-cols-3">
                 <div>
                     <label for="f-ref-referrer" class="form-label">রেফারকারীর বোনাস (৳)</label>
@@ -215,14 +237,17 @@
                     <label for="f-ref-referee" class="form-label">নতুন ইউজারের বোনাস (৳)</label>
                     <input type="number" id="f-ref-referee" name="referee_bonus_amount" min="0" max="100000" step="0.01"
                            value="{{ settings.referee_bonus_amount }}" class="form-input" placeholder="20">
-                    <p class="mt-1 text-xs text-neutral-400">বন্ধুর প্রথমবার ঢুকলে তাঁর ব্যালেন্সে যাবে।</p>
+                    <p class="mt-1 text-xs text-neutral-400">বন্ধুর ব্যালেন্সে যাবে, রিচার্জ শেষ হওয়ার পর।</p>
                     {% if errors.referee_bonus_amount is defined %}<p class="form-error">{{ errors.referee_bonus_amount }}</p>{% endif %}
                 </div>
                 <div>
                     <label for="f-ref-min" class="form-label">প্রথম রিচার্জ সর্বনিম্ন (৳)</label>
                     <input type="number" id="f-ref-min" name="referral_min_first_recharge" min="0" max="1000000" step="0.01"
                            value="{{ settings.referral_min_first_recharge }}" class="form-input" placeholder="100">
-                    <p class="mt-1 text-xs text-neutral-400">০ দিলে যেকোনো অনুমোদিত রিচার্জই গোনা হবে।</p>
+                    <p class="mt-1 text-xs text-neutral-400">
+                        পুরোনো এক-রিচার্জ নিয়মের সেটিং। নতুন রেফারেলে <span class="font-medium">প্রতিটি রিচার্জ সর্বনিম্ন</span> ব্যবহার হবে;
+                        এটি অপেক্ষমাণ রেফারেলের জন্য ব্যাকআপ হিসেবে থাকে।
+                    </p>
                     {% if errors.referral_min_first_recharge is defined %}<p class="form-error">{{ errors.referral_min_first_recharge }}</p>{% endif %}
                 </div>
             </div>
@@ -238,6 +263,47 @@
             <p class="rounded-lg bg-info-50 px-3 py-2 text-xs text-info-800">
                 {{ icon('info', 'w-3.5 h-3.5 inline-block align-text-bottom') }}
                 বোনাসের পরিমাণ নিবন্ধনের সময়ই ফ্রিজ হয়ে যায় — অপেক্ষমাণ থাকা রেফারেলে আগের পরিমাণই পরিশোধ হবে।
+            </p>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('clock', 'w-4 h-4 text-primary-600') }} সার্ভিস অর্ডারের সময়
+        </h2>
+        <p class="mb-4 text-xs text-neutral-500">
+            এই সময়ের বাইরে ইউজার নতুন সার্ভিস অর্ডার করতে পারবে না। সময় গণনা হয় বাংলাদেশ মান সময় (Asia/Dhaka) অনুযায়ী।
+        </p>
+        <div class="space-y-4">
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-200 px-4 py-3">
+                <input type="checkbox" name="order_window_enabled" value="1"
+                       {{ settings.order_window_enabled == '1' ? 'checked' }}
+                       class="mt-0.5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500">
+                <span>
+                    <span class="block text-sm font-semibold text-neutral-800">নির্দিষ্ট সময়ে অর্ডার চালু</span>
+                    <span class="block text-xs text-neutral-500">বন্ধ করলে দিনে ২৪ ঘণ্টা অর্ডার করা যাবে।</span>
+                </span>
+            </label>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="f-window-start" class="form-label">অর্ডার শুরুর সময়</label>
+                    <input type="time" id="f-window-start" name="order_window_start" value="{{ settings.order_window_start }}"
+                           class="form-input">
+                    {% if errors.order_window_start is defined %}<p class="form-error">{{ errors.order_window_start }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="f-window-end" class="form-label">অর্ডার শেষের সময়</label>
+                    <input type="time" id="f-window-end" name="order_window_end" value="{{ settings.order_window_end }}"
+                           class="form-input">
+                    {% if errors.order_window_end is defined %}<p class="form-error">{{ errors.order_window_end }}</p>{% endif %}
+                </div>
+            </div>
+
+            <p class="rounded-lg bg-info-50 px-3 py-2 text-xs text-info-800">
+                {{ icon('info', 'w-3.5 h-3.5 inline-block align-text-bottom') }}
+                শেষের সময়ের পর আবার শুরুর সময় পর্যন্ত (যেমন রাত ১০টা থেকে সকাল ৬টা) অর্ডার বন্ধ থাকবে।
+                ইতিমধ্যে জমা দেওয়া অর্ডার চালু করা বা বাতিল করায় এই সময়ের কোনো প্রভাব পড়ে না।
             </p>
         </div>
     </div>

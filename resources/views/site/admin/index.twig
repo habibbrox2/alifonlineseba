@@ -1,6 +1,6 @@
 {% extends 'layouts/dashboard.twig' %}
 
-{% block title %}অ্যাডমিন — Alif Tools{% endblock %}
+{% block title %}অ্যাডমিন — All Seba{% endblock %}
 
 {% block dashboard_content %}
 {% set headActions %}
@@ -60,7 +60,7 @@
     {# First because it is the queue with a deadline: a request that sits
        `pending` is money held and a user waiting. It opens pre-filtered to
        service orders so the operator lands on work, not on the whole ledger. #}
-    <a href="/admin/transactions?kind=service&status=pending" class="card card-hover group flex flex-col p-5">
+    <a href="/admin/orders?status=pending" class="card card-hover group flex flex-col p-5">
         <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
             {{ icon('inbox', 'w-6 h-6') }}
         </span>

@@ -1,5 +1,5 @@
 /* ============================================================
- * Alif Tools — shared frontend utilities (vanilla ES module).
+ * All Seba — shared frontend utilities (vanilla ES module).
  * No jQuery. Modern browser APIs only.
  * ============================================================ */
 

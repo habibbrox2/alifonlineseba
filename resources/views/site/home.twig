@@ -1,16 +1,16 @@
 {% extends 'layouts/public.twig' %}
 
-{% block title %}Alif Tools — এনআইডি সার্ভার কপি ও ডিজিটাল সেবা হাব (ডেমো){% endblock %}
-{% block description %}Alif Tools-এ পাবেন ইনস্ট্যান্ট NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ সকল ডিজিটাল সেবার ডেমো অভিজ্ঞতা — দ্রুত, নিরাপদ ও সহজ। (সব ডাটা কাল্পনিক){% endblock %}
+{% block title %}All Seba — এনআইডি সার্ভার কপি ও ডিজিটাল সেবা হাব{% endblock %}
+{% block description %}All Seba-এ পাবেন ইনস্ট্যান্ট NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ সকল ডিজিটাল সেবা — দ্রুত, নিরাপদ ও সহজ।{% endblock %}
 
 {% block structured_data %}
 <script type="application/ld+json">
 {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": "Alif Tools",
+    "name": "All Seba",
     "url": "{{ siteUrl }}/",
-    "description": "ডেমো ডিজিটাল সার্ভিস প্ল্যাটফর্ম — NID কপি, ভোটার সার্চ, টিন সার্টিফিকেট (সব ডাটা কাল্পনিক)",
+    "description": "ডিজিটাল সার্ভিস প্ল্যাটফর্ম — NID কপি, ভোটার সার্চ, টিন সার্টিফিকেট ও আরও অনেক সেবা",
     "areaServed": "BD",
     "knowsLanguage": "bn"
 }
@@ -25,14 +25,14 @@
 
     <div class="container-app relative">
         <p class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wide">
-            {{ icon('sparkles', 'w-4 h-4') }} Alif Tools, A TotthoHub-style প্ল্যাটফর্ম ২০২৬
+            {{ icon('sparkles', 'w-4 h-4') }} allseba.online প্ল্যাটফর্ম ২০২৬
         </p>
         <h1 class="mx-auto max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
             ডিজিটাল সেবা এক ক্লিকে!
         </h1>
         <p class="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
-            Alif Tools ডেমো প্ল্যাটফর্মে পাবেন সকল ধরনের ডিজিটাল ও অফিশিয়াল সেবার ডেমো অভিজ্ঞতা —
-            NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ (সব ডাটা কাল্পনিক)।
+            All Seba প্ল্যাটফর্মে পাবেন সকল ধরনের ডিজিটাল ও অফিশিয়াল সেবা —
+            NID সার্ভার কপি, ভোটার সার্চ, টিন সার্টিফিকেট সহ আরও অনেক সেবা।
         </p>
 
         <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
@@ -53,8 +53,8 @@
     <div class="grid gap-5 sm:grid-cols-3">
         {% set features = [
             { icon: 'shield-check', title: '১০০% সুরক্ষিত', desc: 'CSRF, সেশন সিকিউরিটি ও এনক্রিপ্টেড পাসওয়ার্ডসহ আধুনিক নিরাপত্তা।', accent: 'sky' },
-            { icon: 'zap', title: 'ইনস্ট্যান্ট ডেলিভারি', desc: 'সার্ভিস অর্ডারের সাথে সাথেই ডেমো ফলাফল প্রদর্শন।', accent: 'amber' },
-            { icon: 'headphones', title: '২৪/৭ সাপোর্ট', desc: 'যেকোনো সময় সাপোর্ট সেন্টারে মেসেজ করুন (ডেমো)।', accent: 'violet' },
+            { icon: 'zap', title: 'ইনস্ট্যান্ট ডেলিভারি', desc: 'সার্ভিস অর্ডারের সাথে সাথেই ফলাফল প্রদর্শন।', accent: 'amber' },
+            { icon: 'headphones', title: '২৪/৭ সাপোর্ট', desc: 'যেকোনো সময় সাপোর্ট সেন্টারে মেসেজ করুন।', accent: 'violet' },
         ] %}
         {% for feature in features %}
             <div class="card card-hover card-accent p-6 accent-{{ feature.accent }}">
@@ -73,8 +73,8 @@
     <div class="card mx-auto max-w-3xl p-8 text-center sm:p-10">
         <h2 class="text-2xl font-extrabold text-neutral-900">এটি কীভাবে কাজ করে?</h2>
         <p class="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-neutral-500">
-            নিবন্ধন করুন → সার্ভিস বাছাই করুন → ফর্ম পূরণ করুন → ডেমো ফলাফল পান।
-            সব সার্ভিস মক (mock) — কোনো সরকারি ডাটাবেজ ব্যবহার হয় না।
+            নিবন্ধন করুন → সার্ভিস বাছাই করুন → ফর্ম পূরণ করুন → ফলাফল পান।
+            ব্যালেন্স দিয়ে অর্ডার করুন, ফলাফল দ্রুততম সময়ে হাতে পান।
         </p>
         <a href="/register" class="btn btn-primary mt-6 px-8 py-3">এখনই শুরু করুন</a>
     </div>

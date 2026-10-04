@@ -15,7 +15,7 @@
                 </button>
                 <a href="/dashboard" class="flex items-center gap-2.5 font-bold text-white tap-target">
                     <img src="/assets/brand/logo-mark.svg" alt="" class="h-9 w-9" width="36" height="36">
-                    <span class="hidden text-lg tracking-tight sm:block">Alif Tools</span>
+                    <span class="hidden text-lg tracking-tight sm:block">All Seba</span>
                 </a>
             </div>
 
@@ -162,6 +162,26 @@
                     <div class="alert alert-success" role="status">
                         {{ icon('check-circle', 'w-5 h-5 shrink-0') }}
                         <span>{{ flash_success }}</span>
+                        {# The way back from a bulk trash/purge, beside the message
+                           that announces it — one banner, so the button cannot end
+                           up on a different screen from the batch it reverses. The
+                           `return_*` fields are the filter the batch ran from, so
+                           Undo lands the admin back on the list they were looking
+                           at rather than on an unfiltered one. #}
+                        {% if flash_undo is defined and flash_undo %}
+                            <form method="post" action="/admin/services" class="ml-auto shrink-0">
+                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                <input type="hidden" name="do" value="bulk_undo">
+                                <input type="hidden" name="return_q" value="{{ flash_undo.state.q }}">
+                                <input type="hidden" name="return_category" value="{{ flash_undo.state.category }}">
+                                <input type="hidden" name="return_status" value="{{ flash_undo.state.status }}">
+                                <input type="hidden" name="return_trashed" value="{{ flash_undo.state.trashed }}">
+                                <button type="submit" class="btn btn-sm">
+                                    {{ icon('undo-2', 'w-4 h-4') }}
+                                    ফিরিয়ে আনুন ({{ flash_undo.count }})
+                                </button>
+                            </form>
+                        {% endif %}
                     </div>
                 {% endif %}
                 {% if flash_error is defined and flash_error %}

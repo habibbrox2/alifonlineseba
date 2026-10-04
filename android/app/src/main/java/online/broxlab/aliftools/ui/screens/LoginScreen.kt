@@ -51,7 +51,7 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Alif Tools", style = MaterialTheme.typography.headlineMedium)
+        Text("All Seba", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text("ডেমো প্ল্যাটফর্মে প্রবেশ করুন", style = MaterialTheme.typography.bodyMedium)
 

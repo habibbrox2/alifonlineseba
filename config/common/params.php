@@ -11,14 +11,14 @@ return [
     'application' => [
         'charset' => 'UTF-8',
         'locale' => 'bn',
-        'name' => 'Alif Tools',
+        'name' => 'All Seba',
     ],
 
     'app' => [
-        'name' => 'Alif Tools',
+        'name' => 'All Seba',
         'tagline' => 'ডিজিটাল সেবা হাব',
-        'telegram' => 'https://t.me/example_demo_channel',
-        'support' => 'https://t.me/example_demo_support',
+        'telegram' => 'https://t.me/aliftools',
+        'support' => 'https://t.me/aliftools_support',
     ],
 
     'pagination' => [
@@ -51,6 +51,7 @@ return [
             Reference::to(CsrfViewInjection::class),
             Reference::to(IdentityViewInjection::class),
             Reference::to(\App\Web\View\SettingsViewInjection::class),
+            Reference::to(\App\Web\View\PushViewInjection::class),
         ],
     ],
 ];

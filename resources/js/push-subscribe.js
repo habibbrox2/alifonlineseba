@@ -283,3 +283,127 @@ export function initPushSubscribe() {
     say(UNSUPPORTED_HINT);
   }
 }
+
+/* ============================================================
+ * DOM wiring for the /profile settings card.
+ * ============================================================ */
+
+/**
+ * The account's push settings card.
+ *
+ * ## Why this is separate from initPushSubscribe()
+ *
+ * The two cards answer different questions. `/app` asks "would you like
+ * notifications from this site?" — anonymous, browser-scoped, one button.
+ * `/profile` asks "which devices does this *account* notify, and may it?" —
+ * per-account, multi-device, next to a device list the server rendered.
+ *
+ * Sharing the code would mean one function with two flag conventions and a
+ * `querySelector` that sometimes finds the card and sometimes does not. The
+ * shared parts (`subscribe`, `unsubscribe`, `getSubscription`, `REASONS`) are
+ * already exported above; only the wiring is duplicated.
+ *
+ * ## The account switch is a plain form post, on purpose
+ *
+ * Turning notifications off must work with JavaScript disabled, on a browser
+ * that has never granted permission, and on the *second* device that is not
+ * even looking at this page. A `<form method="post">` does all three; a
+ * fetch() would do none. The script below only manages the per-browser part,
+ * which is the only part that genuinely needs it.
+ */
+export function initPushSettings() {
+  const root = document.querySelector('[data-push-settings]');
+  if (!root) {
+    return;
+  }
+
+  const toggle = root.querySelector('[data-push-toggle]');
+  const label = root.querySelector('[data-push-label]');
+  const hint = root.querySelector('[data-push-hint]');
+  const disable = root.querySelector('[data-push-disable]');
+  const vapidKey = root.dataset.vapidKey || '';
+
+  // Two independent reasons the browser controls are absent, both rendered by
+  // the server: no VAPID keys on this deployment, or the account switch is off.
+  // If the account is off, subscribing would create an active row the fan-out
+  // then skips — a device that reads "connected" and never hears anything.
+  if (root.dataset.pushConfigured !== '1' || root.dataset.pushAccount !== '1' || !toggle) {
+    return;
+  }
+
+  let subscriptionId = 0;
+
+  const say = (message) => {
+    if (!hint) {
+      return;
+    }
+    hint.textContent = message || '';
+    hint.hidden = !message;
+  };
+
+  const showSubscribed = (on) => {
+    toggle.disabled = false;
+    if (label) {
+      label.textContent = on ? 'এই ব্রাউজারে নোটিফিকেশন চালু আছে' : 'এই ব্রাউজারে নোটিফিকেশন চালু করুন';
+    }
+    say(on ? 'এই ব্রাউজারটি আপনার অ্যাকাউন্টের সাথে যুক্ত।' : '');
+  };
+
+  // Reflect the *browser's* state on load, and re-post it. Re-posting is what
+  // repairs a device that was switched off from another screen: `subscribe()`
+  // upserts on endpoint and flips `is_active` back to 1, so an account-wide
+  // "off → on" round trip needs nothing from the person holding this device.
+  getSubscription().then((existing) => {
+    if (!existing) {
+      toggle.disabled = false;
+      if (label) {
+        label.textContent = 'এই ব্রাউজারে নোটিফিকেশন চালু করুন';
+      }
+      say('');
+      return;
+    }
+    api(SUBSCRIBE_URL, { method: 'POST', body: existing.toJSON() }).then((result) => {
+      subscriptionId = (result.data && result.data.id) || 0;
+      showSubscribed(true);
+    });
+  });
+
+  toggle.addEventListener('click', async () => {
+    toggle.disabled = true;
+    if (label) {
+      label.textContent = 'অনুমতি দিন…';
+    }
+    say('');
+
+    const result = await subscribe(vapidKey);
+    if (result.ok) {
+      subscriptionId = result.id || subscriptionId;
+      showSubscribed(true);
+      // The device list below the button is server-rendered, and a new row was
+      // just written. Reloading is the honest way to show it.
+      window.location.reload();
+      return;
+    }
+    showSubscribed(false);
+    say(REASONS[result.reason] || REASONS.failed);
+  });
+
+  if (disable) {
+    disable.addEventListener('click', async () => {
+      toggle.disabled = true;
+      const result = await unsubscribe(subscriptionId);
+      subscriptionId = 0;
+      showSubscribed(false);
+      if (result.ok) {
+        window.location.reload();
+        return;
+      }
+      say(REASONS.failed);
+    });
+  }
+
+  if (!isPushSupported()) {
+    toggle.disabled = true;
+    say(UNSUPPORTED_HINT);
+  }
+}

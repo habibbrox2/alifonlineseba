@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 
 /**
  * CSV export of the orders an operator has ticked.
@@ -44,7 +44,7 @@ final class OrderExportService
         'type' => 'ধরন',
     ];
 
-    public function __construct(private readonly TransactionRepository $transactions) {}
+    public function __construct(private readonly ServiceOrderRepository $orders) {}
 
     /**
      * Build the download for a selection.
@@ -63,7 +63,7 @@ final class OrderExportService
         $ids = array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0);
         $ids = array_slice(array_values(array_unique($ids)), 0, ServiceRequestAdminService::BULK_LIMIT);
 
-        $rows = $ids === [] ? [] : $this->transactions->findManyForExport($ids);
+        $rows = $ids === [] ? [] : $this->orders->findManyForExport($ids);
 
         $lines = [self::BOM . $this->line(array_values(self::HEADERS))];
         $exported = 0;

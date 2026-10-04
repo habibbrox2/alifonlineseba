@@ -95,7 +95,7 @@ final class UserRepository
         return (int) $this->db->getLastInsertID();
     }
 
-    /** AL-prefixed 8-hex key, Alif Tools format (AL_E5B6A404). */
+    /** AL-prefixed 8-hex key, All Seba format (AL_E5B6A404). */
     public static function generateApiKey(): string
     {
         return 'AL_' . strtoupper(bin2hex(random_bytes(4)));
@@ -296,6 +296,14 @@ final class UserRepository
     /** Whitelisted sortable columns => SQL column expression. */
     public const SORTABLE = ['id', 'username', 'balance', 'role', 'status', 'last_login_at', 'created_at'];
 
+    /** Role => Bengali label, for the roster and the user list. */
+    public const ROLE_LABELS = [
+        'superadmin' => 'সুপারএডমিন',
+        'admin' => 'এডমিন',
+        'staff' => 'স্টাফ',
+        'user' => 'ইউজার',
+    ];
+
     /**
      * @param string $deleted One of self::DELETED_EXCLUDE (default), DELETED_ONLY, DELETED_ALL.
      * @return array{rows: array, total: int}
@@ -357,6 +365,148 @@ final class UserRepository
         return (int) $this->db
             ->createCommand('SELECT COUNT(*) FROM {{%user}} WHERE [[deleted_at]] IS NULL')
             ->queryScalar();
+    }
+
+    /**
+     * Does this account still want browser push?
+     *
+     * Read on every send rather than cached, because the whole point of the
+     * column is that turning the switch off has to take effect immediately —
+     * a cached answer would keep pinging a browser whose owner just asked to
+     * be left alone, which is exactly the thing that makes people revoke the
+     * site permission entirely instead of using the switch.
+     *
+     * An unknown id answers true: a notification aimed at a row that is not
+     * there (deleted account, stale queue job) has nowhere to go anyway, and
+     * the alternative — answering false — would mean a mis-typed id silently
+     * eats every push for that account.
+     */
+    public function pushEnabled(int $id): bool
+    {
+        $value = $this->db
+            ->createCommand('SELECT [[push_enabled]] FROM {{%user}} WHERE [[id]] = :id')
+            ->bindValue(':id', $id)
+            ->queryScalar();
+
+        // `queryScalar()` yields false — not null — when the SELECT matched no
+        // row, so a deleted account or a stale queue job reads the same as an
+        // opted-in one here. Both are safe: there is nowhere for the message to
+        // go either way.
+        if ($value === false || $value === null) {
+            return true;
+        }
+
+        // The driver hands a boolean column back as int 0/1 or as the string
+        // '0'/'1' depending on emulation settings, so compare numerically
+        // rather than with ===.
+        return (int) $value === 1;
+    }
+
+    /**
+     * The account-wide push switch, as the notification stack reads it.
+     *
+     * Identical to {@see pushEnabled()} except that it survives a database
+     * the migration has not run against yet — the window between `git pull`
+     * and `yii migrate`, where the column does not exist and every send would
+     * otherwise 500 inside the queue worker. Absent column means the default,
+     * which is on.
+     */
+    public function isPushEnabled(int $id): bool
+    {
+        try {
+            return $this->pushEnabled($id);
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    /** @see update() — this only exists so the opt-out is written the one way. */
+    public function setPushEnabled(int $id, bool $enabled): void
+    {
+        $this->update($id, ['push_enabled' => $enabled ? 1 : 0]);
+    }
+
+    /**
+     * The lowest-id active staff account, or null when there is none.
+     *
+     * `system.alert` needs *a* recipient user id, and it does not have one of
+     * its own: an alert about the platform has no acting user. The first
+     * staff account stands in, and NotificationManager's admin fan-out reaches
+     * everybody else — which is why exactly one id is wanted here rather than
+     * a list. Handing it a list would double-notify the first account, since
+     * the fan-out loop deliberately skips the user it was dispatched for.
+     *
+     * Trashed and suspended staff are excluded for the same reason the alert
+     * fan-out excludes them: nobody would read it.
+     */
+    public function firstStaffId(): ?int
+    {
+        $id = $this->db
+            ->createCommand(
+                "SELECT [[id]] FROM {{%user}} WHERE [[role]] IN ('admin','staff','superadmin')"
+                . " AND [[status]] = 'active' AND [[deleted_at]] IS NULL"
+                . ' ORDER BY [[id]] ASC LIMIT 1'
+            )
+            ->queryScalar();
+
+        return $id === false || $id === null ? null : (int) $id;
+    }
+
+    /**
+     * Every staff account, live and trashed, for the super-admin's roster.
+     *
+     * `deleted_at` is included here — unlike every other listing — because
+     * restoring a trashed operator is one of the things this screen has to be
+     * able to do, and a roster that hides trashed accounts makes that
+     * impossible.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listStaff(): array
+    {
+        return $this->db
+            ->createCommand(
+                "SELECT * FROM {{%user}} WHERE [[role]] IN ('admin','staff','superadmin')"
+                . ' ORDER BY ([[role]] = \'superadmin\') DESC, [[id]] ASC',
+            )
+            ->queryAll();
+    }
+
+    /**
+     * Whether at least one usable super-admin remains.
+     *
+     * Called before a role change. Demoting or trashing the last super-admin
+     * would leave nobody able to appoint another one — the panel would still
+     * work, but nothing could ever be paid out again. So the change is refused
+     * while the answer is yes.
+     */
+    public function hasOtherSuperAdmin(int $exceptId): bool
+    {
+        $count = $this->db
+            ->createCommand(
+                "SELECT COUNT(*) FROM {{%user}} WHERE [[role]] = 'superadmin'"
+                . ' AND [[status]] = \'active\' AND [[deleted_at]] IS NULL AND [[id]] <> :id',
+            )
+            ->bindValue(':id', $exceptId)
+            ->queryScalar();
+
+        return (int) $count > 0;
+    }
+
+    /**
+     * Move an account between roles, or suspend it, without touching its rows.
+     *
+     * Role lives on the user row rather than in a permissions table because it
+     * is read on every admin request; a join to find out whether somebody may
+     * see the panel would be paid on every page of the admin area to answer a
+     * question with four possible answers.
+     *
+     * @param string $role   one of admin|staff|superadmin|user
+     * @param string $status one of active|suspended
+     */
+    public function setRole(int $id, string $role, string $status = 'active'): void
+    {
+        $this->update($id, ['role' => $role, 'status' => $status]);
     }
 
     private function exists(string $table, string $column, string $value, ?int $exceptId): bool

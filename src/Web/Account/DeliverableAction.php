@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Account;
 
 use App\Auth\Identity;
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Service\DeliverableStorage;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -36,7 +36,7 @@ use Yiisoft\Router\CurrentRoute;
 final readonly class DeliverableAction
 {
     public function __construct(
-        private TransactionRepository $transactions,
+        private ServiceOrderRepository $orders,
         private DeliverableStorage $deliverables,
         private ResponseFactoryInterface $responseFactory,
         private StreamFactoryInterface $streamFactory,
@@ -48,7 +48,7 @@ final readonly class DeliverableAction
         $identity = $request->getAttribute('identity');
         $id = (int) $route->getArgument('id', '0');
 
-        $row = $this->transactions->findById($id);
+        $row = $this->orders->findById($id);
         $isOwner = $row !== null && (int) $row['user_id'] === $identity->id;
 
         // Same response for "not yours" and "does not exist" so the endpoint

@@ -1,35 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" role="img" aria-label="Alif Tools">
-  <!-- Alif Tools horizontal lockup, light variant.
-       The mark tile is lifted to primary-700 and gains a faint white edge: the
-       shipped primary-900 tile is the exact colour of the gradient behind it,
-       so its rounded corner would vanish. Keep both files in sync when the
-       logo moves.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="All Seba">
+  <!-- All Seba horizontal lockup, light variant.
 
-       The wordmark is a <text> run, not outlined paths, and that is deliberate.
-       The previous version drew it as seven hand-authored path outlines which
-       were wrong: the "lif" of "Alif" and the final "s" of "Tools" were simply
-       absent, and the "o" outline was emitted twice, so the lockup rendered as
-       "ATOLoi" on the auth pages and on the site-wide share card. Outlining a
-       wordmark by hand is what caused that, and it is a bug waiting to happen
-       again for any future rename.
+       Used on the pages whose background is the primary gradient (login,
+       register, the app page), where a primary-900 tile would disappear into
+       the backdrop and take its own rounded corner with it. Hence the tile is
+       lifted to primary-700 and given a faint white edge, and the tick halo
+       is drawn in that same lifted colour rather than in primary-900, or the
+       halo would show as a dark smudge on the tile.
 
-       SVG loaded through <img> still lays out <text> with the system font
-       stack, so this stays a single self-contained file with no webfont round
+       The wordmark is a <text> run, not outlined paths, and that is
+       deliberate and permanent. An earlier version drew it as hand-authored
+       path outlines; the "lif" of Alif and the final "s" of Tools were simply
+       missing and the "o" outline appeared twice, so the lockup rendered as
+       "ATOLoi" on the auth pages and on the share card. Hand-outlining a
+       wordmark is a bug waiting to happen for any future rename, which is
+       exactly what this rename is. If an exact vector lockup is ever needed,
+       convert this run with a text-to-outline tool, never by hand.
+
+       SVG loaded through <img> still lays <text> out with the system font
+       stack, so this stays one self-contained file with no webfont round
        trip. The card generators do not parse it; they draw the wordmark
        themselves with the same font, so the two paths agree by construction.
-       If an exact vector lockup is ever needed, convert this run with a proper
-       text-to-outline tool rather than by hand.
-
-       NB: an XML comment cannot contain a double hyphen, so the notes
-       here avoid it. ET.parse() in the card generators rejects the whole
-       file outright if one sneaks in. -->
-  <g transform="translate(0,0)">
+       An XML comment cannot contain a double hyphen, so these notes avoid
+       it: ET.parse() in the card generators rejects the whole file if one
+       sneaks in. -->
+  <g>
     <rect width="64" height="64" rx="14" fill="#0b6e51" stroke="#ffffff" stroke-opacity="0.28"/>
-    <path d="M36.5 12 L31 12 L23.5 47.5 L29 47.5 Z" fill="#f5b301"/>
-    <circle cx="36.5" cy="15.5" r="4" fill="#ffffff"/>
-    <rect x="17" y="51" width="30" height="4" rx="2" fill="#ffffff"/>
+    <path d="M34 7 L17 37 L27 37 L24 57 L43 27 L32 27 Z" fill="#f5b301"/>
+    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#0b6e51" stroke-width="11"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#ffffff" stroke-width="7"
+          stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <text x="84" y="47" fill="#ffffff"
+  <text x="84" y="45" fill="#ffffff"
         font-family="system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
-        font-size="42" font-weight="700" letter-spacing="0.5">Alif Tools</text>
-</svg>
+        font-size="42" font-weight="700" letter-spacing="0.5">All Seba</text>
+</svg>

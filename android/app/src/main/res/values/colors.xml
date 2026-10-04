@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Alif Tools brand palette, mirrored from tailwind.config.js.
+<!-- All Seba brand palette, mirrored from tailwind.config.js.
      Kept in sync with public/assets/brand/*.svg: primary-900 is the mark tile
      and the splash backdrop, accent-500 is the alif stroke. -->
 <resources>

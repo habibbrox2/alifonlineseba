@@ -20,14 +20,21 @@ final readonly class TransactionsApiAction
         $identity = $request->getAttribute('identity');
         $params = $request->getQueryParams();
         $page = max(1, (int) ($params['page'] ?? '1'));
-        $status = (string) ($params['status'] ?? '');
 
-        $data = $this->transactions->forUser($identity->id, $page, 15, $status);
+        // `type` filters by ledger entry type, not by order status: this is a
+        // statement of what happened to the balance. An unrecognised value is
+        // ignored rather than 422'd, because the app ships a new client and an
+        // old server far more often than the other way round.
+        $requested = (string) ($params['type'] ?? '');
+        $type = in_array($requested, TransactionRepository::TYPES, true) ? $requested : '';
+
+        $data = $this->transactions->forUser($identity->id, $page, 15, $type);
 
         return Api::ok([
             'transactions' => $data['rows'],
             'total' => $data['total'],
             'page' => $page,
+            'balance' => $identity->balance,
         ]);
     }
 }

@@ -17,7 +17,7 @@ final class SettingsRepository
         'site_tagline'      => ['ট্যাগলাইন', 'ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম', 'text'],
         'contact_email'     => ['যোগাযোগ ইমেইল', '', 'text'],
         'contact_phone'     => ['যোগাযোগ ফোন', '', 'text'],
-        'footer_note'       => ['ফুটার নোট', 'এটি একটি ডেমো অ্যাপ্লিকেশন — সকল ডাটা কাল্পনিক।', 'multiline'],
+        'footer_note'       => ['ফুটার নোট', 'সর্বস্বত্ব সংরক্ষিত।', 'multiline'],
         'facebook_url'      => ['ফেসবুক পেজ', '', 'url'],
         'youtube_url'       => ['ইউটিউব চ্যানেল', '', 'url'],
         'whatsapp_url'      => ['হোয়াটসঅ্যাপ', '', 'url'],
@@ -46,16 +46,42 @@ final class SettingsRepository
         'notice_body'       => ['জরুরি নোটিশ', '', 'multiline'],
         'notice_enabled'    => ['জরুরি নোটিশ চালু', '0', 'checkbox'],
 
-        // Referral programme ("বন্ধুকে রেফার করে বোনাস পান"). The bonus is paid
-        // when the referred friend's FIRST recharge is approved, not at signup —
-        // a signup bonus is worth nothing to the operator and is farmed in
-        // minutes. The threshold exists so a friend who tops up ৳10 purely to
-        // unlock the referrer's bonus does not cost more than it returns.
+        // Referral programme ("বন্ধুকে রেফার করে বোনাস পান"). The bonus is paid when
+        // the referred friend's qualifying recharge RUN is finished — not at
+        // signup, and not on their first purchase. A signup bonus is worth
+        // nothing to the operator and is farmed in minutes; a first-recharge
+        // bonus is only slightly harder to farm, because one throwaway account
+        // and one small top-up still collect it.
+        //
+        // The rule is therefore a count AND a floor: the friend must complete
+        // `referral_required_recharges` approved recharges, and each of those
+        // must be at least `referral_min_qualifying_recharge`. Both are snapshotted
+        // onto the referral row when it is created, so a referral already in
+        // flight finishes on the terms the user was shown even if the operator
+        // changes the settings tomorrow.
+        //
+        // `referral_min_first_recharge` is kept for backwards compatibility: it
+        // is the pre-existing key the old single-recharge rule read, it is still
+        // on the settings form so no operator loses a field they had, and
+        // {@see ReferralService} uses it as the fallback when the new minimum
+        // has not been set. It is not read as the qualifying floor once the new
+        // key exists.
         'referral_enabled' => ['রেফারেল সিস্টেম চালু', '1', 'checkbox'],
         'referrer_bonus_amount' => ['রেফারকারীর বোনাস (৳)', '50', 'number'],
         'referee_bonus_amount' => ['নতুন ইউজারের বোনাস (৳)', '20', 'number'],
+        'referral_required_recharges' => ['প্রয়োজনীয় সফল রিচার্জ সংখ্যা', '5', 'number'],
+        'referral_min_qualifying_recharge' => ['প্রতিটি রিচার্জ সর্বনিম্ন (৳)', '100', 'number'],
         'referral_min_first_recharge' => ['প্রথম রিচার্জ সর্বনিম্ন (৳)', '100', 'number'],
-        'referral_terms' => ['রেফারেল শর্তাবলী', 'বন্ধুকে রেফার করুন — তার প্রথম অনুমোদিত রিচার্জের পর বোনাস পাবেন।', 'multiline'],
+        'referral_terms' => ['রেফারেল শর্তাবলী', 'বন্ধুকে রেফার করুন — তার অনুমোদিত রিচার্জ শেষ হলে বোনাস পাবেন।', 'multiline'],
+
+        // Order intake window: a daily Bangladesh-time range in which new
+        // service orders may be submitted. Read by App\Service\OrderWindowService,
+        // which evaluates "now" in Asia/Dhaka rather than in the server's zone.
+        // 'order_window_enabled' = 0 turns the gate off entirely (24/7 intake),
+        // which is also the fail-safe if the two times ever hold nonsense.
+        'order_window_enabled' => ['অর্ডার সময় ব্যবস্থা চালু', '1', 'checkbox'],
+        'order_window_start'   => ['অর্ডার শুরুর সময়', '08:00', 'text'],
+        'order_window_end'     => ['অর্ডার শেষের সময়', '22:00', 'text'],
     ];
 
     /** Human labels for the payment methods shown on the recharge form. */

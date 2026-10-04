@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Night palette for the launch screen.
      values/colors.xml is a *brand* palette. `brand_primary` is only ever
-     consumed by Theme.AlifTools.Splash (windowSplashScreenBackground) — the
+     consumed by Theme.AllSeba.Splash (windowSplashScreenBackground) — the
      launcher icon reads its own @color/ic_launcher_background resource, so
      overriding the name here repaints the splash without touching the icon
      the launcher has already cached and masked.

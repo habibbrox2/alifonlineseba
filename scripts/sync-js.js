@@ -17,6 +17,7 @@ fs.copyFileSync(root + '/resources/js/service-history.js', dest + '/js/service-h
 fs.copyFileSync(root + '/resources/js/icon-picker.js', dest + '/js/icon-picker.js');
 fs.copyFileSync(root + '/resources/js/app-install.js', dest + '/js/app-install.js');
 fs.copyFileSync(root + '/resources/js/push-subscribe.js', dest + '/js/push-subscribe.js');
+fs.copyFileSync(root + '/resources/js/push-prompt.js', dest + '/js/push-prompt.js');
 
 // public/push-sw.js is NOT copied: the Push API requires the worker script to
 // be served from the web root so its scope covers every route, and that file is

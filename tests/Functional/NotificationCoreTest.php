@@ -13,11 +13,13 @@ use App\Notification\TemplateRenderer;
 use App\Repository\NotificationRepository;
 use App\Repository\SettingsRepository;
 use App\Repository\UserRepository;
+use ReflectionClass;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Di\Container;
 use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertContains;
+use function PHPUnit\Framework\assertGreaterThanOrEqual;
 use function PHPUnit\Framework\assertNotContains;
 use function PHPUnit\Framework\assertStringContainsString;
 use function PHPUnit\Framework\assertSame;
@@ -179,12 +181,57 @@ final class NotificationCoreTest extends \Codeception\Test\Unit
 
     public function testEveryEventChannelPairHasCopy(): void
     {
-        foreach (NotificationEvent::spec(NotificationEvent::TOPUP_APPROVED)['channels'] as $channel) {
-            $template = MessageTemplates::forEvent(NotificationEvent::TOPUP_APPROVED)[$channel] ?? null;
-            assertTrue($template !== null, "topup.approved/{$channel} must have copy.");
+        // Every event, not just one: the channel matrix grew a column (webpush)
+        // and a check that only looked at topup.approved would have called the
+        // whole thing covered while three admin-only events had no copy at all.
+        //
+        // Read off the class rather than a hand-written list: a copied list is
+        // a list that stops covering new events the day someone adds the 16th
+        // constant, which is the same blind spot this test is here to close.
+        $events = array_values(array_filter(
+            (new ReflectionClass(NotificationEvent::class))->getConstants(),
+            'is_string'
+        ));
+        assertGreaterThanOrEqual(15, count($events), 'The event catalogue must not silently shrink.');
+
+        foreach ($events as $event) {
+            $seeded = MessageTemplates::forEvent($event);
+            foreach (NotificationEvent::spec($event)['channels'] as $channel) {
+                // webpush has no copy of its own by design: TemplateRenderer
+                // borrows the fcm copy, then the telegram copy for the events
+                // that are admins-only (their recipients are staff, on the web).
+                $template = $seeded[$channel]
+                    ?? ($channel === 'webpush' ? ($seeded['fcm'] ?? $seeded['telegram'] ?? null) : null);
+                assertTrue($template !== null, "{$event}/{$channel} must have copy.");
+                assertTrue(
+                    ($template['title'] ?? '') !== '' && ($template['body'] ?? '') !== '',
+                    "{$event}/{$channel} must have words, not an empty shell."
+                );
+            }
         }
         $rows = MessageTemplates::seedRows();
-        assertTrue(count($rows) >= 20, 'The seed covers every pair (' . count($rows) . ' seeded).');
+        assertGreaterThanOrEqual(20, count($rows), 'The seed covers every pair (' . count($rows) . ' seeded).');
+    }
+
+    public function testFcmAlwaysBringsWebpushAlong(): void
+    {
+        // The other direction of the same trap. The copy check above only asks
+        // whether a listed channel has words; it is happy about a channel list
+        // that quietly never mentions the browser. `fcm` and `webpush` share an
+        // audience — same people, two clients — so an event that reaches the
+        // Android app and not the browser is a bug even though nothing is
+        // missing a template. Admins are the motivating case: they never
+        // install the APK, so a webpush gap is the only way they get told.
+        //
+        // The converse is deliberately not asserted: topup.requested,
+        // topup.cancelled and system.alert reach staff over the browser and
+        // have no fcm arm on purpose.
+        foreach ((new ReflectionClass(NotificationEvent::class))->getConstants() as $event) {
+            $channels = NotificationEvent::spec($event)['channels'];
+            if (in_array('fcm', $channels, true)) {
+                assertContains('webpush', $channels, "{$event} pushes to the app, so it must push to the browser too.");
+            }
+        }
     }
 
     public function testRendererInterpolatesPlaceholders(): void

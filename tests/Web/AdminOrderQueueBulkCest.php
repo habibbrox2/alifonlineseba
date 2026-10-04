@@ -87,10 +87,10 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('see the selected orders carried by a single POST form that knows where to go back to.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
-        $I->seeElement('form[method="post"][action="/admin/transactions"]');
-        $I->seeElement('form[action="/admin/transactions"] input[name="_csrf"]');
+        $I->seeElement('form[method="post"][action="/admin/orders"]');
+        $I->seeElement('form[action="/admin/orders"] input[name="_csrf"]');
 
         $source = $this->flat($I->grabPageSource());
 
@@ -109,13 +109,17 @@ final class AdminOrderQueueBulkCest
             'The settle must post its own action, or the server is guessing which of the two was asked for.',
         );
 
-        foreach (['return_kind', 'return_q', 'return_status', 'return_page', 'return_sort', 'return_dir'] as $field) {
-            $I->seeElement('form[action="/admin/transactions"] input[name="' . $field . '"]');
+        foreach (['return_q', 'return_status', 'return_page', 'return_sort', 'return_dir'] as $field) {
+            $I->seeElement('form[action="/admin/orders"] input[name="' . $field . '"]');
         }
-        Assert::assertMatchesRegularExpression(
-            '/name="return_kind" value="service"/',
+        // No `return_kind` any more: service orders and top-ups were one page
+        // behind a `kind` tab, and are now two pages with two URLs. A return
+        // field that names a tab which no longer exists is worse than none —
+        // it would send the operator's redirect somewhere they never were.
+        Assert::assertStringNotContainsString(
+            'return_kind',
             $source,
-            'The bar has to carry the tab it was drawn on, or the redirect lands on the other queue.',
+            'The tab concept is gone; a `return_kind` hidden field would point the redirect at a page that does not exist.',
         );
 
         Assert::assertSame(
@@ -129,7 +133,7 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('see neither the bar nor the gap it floats over until an order is ticked.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         $source = $this->flat($I->grabPageSource());
 
@@ -156,7 +160,7 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('cancel a selection by clearing the rows, not just the counters.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         $source = $this->flat($I->grabPageSource());
 
@@ -188,7 +192,7 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('tick the whole page from the header without posting the header box itself.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         $source = $this->flat($I->grabPageSource());
 
@@ -220,7 +224,7 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('be told the batch is refused until a status is chosen, and warned that it moves money.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         $source = $this->flat($I->grabPageSource());
 
@@ -281,11 +285,11 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('hand the ticked orders over as a file, on the same bar and the same selection.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         $source = $this->flat($I->grabPageSource());
 
-        $I->seeElement('form[action="/admin/transactions"] button[name="do"][value="bulk_export"]');
+        $I->seeElement('form[action="/admin/orders"] button[name="do"][value="bulk_export"]');
 
         // A plain submit, inside the same form, so the export carries the very
         // same `ids[]` body the settle would. A second form — or a link that
@@ -296,13 +300,13 @@ final class AdminOrderQueueBulkCest
             'Export is a submit button so it inherits the selection; anything else would need the ids re-sent by JavaScript.',
         );
         Assert::assertStringNotContainsString(
-            '<a href="/admin/transactions/export"',
+            '<a href="/admin/orders/export"',
             $source,
             'A link cannot carry a selection, so an export behind one would always export the empty set.',
         );
         Assert::assertSame(
             1,
-            preg_match_all('/<form method="post" action="\/admin\/transactions"/', $source),
+            preg_match_all('/<form method="post" action="\/admin\/orders"/', $source),
             'Both actions share one form; a second POST form would be a second place for the ids to go missing.',
         );
     }
@@ -311,8 +315,10 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('get the ticked orders back as a file, not as a page to read.');
         $orderId = $this->firstServiceOrderId();
+        // Orders live in `service_order` since the ledger split; `transaction`
+        // is now the money log and no longer holds the order's reference.
         $reference = (string) $this->db()
-            ->createCommand('SELECT [[reference]] FROM {{%transaction}} WHERE [[id]] = :id')
+            ->createCommand('SELECT [[reference]] FROM {{%service_order}} WHERE [[id]] = :id')
             ->bindValue(':id', $orderId)
             ->queryScalar();
 
@@ -320,7 +326,7 @@ final class AdminOrderQueueBulkCest
         // Filtered onto this one order so that the row ticked below is the row
         // the export is then asked for: the first page of a shared database is
         // not this file's to assume anything about.
-        $I->amOnPage('/admin/transactions?kind=service&q=' . urlencode($reference));
+        $I->amOnPage('/admin/orders&q=' . urlencode($reference));
 
         $I->checkOption('input[name="ids[]"][value="' . $orderId . '"]');
 
@@ -357,7 +363,7 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('be sent back to the list when the selection exports to nothing.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         // Pressed with nothing ticked, which is what a stale selection — or an
         // operator who has lost track of the bar — actually does.
@@ -365,7 +371,7 @@ final class AdminOrderQueueBulkCest
 
         // A header row and no data is indistinguishable from a broken export, so
         // this one branch is the one that does redirect — and it has to say why.
-        $I->seeInCurrentUrl('/admin/transactions');
+        $I->seeInCurrentUrl('/admin/orders');
         $I->see('নির্বাচিত অর্ডারের তালিকা খালি, তাই ফাইল তৈরি হয়নি।');
     }
 
@@ -373,7 +379,7 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('watch a queued batch instead of guessing whether it ran.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         // Present even with nothing queued, because a section that only appears
         // once it has a job in it is invisible on the day the operator first
@@ -387,7 +393,7 @@ final class AdminOrderQueueBulkCest
         $I->wantTo('see the half-finished batch on the page, not just be told it was queued.');
         $this->seedJob(40, 25, 63, '25/40');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=service');
+        $I->amOnPage('/admin/orders');
 
         $source = $this->flat($I->grabPageSource());
 
@@ -420,7 +426,7 @@ final class AdminOrderQueueBulkCest
     {
         $I->wantTo('find no bulk bar on the top-up tab, where a status change is meaningless.');
         $this->signIn($I);
-        $I->amOnPage('/admin/transactions?kind=recharge');
+        $I->amOnPage('/admin/topups');
 
         $source = $this->flat($I->grabPageSource());
 
@@ -459,7 +465,7 @@ final class AdminOrderQueueBulkCest
     private function firstServiceOrderId(): int
     {
         $id = (int) $this->db()
-            ->createCommand('SELECT [[id]] FROM {{%transaction}} WHERE [[service_id]] IS NOT NULL ORDER BY [[id]] DESC LIMIT 1')
+            ->createCommand('SELECT [[id]] FROM {{%service_order}} WHERE [[service_id]] IS NOT NULL ORDER BY [[id]] DESC LIMIT 1')
             ->queryScalar();
 
         Assert::assertGreaterThan(

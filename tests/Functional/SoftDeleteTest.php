@@ -8,6 +8,7 @@ use App\Auth\IdentityRepository;
 use App\Repository\ActivityLogRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\UserRepository;
+use App\Tests\Support\TestGraph;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Di\Container;
 use Yiisoft\Di\ContainerConfig;
@@ -61,12 +62,12 @@ final class SoftDeleteTest extends \Codeception\Test\Unit
         foreach ($this->userIds as $id) {
             // activity_log.user_id is a FK, so the child rows go first.
             $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
-            $this->db->createCommand()->delete('{{%transaction}}', ['user_id' => $id])->execute();
+            TestGraph::purgeUser($this->db, $id);
             $this->db->createCommand()->delete('{{%notification}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%user}}', ['id' => $id])->execute();
         }
         foreach ($this->serviceIds as $id) {
-            $this->db->createCommand()->delete('{{%transaction}}', ['service_id' => $id])->execute();
+            TestGraph::purgeServiceOrders($this->db, $id);
             $this->db->createCommand()->delete('{{%service}}', ['id' => $id])->execute();
         }
         $this->userIds = [];
@@ -199,7 +200,7 @@ final class SoftDeleteTest extends \Codeception\Test\Unit
         assertNotNull($this->services->findServiceById($id));
 
         assertTrue($this->services->softDelete($id));
-        $this->db->createCommand()->insert('{{%transaction}}', [
+        $this->db->createCommand()->insert('{{%service_order}}', [
             'user_id' => $this->makeUser('purge'),
             'service_id' => $id,
             'reference' => 'TR' . strtoupper($this->suffix),
@@ -208,13 +209,13 @@ final class SoftDeleteTest extends \Codeception\Test\Unit
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s'),
         ])->execute();
-        assertSame(1, $this->services->transactionCount($id));
+        assertSame(1, $this->services->orderCount($id));
 
         assertSame(1, $this->services->purgeService($id));
         assertNull($this->services->findServiceById($id, true), 'A purged service is gone for good.');
 
         $detached = $this->db
-            ->createCommand('SELECT [[service_id]] FROM {{%transaction}} WHERE [[reference]] = :r')
+            ->createCommand('SELECT [[service_id]] FROM {{%service_order}} WHERE [[reference]] = :r')
             ->bindValue(':r', 'TR' . strtoupper($this->suffix))
             ->queryScalar();
         assertNull($detached, 'Purge must detach transactions instead of deleting history.');

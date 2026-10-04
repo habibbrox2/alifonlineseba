@@ -27,15 +27,29 @@
     ] %}
 
     {% if identity.canAccessAdmin() %}
-        {% set groups = groups|merge([{ label: 'অ্যাডমিন', icon: 'shield', items: [
+        {% set adminItems = [
             { label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge', match: 'admin' },
-            { label: 'সার্ভিস অর্ডার', href: '/admin/transactions', icon: 'inbox', match: 'admin-transactions' },
+            { label: 'সার্ভিস অর্ডার', href: '/admin/orders', icon: 'inbox', match: 'admin-orders' },
+            { label: 'আমার হিসাব', href: '/admin/ledger', icon: 'receipt', match: 'admin-ledger' },
             { label: 'সার্ভিস ম্যানেজমেন্ট', href: '/admin/services', icon: 'sparkles', match: 'admin-services' },
             { label: 'রিচার্জ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' },
             { label: 'রেফারেল', href: '/admin/referrals', icon: 'gift', match: 'admin-referrals' },
+        ] %}
+        {# Super-admin only. Shown by role rather than by trial-and-error:
+           these are the pages where one person's decision moves another
+           person's money or authority, and an operator who cannot see them
+           should not have to discover that by getting a refusal. #}
+        {% if identity.isSuperAdmin() %}
+            {% set adminItems = adminItems|merge([
+                { label: 'উত্তোলন অনুরোধ', href: '/admin/withdraws', icon: 'send', match: 'admin-withdraws' },
+                { label: 'স্টাফ পরিচালনা', href: '/admin/staff', icon: 'users', match: 'admin-staff' },
+            ]) %}
+        {% endif %}
+        {% set adminItems = adminItems|merge([
             { label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring', match: 'admin-notifications' },
             { label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' },
-        ] }]) %}
+        ]) %}
+        {% set groups = groups|merge([{ label: 'অ্যাডমিন', icon: 'shield', items: adminItems }]) %}
     {% endif %}
 
     {% for group in groups %}
@@ -61,7 +75,7 @@
     {% endfor %}
 
     <div class="mt-6 rounded-xl bg-primary-50 p-4 text-center">
-        <p class="text-xs font-medium text-primary-800">💡 ডেমো মোড</p>
-        <p class="mt-1 text-[11px] leading-relaxed text-primary-700/80">সকল সার্ভিস ও ডাটা কাল্পনিক — শুধুমাত্র ডেমো উদ্দেশ্যে।</p>
+        <p class="text-xs font-medium text-primary-800">💡 সহায়তা</p>
+        <p class="mt-1 text-[11px] leading-relaxed text-primary-700/80">অর্ডারের জন্য দেওয়া তথ্য সুরক্ষিত রাখা হয়। কোনো সমস্যা হলে সাপোর্টে যোগাযোগ করুন।</p>
     </div>
 </nav>

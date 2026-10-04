@@ -1,0 +1,196 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}উত্তোলন #{{ row.id }} — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    {% include 'components/status-badge.twig' with { status: row.status } %}
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'উত্তোলন অনুরোধ #' ~ row.id,
+    description: 'অনুরোধের সময়: ' ~ (row.created_at|bndate)
+        ~ ' · অনুমোদন: ' ~ (row.reviewed_at ? row.reviewed_at|bndate : '—'),
+    backUrl: '/admin/withdraws',
+    backLabel: 'উত্তোলন তালিকায় ফিরে যান',
+    actions: headActions,
+} %}
+
+{% if isOpen %}
+    <div class="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3">
+        <span class="inline-flex items-center gap-2 text-sm font-semibold text-primary-800">
+            {{ icon('hand', 'w-4 h-4') }}
+            এই অনুরোধটি আপনার নামে ধরা হয়েছে। অন্য সুপারএডমিন এখন এটি সিদ্ধান্ত দিতে পারবেন না।
+        </span>
+        <form method="post" action="/admin/withdraws/{{ row.id }}" class="ml-auto">
+            <input type="hidden" name="_csrf" value="{{ csrf }}">
+            <button type="submit" name="do" value="release" class="btn btn-ghost btn-sm">
+                {{ icon('undo-2', 'w-3.5 h-3.5') }} তালিকায় ফিরিয়ে দিন
+            </button>
+        </form>
+    </div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-2">
+    <div class="space-y-6">
+        {# The destination. Given the widest block on the page, because this is
+           the thing the reviewer is actually here to read — an amount plus a
+           method is not enough to send money from. #}
+        <section class="card p-6">
+            <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('send', 'w-5 h-5 text-primary-600') }} পেমেন্টের বিবরণ
+            </h2>
+
+            <dl class="space-y-3.5">
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">অ্যাডমিন</dt>
+                    <dd class="text-right text-sm font-semibold text-neutral-800">
+                        {{ admin.username ?? '—' }}
+                        <span class="block text-xs font-normal text-neutral-400">{{ admin.phone ?? '' }}</span>
+                    </dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">পরিমাণ</dt>
+                    <dd class="text-right text-lg font-extrabold text-primary-700">{{ row.amount|money }}</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">মাধ্যম</dt>
+                    <dd class="text-right text-sm font-semibold text-neutral-800">
+                        {{ methodLabels[row.method] ?? row.method }}
+                    </dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-b border-neutral-100 pb-3">
+                    <dt class="text-sm text-neutral-500">অ্যাকাউন্ট</dt>
+                    <dd class="select-all break-all text-right font-mono text-sm text-neutral-800">
+                        {{ row.account_details ?? '—' }}
+                    </dd>
+                </div>
+                {% if row.note %}
+                    <div class="flex items-baseline justify-between gap-4">
+                        <dt class="text-sm text-neutral-500">নোট</dt>
+                        <dd class="text-right text-sm text-neutral-700">{{ row.note }}</dd>
+                    </div>
+                {% endif %}
+            </dl>
+
+            {# The admin's own wallet state next to the request. "Is this
+               affordable?" is a question about their balance, and it is one
+               query — but it is the query that stops a payout being approved
+               against a figure that no longer exists. #}
+            <div class="mt-5 rounded-xl bg-neutral-50 px-4 py-3 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-neutral-500">এখন ব্যালেন্সে আছে</span>
+                    <span class="font-bold text-neutral-800">{{ adminBalance|money }}</span>
+                </div>
+                <div class="mt-1 flex justify-between">
+                    <span class="text-neutral-500">এই অনুরোধের পর থাকবে</span>
+                    <span class="font-bold {{ adminBalance - row.amount < 0 ? 'text-danger-600' : 'text-neutral-800' }}">
+                        {{ (adminBalance - row.amount)|money }}
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        {# Earnings, so the reviewer can sanity-check the figure against what
+           was actually earned rather than against what was asked for. #}
+        {% set earned = ledgerTotals['order_credit']['credit'] ?? 0 %}
+        {% set taken = (ledgerTotals['withdraw']['debit'] ?? 0) - (ledgerTotals['withdraw_refund']['credit'] ?? 0) %}
+        <section class="card p-6">
+            <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('receipt', 'w-5 h-5 text-primary-600') }} এই অ্যাডমিনের হিসাব
+            </h2>
+            <dl class="space-y-2.5 text-sm">
+                <div class="flex justify-between">
+                    <dt class="text-neutral-500">মোট আয় (অর্ডার অনুমোদন)</dt>
+                    <dd class="font-semibold text-success-700">{{ earned|money }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-neutral-500">আগে উত্তোলন করেছেন</dt>
+                    <dd class="font-semibold text-neutral-700">{{ taken|money }}</dd>
+                </div>
+                <div class="flex justify-between border-t border-neutral-100 pt-2.5">
+                    <dt class="text-neutral-500">বাকি</dt>
+                    <dd class="font-bold text-primary-700">{{ (earned - taken)|money }}</dd>
+                </div>
+            </dl>
+            <a href="/admin/ledger?scope=all" class="btn btn-ghost btn-sm mt-4 w-full">
+                {{ icon('external-link', 'w-4 h-4') }} পুরো লেজার দেখুন
+            </a>
+        </section>
+    </div>
+
+    <div class="space-y-6">
+        {% if isOpen and isOwn %}
+            {# Stated plainly rather than shown as a disabled button: the reason
+               is a rule, not a temporary inability, and a rule the reviewer
+               should be able to see. #}
+            <section class="card border-warning-200 bg-warning-50 p-6">
+                <h2 class="flex items-center gap-2 text-lg font-bold text-warning-900">
+                    {{ icon('alert-triangle', 'w-5 h-5') }} নিজের অনুরোধ
+                </h2>
+                <p class="mt-2 text-sm text-warning-800">
+                    এটি আপনার নিজের উত্তোলন অনুরোধ, তাই আপনি এটি অনুমোদন বা বাতিল করতে পারবেন না।
+                    অন্য একজন সুপারএডমিন দেখবেন।
+                </p>
+            </section>
+        {% elseif isOpen %}
+            {# The money already left the admin's balance when they asked, so
+               approving records the decision rather than moving anything. The
+               button says what actually happens, which is not "money sent". #}
+            <section class="card border-primary-200 p-6">
+                <h2 class="mb-1 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('badge-check', 'w-5 h-5 text-primary-600') }} সিদ্ধান্ত
+                </h2>
+                <p class="mb-5 text-xs text-neutral-500">
+                    অনুরোধ জমার সময়ই {{ row.amount|money }} তাঁর ব্যালেন্স থেকে কেটে রাখা হয়েছে।
+                    অনুমোদন করলে সেটি চূড়ান্ত হবে এবং আপনি টাকাটি পাঠিয়ে দেবেন।
+                </p>
+
+                <form method="post" action="/admin/withdraws/{{ row.id }}" class="space-y-4">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                    <button type="submit" name="do" value="approve" class="btn btn-primary w-full"
+                            onclick="return confirm('{{ row.amount|money }} অনুমোদন করবেন?\n\nঅ্যাকাউন্ট: {{ row.account_details }}\n\nঅনুমোদনের পর টাকাটি {{ admin.username }}-এর অ্যাকাউন্টে পাঠাতে হবে।');">
+                        {{ icon('check-check', 'w-4 h-4') }} অনুমোদন করুন — {{ row.amount|money }}
+                    </button>
+                </form>
+
+                <form method="post" action="/admin/withdraws/{{ row.id }}" class="mt-5 space-y-4 border-t border-neutral-100 pt-5">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                    <div>
+                        <label for="wd_reason" class="form-label">বাতিলের কারণ <span class="text-danger-600">*</span></label>
+                        <textarea id="wd_reason" name="reason" rows="2" class="form-input" required maxlength="500"
+                                  placeholder="যেমন: অ্যাকাউন্ট নম্বরটি মিলছে না — সঠিক নম্বর দিয়ে আবার পাঠান"></textarea>
+                        <p class="form-help">
+                            কারণটি অ্যাডমিন দেখবেন এবং টাকা তার ব্যালেন্সে ফিরে যাবে।
+                        </p>
+                    </div>
+
+                    <button type="submit" name="do" value="reject" class="btn btn-ghost w-full text-danger-600"
+                            onclick="return confirm('অনুরোধটি বাতিল করবেন?\n\n{{ row.amount|money }} অ্যাডমিনের ব্যালেন্সে ফিরে যাবে।');">
+                        {{ icon('x-circle', 'w-4 h-4') }} বাতিল করে টাকা ফেরত দিন
+                    </button>
+                </form>
+            </section>
+        {% else %}
+            <section class="card p-6">
+                <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                    {{ icon('history', 'w-5 h-5 text-primary-600') }} সিদ্ধান্ত
+                </h2>
+                <div class="rounded-lg bg-neutral-100 px-4 py-3 text-sm text-neutral-700">
+                    <p class="font-semibold">
+                        এই অনুরোধটি {{ row.status|statuslabel }}।
+                        {% if row.reviewed_at %}{{ row.reviewed_at|bndate }}{% endif %}
+                    </p>
+                    {% if row.reject_reason %}
+                        <p class="mt-2"><span class="font-semibold">কারণ:</span> {{ row.reject_reason }}</p>
+                    {% endif %}
+                    <p class="mt-2 text-xs text-neutral-500">
+                        একটি সিদ্ধান্তের পর আর পরিবর্তন করা যায় না।
+                    </p>
+                </div>
+            </section>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

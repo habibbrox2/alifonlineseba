@@ -1,7 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Alif Tools">
-  <!-- Alif Tools favicon: mark at favicon scale -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="All Seba">
+  <!-- All Seba favicon: the same mark as public/assets/brand/logo-mark.svg.
+
+       Byte-for-byte the same shapes on purpose. The tab bar icon and the
+       header logo are the first and last time a visitor sees this brand, and
+       a favicon that is a slightly different drawing is how a logo system
+       starts drifting. Keep this file and logo-mark.svg in step.
+
+       Nothing here is optimised for the 16px case (no simplified variant,
+       no extra padding): the tile is a flat silhouette and the bolt is solid,
+       which is what survives downscaling. If the tick ever muddies at 16px,
+       the fix is a bolder stroke here AND the same stroke in
+       scripts/build-brand-icons.php, not a second drawing. -->
   <rect width="64" height="64" rx="14" fill="#083f31"/>
-  <path d="M36.5 12 L31 12 L23.5 47.5 L29 47.5 Z" fill="#f5b301"/>
-  <circle cx="36.5" cy="15.5" r="4" fill="#ffffff"/>
-  <rect x="17" y="51" width="30" height="4" rx="2" fill="#ffffff"/>
+  <path d="M34 7 L17 37 L27 37 L24 57 L43 27 L32 27 Z" fill="#f5b301"/>
+  <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#083f31" stroke-width="11"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#ffffff" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -43,6 +43,18 @@ final readonly class ReferralsAction
         $code = $this->users->ensureReferralCode($identity->id);
         $data = $this->referrals->forReferrer($identity->id, $page, self::PER_PAGE);
 
+        // `remaining` and the percent are derived here rather than stored, so
+        // the progress bar on the page can never disagree with the two numbers
+        // it is drawn from.
+        foreach ($data['rows'] as $index => $row) {
+            $required = max(1, (int) ($row['required_count'] ?? 1));
+            $completed = max(0, (int) ($row['completed_count'] ?? 0));
+            $data['rows'][$index]['required_count'] = $required;
+            $data['rows'][$index]['completed_count'] = $completed;
+            $data['rows'][$index]['remaining'] = max(0, $required - $completed);
+            $data['rows'][$index]['progress'] = (int) min(100, round($completed / $required * 100));
+        }
+
         return $this->view->render('site/account/referrals.twig', [
             'code' => $code,
             'shareLink' => $this->service->shareLink($identity->id),
@@ -53,7 +65,8 @@ final readonly class ReferralsAction
             'summary' => $this->referrals->summaryFor($identity->id),
             'referrerBonus' => $this->service->referrerBonus(),
             'refereeBonus' => $this->service->refereeBonus(),
-            'minRecharge' => $this->service->minFirstRecharge(),
+            'requiredRecharges' => $this->service->requiredRecharges(),
+            'minRecharge' => $this->service->minQualifyingRecharge(),
             'summaryText' => $this->service->summaryText(),
             'terms' => $this->service->terms(),
             'enabled' => $this->service->isEnabled(),

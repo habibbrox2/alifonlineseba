@@ -13,7 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Yiisoft\Db\Connection\ConnectionInterface;
 
-#[AsCommand('app:seed', 'Seeds demo categories, services and users (clearly-marked demo data).')]
+#[AsCommand('app:seed', 'Seeds sample categories, services and users.')]
 final class SeedCommand extends Command
 {
     /**
@@ -22,7 +22,7 @@ final class SeedCommand extends Command
      * services and transactions that still point at them keep their FKs.
      *
      * A named list, not "whatever is not in the taxonomy": a category an admin
-     * added by hand must never be retired by a re-run of the demo seed.
+     * added by hand must never be retired by a re-run of the seed.
      *
      * @var list<string>
      */
@@ -35,7 +35,7 @@ final class SeedCommand extends Command
     ];
 
     /**
-     * Demo variants per slug: options the order page shows as a selector with
+     * Variants per slug: options the order page shows as a selector with
      * per-variant prices ("original vs smart card copy" parity).
      *
      * @var array<string, array<int, array{label: string, price: float}>>
@@ -56,7 +56,7 @@ final class SeedCommand extends Command
     ];
 
     /**
-     * Demo ordering rules per slug, rendered as the rules card on the order page.
+     * Ordering rules per slug, rendered as the rules card on the order page.
      *
      * @var array<string, string>
      */
@@ -101,7 +101,7 @@ final class SeedCommand extends Command
 
         // ---- Catalog: idempotent by slug -------------------------------------
         // Re-running the seed refreshes categories/services to the current
-        // demo catalog without touching user rows (their transactions FK to
+        // seed catalog without touching user rows (their transactions FK to
         // services, so only services that no transaction references are
         // replaced; the rest are inserted when missing).
         $existingSlugs = [];
@@ -199,13 +199,13 @@ final class SeedCommand extends Command
             $created++;
         }
 
-        // ---- Retire superseded demo slugs -----------------------------------
+        // ---- Retire superseded slugs ---------------------------------------
         // The first seed pass used a smaller placeholder catalog; those slugs
         // are not part of the reference taxonomy. Disable the services and
         // categories (rows stay, so FK/transaction history survives) instead
         // of deleting them.
         // ---- Backfill variants/rules for pre-existing services ---------------
-        // Services seeded before those columns existed get the same demo data
+        // Services seeded before those columns existed get the same data
         // as a fresh install; rows that already define variants are untouched.
         foreach (self::SEED_VARIANTS as $slug => $variants) {
             $service = $this->services->findServiceBySlug($slug);
@@ -218,7 +218,7 @@ final class SeedCommand extends Command
             }
         }
 
-        // ---- Retire superseded demo slugs -----------------------------------
+        // ---- Retire superseded slugs ---------------------------------------
         foreach (self::LEGACY_CATEGORY_SLUGS as $slug) {
             if (isset($existingCategorySlugs[$slug])) {
                 $this->services->updateCategory((int) $this->db

@@ -1,0 +1,145 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}উত্তোলন অনুরোধ — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    {% if stats.unresolved > 0 %}
+        <span class="badge badge-warning">{{ icon('bell', 'w-3.5 h-3.5') }} {{ stats.unresolved }}টি অপেক্ষমাণ</span>
+    {% else %}
+        <span class="badge badge-success">{{ icon('check-check', 'w-3.5 h-3.5') }} সব প্রক্রিয়া হয়েছে</span>
+    {% endif %}
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'উত্তোলন অনুরোধ',
+    description: 'অ্যাডমিনদের টাকা উত্তোলনের অনুরোধ — যাচাই করে অনুমোদন বা বাতিল করুন',
+    actions: headActions,
+} %}
+
+<!-- Stat cards -->
+<div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% include 'components/stat-card.twig' with { label: 'মোট অনুরোধ', value: stats.total, icon: 'inbox', tone: 'info' } %}
+    {% include 'components/stat-card.twig' with { label: 'অপেক্ষমাণ', value: stats.unresolved, icon: 'bell', tone: 'accent' } %}
+    {% include 'components/stat-card.twig' with { label: 'অপেক্ষমাণ টাকা', value: stats.unresolved_amount|money, icon: 'wallet', tone: 'info' } %}
+    {% include 'components/stat-card.twig' with { label: 'প্রত্যাহৃত টাকা', value: stats.approved_amount|money, icon: 'send', tone: 'success' } %}
+</div>
+
+{# "অপেক্ষমাণ" and "যাচাই ধরা" are separate chips because they are separate jobs: the
+   first is unclaimed work, the second is work somebody already owns. Each keeps
+   the current search and sort so narrowing by state never discards what the
+   reviewer was looking for. #}
+{% set filterBase = (q ? 'q=' ~ q|url_encode ~ '&' : '') ~ (sort != 'created_at' or dir != 'desc' ? 'sort=' ~ sort ~ '&dir=' ~ dir ~ '&' : '') %}
+<div class="mb-4 flex flex-wrap items-center gap-2">
+    <span class="text-sm font-medium text-neutral-500">ফিল্টার:</span>
+    <a href="/admin/withdraws?{{ filterBase }}"
+       class="btn btn-sm {{ status == '' ? 'btn-primary' : 'btn-ghost' }}">সব</a>
+    {% for st in statuses %}
+        <a href="/admin/withdraws?{{ filterBase }}status={{ st }}"
+           class="btn btn-sm {{ status == st ? 'btn-primary' : 'btn-ghost' }}">
+            {{ st|statusbadge|raw }}
+        </a>
+    {% endfor %}
+</div>
+
+<form method="get" action="/admin/withdraws" class="mb-5 flex flex-wrap items-end gap-2">
+    <div class="min-w-52 flex-1">
+        <label for="wq" class="sr-only">খুঁজুন</label>
+        <input id="wq" type="search" name="q" value="{{ q }}" class="form-input"
+               placeholder="অ্যাডমিন, ফোন বা অ্যাকাউন্টের বিবরণ দিয়ে খুঁজুন…">
+    </div>
+
+    <select name="status" class="form-input sm:w-44">
+        <option value="">সব স্ট্যাটাস</option>
+        {% for st in statuses %}
+            <option value="{{ st }}" {{ status == st ? 'selected' }}>{{ st|statuslabel }}</option>
+        {% endfor %}
+    </select>
+
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button type="submit" class="btn btn-primary">{{ icon('search', 'w-4 h-4') }} খুঁজুন</button>
+    {% if q or status %}
+        <a href="/admin/withdraws" class="btn btn-ghost">ফিল্টার মুছুন</a>
+    {% endif %}
+</form>
+
+<div class="card overflow-hidden">
+    {# Empty state lives outside the <table>: .table-base carries a 640px min-width,
+       so a centred message inside it would sit off-screen on a phone. #}
+    {% if rows is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('send', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">
+                {% if q or status %}এই ফিল্টারে কোনো অনুরোধ পাওয়া যায়নি।
+                {% else %}কোনো উত্তোলন অনুরোধ নেই।{% endif %}
+            </p>
+        </div>
+    {% else %}
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr>
+                    <th>অ্যাডমিন</th>
+                    {% include 'components/sortable-header.twig' with {
+                        label: 'পরিমাণ', column: 'amount', sort: sort, dir: dir, right: true,
+                        base: '/admin/withdraws?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ (q ? 'q=' ~ q|url_encode ~ '&' : ''),
+                    } %}
+                    <th>মাধ্যম ও অ্যাকাউন্ট</th>
+                    <th>অবস্থা</th>
+                    {% include 'components/sortable-header.twig' with {
+                        label: 'তারিখ', column: 'created_at', sort: sort, dir: dir,
+                        base: '/admin/withdraws?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ (q ? 'q=' ~ q|url_encode ~ '&' : ''),
+                    } %}
+                    <th class="text-right">অ্যাকশন</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for w in rows %}
+                    <tr>
+                        <td>
+                            <p class="font-medium text-neutral-800">{{ w.username ?? '—' }}</p>
+                            <p class="text-xs text-neutral-400">{{ w.phone ?? '' }}</p>
+                        </td>
+                        <td class="text-right font-semibold text-primary-700">{{ w.amount|money }}</td>
+                        <td>
+                            <p class="text-sm text-neutral-700">{{ w.method|upper }}</p>
+                            {# The destination, verbatim. A payout cannot be
+                               approved on the strength of an amount alone. #}
+                            <p class="select-all break-all text-xs text-neutral-500">{{ w.account_details ?? '—' }}</p>
+                        </td>
+                        <td>
+                            {% include 'components/status-badge.twig' with { status: w.status } %}
+                            {% if w.status == 'review' and w.claimed_at %}
+                                <p class="mt-1 text-[10px] text-neutral-400">ধরা {{ w.claimed_at|bndate }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="whitespace-nowrap text-neutral-500">{{ w.created_at|bndate }}</td>
+                        <td>
+                            <div class="flex justify-end">
+                                <a href="/admin/withdraws/{{ w.id }}" class="btn btn-ghost btn-sm">
+                                    {% if w.status == 'review' %}
+                                        {{ icon('eye', 'w-3.5 h-3.5') }} খুলুন
+                                    {% elseif w.status == 'pending' %}
+                                        {{ icon('search-check', 'w-3.5 h-3.5') }} যাচাই
+                                    {% else %}
+                                        {{ icon('eye', 'w-3.5 h-3.5') }} দেখুন
+                                    {% endif %}
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total,
+    baseUrl: '/admin/withdraws?' ~ (status ? 'status=' ~ status ~ '&' : '') ~ (q ? 'q=' ~ q|url_encode ~ '&' : '') ~ 'page=',
+    sort: sort, dir: dir,
+} %}
+{% endblock %}

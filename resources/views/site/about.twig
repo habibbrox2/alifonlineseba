@@ -1,7 +1,7 @@
 {% extends 'layouts/public.twig' %}
 
-{% block title %}আমাদের সম্পর্কে — Alif Tools{% endblock %}
-{% block description %}Alif Tools সম্পর্কে — আধুনিক ডিজিটাল সার্ভিস হাব অ্যাপ্লিকেশনের ডেমো ইমপ্লিমেন্টেশন, Yii 3 ও Tailwind CSS দিয়ে নির্মিত।{% endblock %}
+{% block title %}আমাদের সম্পর্কে — All Seba{% endblock %}
+{% block description %}All Seba সম্পর্কে — আধুনিক ডিজিটাল সার্ভিস প্ল্যাটফর্ম, Yii 3 ও Tailwind CSS দিয়ে নির্মিত।{% endblock %}
 
 {% block content %}
 <section class="container-app py-12">
@@ -9,16 +9,16 @@
         <h1 class="text-3xl font-extrabold text-neutral-900">আমাদের সম্পর্কে</h1>
         <div class="card mt-6 p-6 leading-relaxed text-neutral-600 sm:p-8">
             <p>
-                <strong>Alif Tools</strong> একটি ডেমো ডিজিটাল সার্ভিস প্ল্যাটফর্ম — যা আধুনিক সার্ভিস হাব
+                <strong>All Seba</strong> একটি ডিজিটাল সার্ভিস প্ল্যাটফর্ম — যা আধুনিক সার্ভিস হাব
                 অ্যাপ্লিকেশনের ইউজার এক্সপেরিয়েন্স প্রদর্শনের জন্য তৈরি। এটি Yii 3, Twig, Tailwind CSS ও
                 Alpine.js দিয়ে নির্মিত একটি স্বাধীন ইমপ্লিমেন্টেশন।
             </p>
             <p class="mt-4">
-                এই প্ল্যাটফর্মের সকল সার্ভিস, ইউজার ও লেনদেন <strong>সম্পূর্ণ কাল্পনিক ডেমো ডাটা</strong>।
-                কোনো সরকারি ডাটাবেজ, বাস্তব পরিচয় তথ্য বা পেমেন্ট গেটওয়ে এখানে ব্যবহার হয় না।
+                এখানে <strong>আপনার তথ্য সুরক্ষিত রাখা হয়</strong> — পাসওয়ার্ড শুধু হ্যাশ আকারে সংরক্ষিত হয়
+                এবং কোনো তৃতীয় পক্ষের সঙ্গে ভাগ করা হয় না।
             </p>
             <h2 class="mt-8 text-xl font-bold text-neutral-900">যোগাযোগ</h2>
-            <p class="mt-2">ডেমো সাপোর্ট: support@demo.local (কাল্পনিক)</p>
+            <p class="mt-2">সাপোর্ট: {{ site.contact_email|default('হেল্প ডেস্কে যোগাযোগ করুন') }}</p>
         </div>
     </div>
 </section>

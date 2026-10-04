@@ -9,13 +9,16 @@ use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\SettingsRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Repository\TransactionRepository;
+use App\Tests\Support\TestGraph;
 use App\Repository\UserRepository;
 use App\Notification\NotificationEvent;
 use App\Notification\NotificationManager;
 use App\Notification\QueueRepository;
 use App\Notification\TemplateRenderer;
 use App\Service\DeliverableStorage;
+use App\Service\OrderWindowService;
 use App\Service\ServiceManager;
 use App\Service\ServiceRequestAdminService;
 use App\Service\StatusPresenter;
@@ -66,6 +69,9 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
     private const PRICE = 12.5;
     private const START_BALANCE = 100.0;
 
+    /** The recharge amount `makeTopUp()` credits. */
+    private const TOPUP = 75.0;
+
     /** Smallest thing finfo still identifies as a real PNG. */
     private const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -74,7 +80,9 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
     private ConnectionInterface $db;
     private ServiceRepository $services;
     private UserRepository $users;
-    private TransactionRepository $transactions;
+    private ServiceOrderRepository $orders;
+    private \App\Service\LedgerService $ledger;
+    private TransactionRepository $ledgerRepository;
     private ServiceManager $manager;
     private ServiceRequestAdminService $admin;
     private DeliverableStorage $storage;
@@ -94,7 +102,9 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         $this->db = $container->get(ConnectionInterface::class);
         $this->services = new ServiceRepository($this->db);
         $this->users = new UserRepository($this->db);
-        $this->transactions = new TransactionRepository($this->db);
+        $this->orders = TestGraph::orders($this->db);
+        $this->ledger = TestGraph::ledger($this->db, $this->users);
+        $this->ledgerRepository = TestGraph::ledgerRepository($this->db);
 
         $notify = new NotificationManager(
             new NotificationRepository($this->db),
@@ -106,11 +116,15 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
 
         $this->manager = new ServiceManager(
             $this->services,
-            $this->transactions,
+            $this->orders,
+            $this->ledger,
             $this->users,
             new ActivityLogRepository($this->db),
             new NotificationRepository($this->db),
             $notify,
+            // The default window is a real, clock-dependent gate; these tests assert
+            // on order behaviour, not on the hour of the day they happen to run.
+            OrderWindowService::alwaysOpen(),
         );
 
         // A real storage instance on the real base path, not a temp dir: the
@@ -119,7 +133,8 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         $this->storage = DeliverableStorage::fromProjectRoot();
 
         $this->admin = new ServiceRequestAdminService(
-            $this->transactions,
+            $this->orders,
+            $this->ledger,
             $this->users,
             $this->storage,
             $notify,
@@ -172,7 +187,11 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
 
         foreach ($this->userIds as $id) {
             $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
-            $this->db->createCommand()->delete('{{%transaction}}', ['user_id' => $id])->execute();
+            // Ledger rows pointing at this user's orders have to go *before* the
+            // orders: a ledger entry references the order that moved the money,
+            // and the FK refuses the other order. Deleting by join rather than by
+            // id list, because the ids are not known here.
+            TestGraph::purgeUser($this->db, $id);
             // Deliveries reference queue rows (FK), which reference the user —
             // both must go before the user row or the delete is refused.
             $this->db
@@ -183,7 +202,7 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
             $this->db->createCommand()->delete('{{%notification}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%user}}', ['id' => $id])->execute();
         }
-        $this->db->createCommand()->delete('{{%transaction}}', ['service_id' => $this->serviceId])->execute();
+        TestGraph::purgeServiceOrders($this->db, $this->serviceId);
         $this->db->createCommand()->delete('{{%service}}', ['id' => $this->serviceId])->execute();
         $this->userIds = [];
         // In-app fan-out rows that landed on users outside our list.
@@ -268,12 +287,12 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         );
         assertTrue($result->success, 'A valid submission must be accepted: ' . $result->message);
 
-        return (array) $this->transactions->findById((int) $result->data['_request_id']);
+        return (array) $this->orders->findById((int) $result->data['_request_id']);
     }
 
     private function row(int $id): array
     {
-        $row = $this->transactions->findById($id);
+        $row = $this->orders->findById($id);
         assertNotNull($row, 'The fixture request must still exist.');
         return $row;
     }
@@ -298,8 +317,8 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         );
         assertSame(
             'ডিসপ্যাচড',
-            TransactionRepository::metadata($row)['admin_note'] ?? null,
-            'The operator note rides along in metadata for the user to read.',
+            (string) ($row['admin_note'] ?? ''),
+            'The operator note is a column of its own, so the queue can filter on it.',
         );
     }
 
@@ -379,7 +398,18 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         );
     }
 
-    public function testCompletingThenFailingDoesNotRefund(): void
+    /**
+     * Approving is the payout, so a completed order has already paid an admin
+     * and cannot afterwards be relabelled as failed.
+     *
+     * The old shape of this test let the second transition succeed and simply
+     * skipped the refund. That is the worse outcome: the user is told their
+     * delivered work did not happen while the operator keeps the cash, and the
+     * books show money paid for a `failed` order. Refusing the transition is
+     * the honest answer — reversing a payout is a superadmin action, not a
+     * dropdown.
+     */
+    public function testCompletingThenFailingIsRefusedBecauseTheMoneyIsAlreadyPaid(): void
     {
         $user = $this->makeUser('delivered');
         $admin = $this->makeUser('admin', 'admin');
@@ -387,12 +417,25 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         $id = (int) $pending['id'];
 
         assertTrue($this->admin->setStatus($id, StatusPresenter::COMPLETED, $admin)[0]);
-        assertTrue($this->admin->setStatus($id, StatusPresenter::FAILED, $admin)[0]);
 
+        [$ok, $message] = $this->admin->setStatus($id, StatusPresenter::FAILED, $admin);
+
+        assertFalse($ok, 'A completed order has paid its operator; failing it now must be refused.');
+        assertStringContainsString('এডমিনকে', $message, 'The reason has to name the money, not just say "closed".');
+        assertSame(
+            StatusPresenter::COMPLETED,
+            (string) $this->row($id)['status'],
+            'A refused transition must leave the status alone.',
+        );
         assertEquals(
             self::START_BALANCE - self::PRICE,
             $this->balance($user),
             'Work that was delivered and paid for is not refunded by a later status change.',
+        );
+        assertEquals(
+            self::START_BALANCE + self::PRICE,
+            (float) ((array) $this->users->findById($admin->id))['balance'],
+            'The operator keeps the payout; a refused transition must not claw it back either.',
         );
     }
 
@@ -404,19 +447,25 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
      *
      * @return array<string, mixed>
      */
+    /**
+     * A recharge for this user, written through the real ledger gateway.
+     *
+     * Deliberately not a bare INSERT: a hand-made row would only prove that a
+     * hand-made row stays where it was put, and the property under test is
+     * that the *production* path puts recharges in the ledger and nowhere else.
+     *
+     * @return array<string, mixed> the ledger row
+     */
     private function makeTopUp(Identity $user, string $tag): array
     {
-        $this->db->createCommand()->insert('{{%transaction}}', [
-            'user_id' => $user->id,
-            'service_id' => null,
-            'reference' => 'TOPUP-' . $tag . '-' . $this->suffix,
-            'status' => StatusPresenter::COMPLETED,
-            'amount' => 75.0,
-            'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s'),
-        ])->execute();
+        $this->ledger->creditUser($user->id, self::TOPUP, [
+            'type' => TransactionRepository::TYPE_TOPUP,
+            'description' => 'Fixture recharge ' . $tag,
+        ]);
 
-        return (array) $this->transactions->findById((int) $this->db->getLastInsertID());
+        return (array) $this->ledgerRepository->findById(
+            (int) $this->db->createCommand('SELECT MAX([[id]]) FROM {{%transaction}}')->queryScalar(),
+        );
     }
 
     /** @return array<string, mixed> */
@@ -472,7 +521,7 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         }
     }
 
-    public function testABulkSettleNeverTouchesATopUpSittingInTheSameSelection(): void
+    public function testABulkSettleNeverTouchesARechargeIdInTheSameSelection(): void
     {
         $admin = $this->makeUser('admin', 'admin');
         $user = $this->makeUser('topup');
@@ -480,24 +529,29 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
         $topUp = $this->makeTopUp($user, 'bulk');
         $topUpId = (int) $topUp['id'];
 
-        // Deliberately selected together: the guard has to be the service, not
-        // the tab that happens to hide the checkbox.
+        // Deliberately selected together. A recharge is no longer a row in the
+        // order table at all, so the guard this used to need (a NULL service_id
+        // meaning "not an order") is gone — and so is the hazard it guarded
+        // against. The id below is a *ledger* id, and it must simply not
+        // resolve to an order, rather than resolving to whatever order happens
+        // to share the number.
         $result = $this->admin->settleMany([$id, $topUpId], StatusPresenter::FAILED, $admin);
 
-        assertTrue($result['ok'], 'The service request in the selection still settles.');
+        assertTrue($result['ok'], 'The service order in the selection still settles.');
         assertSame(1, $result['applied']);
-        assertSame(1, $result['skipped'], 'A top-up is not a service order and must be reported as skipped.');
+        assertSame(1, $result['skipped'], 'A ledger id is not an order id and must be reported as skipped.');
         assertSame(StatusPresenter::FAILED, (string) $this->row($id)['status']);
 
-        assertSame(
-            StatusPresenter::COMPLETED,
-            (string) $this->row($topUpId)['status'],
-            'A recharge is already settled; the bulk path must leave it exactly as it was.',
+        assertNull(
+            $this->orders->findById($topUpId),
+            'A recharge must not be reachable as an order — otherwise approving it would pay it twice.',
         );
         assertEquals(
-            self::START_BALANCE,
+            self::START_BALANCE + self::TOPUP,
             $this->balance($user),
-            'Refunding a top-up would credit money this path never debited.',
+            'Refunding a top-up would credit money this path never debited.'
+                . ' The starting balance plus the recharge is the whole truth here:'
+                . ' the order was debited then refunded, and the recharge was only ever credited.',
         );
     }
 
@@ -786,58 +840,48 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
 
     // ---- The queue the operator works from -------------------------------
 
-    public function testTheServiceOrderViewExcludesTopUpsAndCountsTheHeldOnes(): void
+    public function testTheServiceOrderQueueHoldsOrdersOnlyAndCountsTheHeldOnes(): void
     {
         $user = $this->makeUser('queue');
         $id = (int) $this->submitRequest($user)['id'];
 
-        // A recharge lands in the same table with a NULL service_id — that is
-        // the only thing telling the two apart, so the filter has to be on it.
-        $this->db->createCommand()->insert('{{%transaction}}', [
-            'user_id' => $user->id,
-            'service_id' => null,
-            'reference' => 'TOPUP-' . $this->suffix,
-            'status' => StatusPresenter::COMPLETED,
-            'amount' => 75.0,
-            'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s'),
-        ])->execute();
+        // A recharge is a ledger entry, not a queue row. It is written through
+        // the real gateway so the row below is one the production path would
+        // have written — inserting a bare row here would only prove that a
+        // hand-made row stays where it was put.
+        $this->ledger->creditUser($user->id, 75.0, [
+            'type' => TransactionRepository::TYPE_TOPUP,
+            'description' => 'Test recharge',
+        ]);
 
-        $serviceOnly = $this->transactions->all(1, 15, '', '', 'id', 'desc', true);
-        $ids = array_map('intval', array_column($serviceOnly['rows'], 'id'));
-        assertTrue(in_array($id, $ids, true), 'The request must appear in the service-order queue.');
+        $queue = $this->orders->adminList(1, 15, '', '', 'id', 'desc');
+        $ids = array_map('intval', array_column($queue['rows'], 'id'));
+        assertTrue(in_array($id, $ids, true), 'The order must appear in the order queue.');
         assertFalse(
-            in_array('TOPUP-' . $this->suffix, array_column($serviceOnly['rows'], 'reference'), true),
-            'A top-up has its own admin page and must not sit in the service queue.',
+            in_array('TOPUP', array_map('strval', array_column($queue['rows'], 'service_name', null)), true),
+            'The order queue carries no recharge rows at all.',
         );
 
-        $unfiltered = $this->transactions->all(1, 15, '', '', 'id', 'desc');
-        assertGreaterThan(
-            $serviceOnly['total'],
-            $unfiltered['total'],
-            'Dropping the filter brings the top-ups back, so the exclusion is doing real work.',
-        );
-
-        $open = $this->transactions->openServiceOrders();
-        assertGreaterThan(0, $open['count'], 'The dashboard badge counts the held requests.');
+        $open = $this->orders->openOrders();
+        assertGreaterThan(0, $open['count'], 'The dashboard badge counts the held orders.');
         assertEquals(
             self::PRICE,
             (float) $this->db
-                ->createCommand('SELECT COALESCE(SUM([[amount]]),0) FROM {{%transaction}} WHERE [[id]] = :id')
+                ->createCommand('SELECT COALESCE(SUM([[amount]]),0) FROM {{%service_order}} WHERE [[id]] = :id')
                 ->bindValue(':id', $id)
                 ->queryScalar(),
-            'The request is still held at its full price.',
+            'The order is still held at its full price.',
         );
 
         // Once settled it is no longer work in progress.
         assertTrue($this->admin->setStatus($id, StatusPresenter::COMPLETED, $this->makeUser('admin', 'admin'))[0]);
-        $after = $this->transactions->openServiceOrders();
+        $after = $this->orders->openOrders();
         assertSame(
             (int) $this->db
-                ->createCommand("SELECT COUNT(*) FROM {{%transaction}} WHERE [[service_id]] IS NOT NULL AND [[status]] IN ('pending','processing')")
+                ->createCommand("SELECT COUNT(*) FROM {{%service_order}} WHERE [[status]] IN ('pending','review')")
                 ->queryScalar(),
             $after['count'],
-            'Completing a request takes it off the open-orders count.',
+            'Approving an order takes it off the open-orders count.',
         );
     }
 
@@ -845,7 +889,7 @@ final class AdminServiceRequestTest extends \Codeception\Test\Unit
     private function serve(Identity $identity, int $transactionId): \Psr\Http\Message\ResponseInterface
     {
         $psr17 = new Psr17Factory();
-        $action = new DeliverableAction($this->transactions, $this->storage, $psr17, $psr17);
+        $action = new DeliverableAction($this->orders, $this->storage, $psr17, $psr17);
 
         $request = (new ServerRequest('GET', '/service-requests/' . $transactionId . '/file'))
             ->withAttribute('identity', $identity);

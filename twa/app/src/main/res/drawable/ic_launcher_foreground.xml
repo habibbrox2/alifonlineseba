@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Foreground layer of the adaptive icon: the golden alif + white dot and
+     baseline, centred in the 108dp canvas with ~18dp safe-zone padding. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- alif stroke: design-space 64 → canvas 108, scaled 1.6875 about the centre -->
+    <path
+        android:fillColor="#F5B301"
+        android:pathData="M63.03125,20.25 L52.28125,20.25 L39.65625,80.15625 L50.40625,80.15625 Z" />
+    <!-- dot over the alif -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M61.469,26.156 m-6.75,0 a6.75,6.75 0 1,1 13.5,0 a6.75,6.75 0 1,1 -13.5,0" />
+    <!-- baseline -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M28.6875,86.0625 L79.3125,86.0625 A3.375,3.375 0 0 1 79.3125,92.8125 L28.6875,92.8125 A3.375,3.375 0 0 1 28.6875,86.0625 Z" />
+</vector>

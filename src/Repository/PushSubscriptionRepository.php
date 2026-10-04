@@ -48,7 +48,12 @@ final class PushSubscriptionRepository
             ->bindValue(':e', $endpoint)
             ->queryOne();
 
-        if ($existing === false) {
+        // `AbstractCommand::queryOne()` is typed `?array` — an empty result set
+        // comes back as null and has never come back as false. Comparing
+        // against `false` here sent every first-time subscriber down the update
+        // branch with $existing === null, which is a 500 at `(int) $existing['id']`
+        // and no row written at all. See AppReleaseRepository for the same note.
+        if ($existing === null) {
             $this->db->createCommand()->insert('{{%push_subscription}}', [
                 'user_id' => $userId,
                 'endpoint' => $endpoint,
@@ -187,6 +192,161 @@ final class PushSubscriptionRepository
             ->queryScalar();
     }
 
+    /**
+     * Turn every one of a user's browsers off in a single statement.
+     *
+     * This is what the account-wide switch calls, and it is why the setting is
+     * a real off switch rather than a flag that merely hides notifications:
+     * `send()` re-checks the flag too, but deactivating the rows means a
+     * browser that is still holding a live subscription stops being a target
+     * for a broadcast and stops showing up as "connected" everywhere else.
+     *
+     * @return int rows actually changed
+     */
+    public function deactivateAllForUser(int $userId): int
+    {
+        return $this->db
+            ->createCommand()
+            ->update(
+                '{{%push_subscription}}',
+                ['is_active' => 0, 'updated_at' => date('Y-m-d H:i:s')],
+                ['user_id' => $userId, 'is_active' => 1],
+            )
+            ->execute();
+    }
+
+    /**
+     * Every browser one account has ever connected, newest first, for the
+     * device list on the settings page.
+     *
+     * Deactivated rows are included on purpose. "You turned this off on your
+     * phone in March" is exactly the question a person is looking at the list
+     * to answer, so hiding the row would make the list lie.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function forUser(int $userId, int $limit = 20): array
+    {
+        $rows = $this->db
+            ->createCommand(
+                'SELECT [[id]], [[user_agent]], [[is_active]], [[last_seen_at]], [[created_at]]'
+                . ' FROM {{%push_subscription}} WHERE [[user_id]] = :uid'
+                . ' ORDER BY [[is_active]] DESC, [[created_at]] DESC LIMIT ' . max(1, $limit)
+            )
+            ->bindValue(':uid', $userId)
+            ->queryAll();
+
+        return array_map(
+            static fn (array $row): array => $row + ['label' => self::describeBrowser((string) ($row['user_agent'] ?? ''))],
+            array_map(static fn ($row): array => (array) $row, $rows),
+        );
+    }
+
+    /**
+     * "Chrome · Windows" out of a raw User-Agent, for the device list.
+     *
+     * A raw UA is forty words of gibberish that identifies nothing and changes
+     * every few months; two short labels are enough for somebody to recognise
+     * "that's my laptop". Unknown agents degrade to a single honest word rather
+     * than an empty cell, because an empty row in a device list reads as a bug.
+     */
+    public static function describeBrowser(string $userAgent): string
+    {
+        if (trim($userAgent) === '') {
+            return 'অজানা ব্রাউজার';
+        }
+
+        $browser = 'ব্রাউজার';
+        foreach ([
+            'Edg' => 'Edge',
+            'OPR' => 'Opera',
+            'Chrome' => 'Chrome',
+            'Firefox' => 'Firefox',
+            'Safari' => 'Safari',
+        ] as $needle => $label) {
+            if (str_contains($userAgent, $needle)) {
+                $browser = $label;
+                break;
+            }
+        }
+
+        $os = 'অজানা';
+        foreach ([
+            'Windows' => 'Windows',
+            'Android' => 'Android',
+            'iPhone' => 'iPhone',
+            'iPad' => 'iPad',
+            'Mac OS' => 'Mac',
+            'Linux' => 'Linux',
+        ] as $needle => $label) {
+            if (str_contains($userAgent, $needle)) {
+                $os = $label;
+                break;
+            }
+        }
+
+        return $browser . ' · ' . $os;
+    }
+
+    /**
+     * Row counts for `app:webpush:check`.
+     *
+     * An operator's first question is "are there any browsers at all?", and
+     * the split matters more than the total: owned rows are the ones the
+     * per-account switch governs, anonymous ones are the /app banner, and
+     * inactive rows are the tombstones the settings page still lists.
+     *
+     * One SELECT with SUM(CASE...) rather than three COUNT queries — the
+     * table is small, but a check command should not feel like a report.
+     *
+     * @return array{total: int, active: int, owned: int, anonymous: int, inactive: int}
+     */
+    public function summary(): array
+    {
+        $row = $this->db
+            ->createCommand(
+                'SELECT COUNT(*) AS [[total]],'
+                . ' SUM(CASE WHEN [[is_active]] = 1 THEN 1 ELSE 0 END) AS [[active]],'
+                . ' SUM(CASE WHEN [[is_active]] = 1 AND [[user_id]] IS NOT NULL THEN 1 ELSE 0 END) AS [[owned]],'
+                . ' SUM(CASE WHEN [[is_active]] = 1 AND [[user_id]] IS NULL THEN 1 ELSE 0 END) AS [[anonymous]]'
+                . ' FROM {{%push_subscription}}'
+            )
+            ->queryOne() ?? [];
+
+        // SUM() over an empty table is NULL, not 0 — hence the casts.
+        $active = (int) ($row['active'] ?? 0);
+        $owned = (int) ($row['owned'] ?? 0);
+        $total = (int) ($row['total'] ?? 0);
+
+        return [
+            'total' => $total,
+            'active' => $active,
+            'owned' => $owned,
+            'anonymous' => (int) ($row['anonymous'] ?? 0),
+            'inactive' => max(0, $total - $active),
+        ];
+    }
+
+    /**
+     * The stored keys behind one endpoint, or null when there is no active row
+     * for it. Used by `app:webpush:check --endpoint=…`, which cannot encrypt
+     * for a browser whose p256dh/auth it does not hold.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function activeByEndpoint(string $endpoint): ?array
+    {
+        $row = $this->db
+            ->createCommand(
+                'SELECT [[id]], [[user_id]], [[endpoint]], [[p256dh]], [[auth]]'
+                . ' FROM {{%push_subscription}} WHERE [[endpoint]] = :e AND [[is_active]] = 1 LIMIT 1'
+            )
+            ->bindValue(':e', $endpoint)
+            ->queryOne();
+
+        return $row === null ? null : (array) $row;
+    }
+
     public function findByEndpoint(string $endpoint): ?array
     {
         $row = $this->db
@@ -195,6 +355,46 @@ final class PushSubscriptionRepository
             ->queryOne();
 
         return $row === null ? null : (array) $row;
+    }
+
+    /**
+     * Every row, keyed by id, for `app:webpush:watch`.
+     *
+     * This is the one reader that wants the whole table including the inactive
+     * tombstones, and it is a different question from anything else here: the
+     * watcher is not looking for subscriptions to push *to*, it is looking for
+     * rows whose state just changed, so it has to see a browser go away as
+     * well as arrive. `is_active` and `user_id` come along because those two
+     * columns are the entire difference between "a browser subscribed" and "the
+     * same browser re-posted its subscription again on this page load".
+     *
+     * No key material: the watcher prints browser, host and owner, and has no
+     * use for p256dh/auth.
+     *
+     * `is_active` comes back as the comparison `= 1` rather than as the bare
+     * column because a `bit(1)` arrives over the wire as whatever the driver
+     * feels like — 1, '1', or the raw byte 0x01, all of which cast differently
+     * in PHP. The server does the comparison, exactly as summary() does, and
+     * the watcher gets an ordinary integer.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function allForWatching(): array
+    {
+        $rows = $this->db
+            ->createCommand(
+                'SELECT [[id]], [[user_id]], [[endpoint]], [[user_agent]], ([[is_active]] = 1) AS [[active]], [[created_at]]'
+                . ' FROM {{%push_subscription}}'
+            )
+            ->queryAll();
+
+        $byId = [];
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            $byId[(int) $row['id']] = $row;
+        }
+
+        return $byId;
     }
 
     /**

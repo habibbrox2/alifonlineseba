@@ -1,6 +1,6 @@
-# Alif Tools — ডিজিটাল সেবা হাব (ডেমো)
+# Alif Tools — ডিজিটাল সার্ভিস প্ল্যাটফর্ম
  PHP 8.2+/Yii 3, Twig, MySQL 8, Tailwind CSS, Alpine.js ও Lucide আইকন দিয়ে তৈরি। 
- **সকল সার্ভিস ও ডাটা কাল্পনিক — শুধুমাত্র ডেমো উদ্দেশ্যে।**
+ **দেশজুড়ে ডিজিটাল সার্ভিস — এক ঠিকানায় অর্ডার, ট্র্যাক ও সাপোর্ট।**
 
 ## ফিচারসমূহ
 
@@ -33,7 +33,7 @@ cp .env.example .env   # .env এডিট করুন (DB ক্রেডে�
 
 # ৩. ডাটাবেস
 php yii migrate:up --no-interaction
-php yii app:seed       # ডেমো ক্যাটাগরি/সার্ভিস/ইউজার
+php yii app:seed       # নমুনা ক্যাটালগরি/সার্ভিস/ইউজার
 
 # ৪. অ্যাসেট (Tailwind + JS sync + Lucide sprite)
 npm run build
@@ -44,7 +44,7 @@ php -S 127.0.0.1:8099 -t public public/index.php
 
 `http://127.0.0.1:8099` ওপেন করুন।
 
-### ডেমো অ্যাকাউন্ট
+### সিড করা অ্যাকাউন্ট
 
 | ইউজারনেম | পাসওয়ার্ড | রোল |
 |---|---|---|
@@ -74,12 +74,13 @@ vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8099-�
 ├── scripts/                # sync-js.js, generate-sprite.php
 ├── src/
 │   ├── Auth/               # Identity, session auth, role guards
-│   ├── Console/            # yii কমান্ড (app:seed)
+│   ├── Console/            # yii কমান্ড (app:seed, app:fcm:check, app:webpush:check)
+│   ├── Notification/       # ইভেন্ট, কিউ, চ্যানেল (in_app, fcm, webpush, telegram)
 │   ├── Provider/           # মক সার্ভিস প্রোভাইডার
 │   ├── Repository/         # DB অ্যাক্সেস
 │   └── Web/                # Actions (Site, Auth, Dashboard, Services, Account, Admin, Api)
 ├── tests/                  # Codeception স্যুট
-└── docs/                   # architecture-plan, reference-ui-analysis, deployment, payment-brand
+└── docs/                   # architecture-plan, reference-ui-analysis, deployment, payment-brand, push
 ```
 
 ## ডকুমেন্টেশন
@@ -88,7 +89,10 @@ vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8099-�
 - [আর্কিটেকচার প্ল্যান](docs/architecture-plan.md)
 - [রেফারেন্স UI অ্যানালাইসিস](docs/reference-ui-analysis.md)
 - [পেমেন্ট ব্র্যান্ড গাইডলাইন (bKash, Nagad, Rocket)](docs/payment-brand-guidelines.md)
+- [ব্রাউজার পুশ নোটিফিকেশন — আর্কিটেকচার](docs/push-notifications.md)
+- [ব্রাউজার পুশ নোটিফিকেশন — ইউজার ও অ্যাডমিন গাইড](docs/push-notifications-bn.md)
+- [ওয়েব পুশ রানবুক (সেটআপ ও ট্রাবলশুটিং)](docs/webpush-runbook.md)
 
 ## লাইসেন্স
 
-ডেমো প্রজেক্ট — শেখা ও প্রদর্শনের উদ্দেশ্যে।
+Alif Tools — সর্বস্বত্ব সংরক্ষিত।

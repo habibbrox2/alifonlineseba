@@ -6,8 +6,8 @@ namespace App\Web\Api;
 
 use App\Auth\Identity;
 use App\Repository\NotificationRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
-use App\Repository\TransactionRepository;
 use App\Service\Api;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -16,7 +16,7 @@ final readonly class DashboardApiAction
 {
     public function __construct(
         private ServiceRepository $services,
-        private TransactionRepository $transactions,
+        private ServiceOrderRepository $orders,
         private NotificationRepository $notifications,
     ) {}
 
@@ -24,7 +24,7 @@ final readonly class DashboardApiAction
     {
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
-        $stats = $this->transactions->statsForUser($identity->id);
+        $stats = $this->orders->statsForUser($identity->id);
 
         return Api::ok([
             'user' => [

@@ -84,6 +84,16 @@ final readonly class AdminReferralsAction
 
         $data = $this->referrals->adminList($page, self::PER_PAGE, $status, $query, $sort, $dir);
 
+        // `remaining` is derived rather than stored so the queue's "আরও Nটি
+        // দরকার" can never disagree with the two numbers it comes from.
+        foreach ($data['rows'] as $index => $row) {
+            $required = max(1, (int) ($row['required_count'] ?? 1));
+            $completed = max(0, (int) ($row['completed_count'] ?? 0));
+            $data['rows'][$index]['required_count'] = $required;
+            $data['rows'][$index]['completed_count'] = $completed;
+            $data['rows'][$index]['remaining'] = max(0, $required - $completed);
+        }
+
         return $this->view->render('site/admin/referrals.twig', [
             'rows' => $data['rows'],
             'total' => $data['total'],
@@ -100,7 +110,8 @@ final readonly class AdminReferralsAction
             'enabled' => $this->service->isEnabled(),
             'referrerBonus' => $this->service->referrerBonus(),
             'refereeBonus' => $this->service->refereeBonus(),
-            'minRecharge' => $this->service->minFirstRecharge(),
+            'requiredRecharges' => $this->service->requiredRecharges(),
+            'minRecharge' => $this->service->minQualifyingRecharge(),
         ]);
     }
 }

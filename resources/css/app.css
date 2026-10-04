@@ -1,5 +1,5 @@
 /* ============================================================
- * Alif Tools — Tailwind entry + design tokens
+ * All Seba — Tailwind entry + design tokens
  * ============================================================ */
 
 @tailwind base;
@@ -810,6 +810,64 @@
 /* The banner is the bottom-most thing on a phone, so the page needs room to
    scroll past it or the footer ends up permanently underneath. */
 body.app-install-visible {
+  padding-bottom: 5.5rem;
+}
+
+/* ============================================================
+ * Push permission prompt
+ *
+ * A second fixed bar offering browser notifications, shown only
+ * where a decision is still open. `push-prompt.js` removes the
+ * `hidden` attribute; the rules are unconditional so the element
+ * can never flash before the script runs.
+ *
+ * It and the install banner share the same slot on purpose: two
+ * bars stacked on a phone cover the whole screen and nobody reads
+ * either. Whichever is visible wins, and dismissing one hands the
+ * space back to the other.
+ * ============================================================ */
+.push-prompt {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  background: #ffffff;
+  border-top: 1px solid rgb(8 63 49 / 0.1);
+  box-shadow: 0 -8px 24px -12px rgb(8 63 49 / 0.35);
+}
+.push-prompt[hidden] {
+  display: none;
+}
+.push-prompt-close {
+  position: absolute;
+  top: -0.6rem;
+  right: 0.5rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #6b7280;
+  box-shadow: 0 1px 4px rgb(8 63 49 / 0.2);
+}
+.push-prompt-close:hover {
+  color: #083f31;
+}
+.push-prompt-hint {
+  margin-top: 0.25rem;
+}
+
+/* One bottom slot, not two. The prompt outranks the install banner
+   because a permission that is never granted is permanent, while an
+   install banner can wait for the next page. */
+body.push-prompt-visible .app-install {
+  display: none;
+}
+body.push-prompt-visible {
   padding-bottom: 5.5rem;
 }
 

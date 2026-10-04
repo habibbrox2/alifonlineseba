@@ -125,7 +125,7 @@ final readonly class ReceiptAction
      */
     private function watermarkLabel(array $topup, Identity $identity): string
     {
-        $parts = ['ALIF TOOLS', 'TOPUP #' . (int) $topup['id']];
+        $parts = ['ALL SEBA', 'TOPUP #' . (int) $topup['id']];
 
         $reference = strtoupper(trim((string) ($topup['reference'] ?? '')));
         if ($reference !== '' && preg_match('/^[A-Z0-9\-]{4,64}$/', $reference) === 1) {

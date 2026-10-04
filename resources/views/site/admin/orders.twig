@@ -1,0 +1,314 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}সার্ভিস অর্ডার — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    {% if open.count > 0 %}
+        <span class="badge badge-warning">{{ icon('bell', 'w-3.5 h-3.5') }} {{ open.count }}টি অপেক্ষমাণ</span>
+    {% else %}
+        <span class="badge badge-success">{{ icon('check-check', 'w-3.5 h-3.5') }} সব প্রক্রিয়া হয়েছে</span>
+    {% endif %}
+    <a href="/admin/ledger" class="btn btn-sm btn-ghost">{{ icon('receipt', 'w-4 h-4') }} আমার হিসাব</a>
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'সার্ভিস অর্ডার',
+    description: 'ইউজারদের সব সার্ভিস অর্ডার — খুলে যাচাই করুন, অনুমোদন করলে আপনার ব্যালেন্সে টাকা যোগ হবে',
+    actions: headActions,
+} %}
+
+<!-- Stat cards -->
+<div class="mb-6 grid gap-4 sm:grid-cols-3">
+    {% include 'components/stat-card.twig' with { label: 'মোট অপেক্ষমাণ', value: open.count, icon: 'inbox', tone: 'accent' } %}
+    {% include 'components/stat-card.twig' with { label: 'অপেক্ষমাণ টাকার পরিমাণ', value: open.amount|money, icon: 'wallet', tone: 'info' } %}
+    {% include 'components/stat-card.twig' with { label: 'আমার ধরা কাজ', value: mine.count, icon: 'hand', tone: 'primary' } %}
+</div>
+
+{# The three slices of the queue, and the reason this page is not one list.
+
+   More than one operator works this queue, so "what is mine" and "what is
+   free" and "what has somebody else started" are three different questions and
+   the page answers all three. Each chip keeps the current search and sort, so
+   narrowing by state never discards what the admin was looking for. #}
+{% set filterBase = (q ? 'q=' ~ q|url_encode ~ '&' : '') ~ (sort != 'id' or dir != 'desc' ? 'sort=' ~ sort ~ '&dir=' ~ dir ~ '&' : '') %}
+<div class="mb-4 flex flex-wrap items-center gap-2">
+    <span class="text-sm font-medium text-neutral-500">কার কাজ:</span>
+    <a href="/admin/orders?{{ filterBase }}"
+       class="btn btn-sm {{ scope == 'all' ? 'btn-primary' : 'btn-ghost' }}">সবাই পাবেন না</a>
+    <a href="/admin/orders?{{ filterBase }}scope=mine"
+       class="btn btn-sm {{ scope == 'mine' ? 'btn-primary' : 'btn-ghost' }}">
+        আমার কাজ
+        <span class="ml-1 rounded-full bg-black/10 px-1.5 text-[11px]">{{ mine.count }}</span>
+    </a>
+    <a href="/admin/orders?{{ filterBase }}scope=taken"
+       class="btn btn-sm {{ scope == 'taken' ? 'btn-primary' : 'btn-ghost' }}">অন্যের কাজ</a>
+</div>
+
+<form method="get" action="/admin/orders" class="mb-5 flex flex-wrap items-end gap-2">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    <div class="min-w-52 flex-1">
+        <label for="of-q" class="sr-only">খুঁজুন</label>
+        <input id="of-q" type="search" name="q" value="{{ q }}" class="form-input"
+               placeholder="রেফারেন্স, ইউজার, ফোন বা সার্ভিস দিয়ে খুঁজুন…">
+    </div>
+
+    <select name="status" class="form-input sm:w-44">
+        <option value="">সব স্ট্যাটাস</option>
+        {% for st in ['pending', 'review', 'processing', 'completed', 'failed', 'cancelled'] %}
+            <option value="{{ st }}" {{ status == st ? 'selected' }}>{{ st|statuslabel }}</option>
+        {% endfor %}
+    </select>
+
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button type="submit" class="btn btn-primary">{{ icon('search', 'w-4 h-4') }} খুঁজুন</button>
+    {% if q or status %}
+        <a href="/admin/orders?scope={{ scope }}" class="btn btn-ghost">ফিল্টার মুছুন</a>
+    {% endif %}
+</form>
+
+{# The batch queue, and the reason the settle is asynchronous. Without this the
+   operator submits, gets a message saying the work is queued, and then has no
+   way to learn whether it ever ran.
+
+   Server-rendered rather than polled: a queue page is reloaded to look at the
+   list, and that is the natural moment to see the last batch's fate. #}
+{% if jobs is defined %}
+    {% set jobBadges = { queued: ['অপেক্ষমাণ', 'badge-warning'], processing: ['চলছে', 'badge-info'], done: ['সম্পন্ন', 'badge-success'], failed: ['ব্যর্থ', 'badge-danger'] } %}
+    <div class="card mb-4 px-4 py-3">
+        <p class="mb-3 text-sm font-semibold text-neutral-800">সাম্প্রতিক বাল্ক কাজ</p>
+        {# Rendered even when empty, and that is deliberate. A section that
+           appears only once something has happened in it teaches the operator
+           nothing on the day they first need it — and "no recent jobs" is
+           itself an answer. #}
+        {% if jobs is empty %}
+            <p class="text-xs text-neutral-500">এখনো কোনো বাল্ক কাজ নেই।</p>
+        {% else %}
+            <ul class="space-y-3">
+                {% for job in jobs %}
+                    {% set badge = jobBadges[job.status] ?? ['অজানা', 'badge-neutral'] %}
+                    <li>
+                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span class="font-medium text-neutral-700">
+                                #{{ job.id }} · {{ job.total }} টি অর্ডার
+                                <span class="font-normal text-neutral-400">— {{ job.requested_by_name ?: 'admin' }}</span>
+                            </span>
+                            <span class="badge {{ badge[1] }}">{{ badge[0] }}</span>
+                        </div>
+                        <div class="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-neutral-200"
+                             role="progressbar" aria-valuenow="{{ job.progress }}" aria-valuemin="0" aria-valuemax="100">
+                            <div class="h-full rounded-full bg-primary-600 transition-all" style="width: {{ job.progress }}%"></div>
+                        </div>
+                        <p class="mt-1 text-xs text-neutral-500">
+                            {{ job.message ?: (job.processed ~ '/' ~ job.total) }}
+                        </p>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+{% endif %}
+
+{# Bulk settle is offered on the *unclaimed* slice only. A claimed row belongs
+   to the admin who took it, and quietly approving somebody else's open order
+   from a bulk button is the exact accident the claim exists to prevent.
+   ServiceRequestAdminService::settleMany() refuses it server-side too, so a
+   hand-made POST gets a skipped count rather than a payout. #}
+{% set bulk = scope == 'all' %}
+
+{% if bulk %}
+    {# Selection is plain `name="ids[]"` checkboxes inside a normal form: the
+       submit button is wired, the ids are already in the body, and the whole
+       thing still works with Alpine asleep. Alpine only adds the count, the
+       select-all and the bar.
+
+       `do` rides on the submit button's own name/value rather than a hidden
+       field, because the form now has two actions and they are genuinely
+       different requests. #}
+    <form method="post" action="/admin/orders"
+          x-data="{ count: 0, total: {{ rows|length }}, all: false, target: '',
+                    clear(el) {
+                        el.querySelectorAll('tbody input[type=checkbox]')
+                            .forEach(row => row.checked = false);
+                        this.count = 0; this.all = false; this.target = '';
+                    } }"
+          @change="count = $el.querySelectorAll('tbody input[type=checkbox]:checked').length;
+                   all = count > 0 && count === total"
+          @submit="const btn = $event.submitter;
+                   if (btn && btn.value === 'bulk_status' && target !== ''
+                       && !confirm('নির্বাচিত ' + count + ' টি অর্ডার হালনাগাদ করবেন?\n\nসম্পন্ন করলে প্রতিটির টাকা আপনার ব্যালেন্সে যোগ হবে; বাতিল/ব্যর্থ করলে ইউজারের ব্যালেন্সে ফেরত যাবে।'))
+                       $event.preventDefault()">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        {# The view this bar was drawn in, so the redirect puts the operator back
+           on the same filtered page — their next move is nearly always the next
+           batch off the same list. #}
+        <input type="hidden" name="return_scope" value="{{ scope }}">
+        <input type="hidden" name="return_q" value="{{ q }}">
+        <input type="hidden" name="return_status" value="{{ status }}">
+        <input type="hidden" name="return_page" value="{{ page }}">
+        <input type="hidden" name="return_sort" value="{{ sort }}">
+        <input type="hidden" name="return_dir" value="{{ dir }}">
+{% endif %}
+
+<div class="card overflow-hidden">
+    {# Outside the <table> so the message is not stranded in a 640px-wide scroll area. #}
+    {% if rows is empty %}
+        <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                {{ icon('inbox', 'w-6 h-6') }}
+            </span>
+            <p class="text-sm text-neutral-500">
+                {% if q or status %}এই ফিল্টারে কোনো অর্ডার পাওয়া যায়নি।
+                {% elseif scope == 'mine' %}আপনার নামে ধরা কোনো অর্ডার নেই। "সবাই পাবেন না" থেকে নতুন কাজ নিতে পারেন।
+                {% else %}কোনো অর্ডার পাওয়া যায়নি।{% endif %}
+            </p>
+        </div>
+    {% else %}
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr>
+                    {% if bulk %}
+                        {# No `name`, so it is never submitted — it only drives the
+                           row boxes, and the form's own change handler counts
+                           them back. #}
+                        <th class="w-10">
+                            <input type="checkbox" x-bind:checked="all"
+                                   @change="$el.form.querySelectorAll('tbody input[type=checkbox]').forEach(row => row.checked = $el.checked)"
+                                   class="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                                   aria-label="এই পাতার সব অর্ডার নির্বাচন করুন">
+                        </th>
+                    {% endif %}
+                    {% include 'components/sortable-header.twig' with { label: 'রেফারেন্স', column: 'reference', sort: sort, dir: dir, base: ordersQuery } %}
+                    {% include 'components/sortable-header.twig' with { label: 'ইউজার', column: 'username', sort: sort, dir: dir, base: ordersQuery } %}
+                    <th>সার্ভিস</th>
+                    {% include 'components/sortable-header.twig' with { label: 'পরিমাণ', column: 'amount', sort: sort, dir: dir, base: ordersQuery, right: true } %}
+                    <th>অবস্থা</th>
+                    <th>যিনি ধরেছেন</th>
+                    {% include 'components/sortable-header.twig' with { label: 'তারিখ', column: 'created_at', sort: sort, dir: dir, base: ordersQuery } %}
+                    <th class="text-right">অ্যাকশন</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in rows %}
+                    <tr>
+                        {% if bulk %}
+                            {# Only untouched rows get a box. A `review` row on the
+                               "all" tab is not on this tab at all, but a
+                               `processing` row is — and bulk settling a
+                               `processing` row would take money from a job
+                               somebody may already have half done. #}
+                            <td class="w-10">
+                                {% if order.status == 'pending' %}
+                                    <input type="checkbox" name="ids[]" value="{{ order.id }}"
+                                           class="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                                           aria-label="অর্ডার {{ order.reference }} নির্বাচন করুন">
+                                {% endif %}
+                            </td>
+                        {% endif %}
+                        <td class="font-mono text-xs">{{ order.reference }}</td>
+                        <td>
+                            <p class="font-medium text-neutral-800">{{ order.username ?? '—' }}</p>
+                            <p class="text-xs text-neutral-400">{{ order.phone ?? '' }}</p>
+                        </td>
+                        <td>{{ order.service_name ?? 'সার্ভিস' }}</td>
+                        <td class="font-semibold text-primary-700">{{ order.amount|money }}</td>
+                        <td>{% include 'components/status-badge.twig' with { status: order.status } %}</td>
+                        {# The claim made visible. An order somebody else has
+                           taken shows their name, which is what turns "I was
+                           refused" into "I can see why" — and stops a second
+                           admin wasting ten minutes on a row that is already
+                           half done. #}
+                        <td>
+                            {% if order.claimed_by_name %}
+                                <p class="text-xs font-medium text-neutral-700">{{ order.claimed_by_name }}</p>
+                                {% if order.claimed_at %}
+                                    <p class="text-[10px] text-neutral-400">{{ order.claimed_at|bndate }}</p>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-xs text-neutral-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="whitespace-nowrap text-neutral-500">{{ order.created_at|bndate }}</td>
+                        <td class="text-right">
+                            <div class="flex flex-col items-end gap-1">
+                                {# The file marker is a separate line from the link: it is the only
+                                   way an operator can tell, from the list alone, which orders
+                                   still need their deliverable handed over. #}
+                                {% if order.deliverable_path %}
+                                    <span class="inline-flex items-center gap-1 text-[11px] text-success-600">
+                                        {{ icon('paperclip', 'w-3 h-3') }} ফাইল দেওয়া হয়েছে
+                                    </span>
+                                {% endif %}
+                                {# Opening the desk claims the order, so the label
+                                   says what the click will do rather than just
+                                   "open". #}
+                                <a href="/admin/orders/{{ order.id }}" class="btn btn-sm btn-ghost">
+                                    {% if order.claimed_by_name %}
+                                        {{ icon('eye', 'w-3.5 h-3.5') }} দেখুন
+                                    {% else %}
+                                        {{ icon('hand', 'w-3.5 h-3.5') }} ধরে যাচাই
+                                    {% endif %}
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% include 'components/pagination.twig' with {
+    page: page, perPage: perPage, total: total,
+    baseUrl: ordersQuery ~ 'page=',
+    sort: sort, dir: dir,
+} %}
+
+{% if bulk %}
+        {# The bar is fixed to the bottom of the viewport so it is reachable
+           however far down a page of orders the operator has scrolled, and
+           hidden until something is ticked.
+
+           The spacer keeps the last rows from sitting underneath it. Both carry
+           `x-cloak` so neither flashes into view before Alpine boots. #}
+        <div class="h-28" x-show="count > 0" x-cloak></div>
+
+        <div class="fixed inset-x-0 bottom-20 z-40 mx-auto w-full max-w-3xl px-4 sm:bottom-4"
+             x-show="count > 0" x-cloak>
+            <div class="card flex flex-wrap items-center gap-2 px-4 py-3 shadow-lg">
+                <p class="mr-auto text-sm font-semibold text-neutral-800">
+                    <span x-text="count"></span> টি অর্ডার নির্বাচিত
+                </p>
+
+                {# No `required` here: the export button does not need a status,
+                   and a required select would silently block it at the browser's
+                   own validation step, with no message about what went wrong. #}
+                <select name="status" x-model="target"
+                        class="form-input sm:w-44" aria-label="নতুন অবস্থা">
+                    <option value="">অবস্থা বেছে নিন…</option>
+                    {% for st in statuses %}
+                        <option value="{{ st }}">{{ st|statuslabel }}</option>
+                    {% endfor %}
+                </select>
+
+                <button type="submit" name="do" value="bulk_status"
+                        class="btn btn-primary btn-sm" x-bind:disabled="target === ''">
+                    {{ icon('list-checks', 'w-4 h-4') }} অবস্থা প্রয়োগ করুন
+                </button>
+
+                {# The second action on the same selection. Same `type=submit`,
+                   so it carries the ids like any other — the only difference is
+                   the `do` value the server branches on, and that it answers
+                   with a file instead of a redirect. #}
+                <button type="submit" name="do" value="bulk_export" class="btn btn-ghost btn-sm">
+                    {{ icon('download', 'w-4 h-4') }} CSV
+                </button>
+
+                <button type="button" class="btn btn-ghost btn-sm" @click="clear($el.form)">বাতিল</button>
+            </div>
+        </div>
+    </form>
+{% endif %}
+{% endblock %}

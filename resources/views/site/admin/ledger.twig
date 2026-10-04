@@ -1,0 +1,244 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}আমার হিসাব — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    <span class="badge badge-success">{{ icon('wallet', 'w-3.5 h-3.5') }} ব্যালেন্স {{ balance|money }}</span>
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'আমার হিসাব',
+    description: 'কোন অর্ডার থেকে কত টাকা আয় হলো, কত উত্তোলন করলেন — প্রতিটি লেনদেনের হিসাব সহ',
+    actions: headActions,
+} %}
+
+{# How the balance was reached, in three numbers. Derived from the ledger
+   rather than from the balance column, because the whole point of this page is
+   that the number can be checked. #}
+{% set earned = totals['order_credit']['credit'] ?? 0 %}
+{% set withdrawn = (totals['withdraw']['debit'] ?? 0) + (totals['withdraw']['credit'] ?? 0) %}
+{% set refunded = totals['withdraw_refund']['credit'] ?? 0 %}
+
+<div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% include 'components/stat-card.twig' with { label: 'বর্তমান ব্যালেন্স', value: balance|money, icon: 'wallet', tone: 'success' } %}
+    {% include 'components/stat-card.twig' with { label: 'মোট আয় (অর্ডার অনুমোদন)', value: earned|money, icon: 'badge-check', tone: 'primary' } %}
+    {% include 'components/stat-card.twig' with { label: 'মোট উত্তোলন', value: (withdrawn - refunded)|money, icon: 'arrow-up-right', tone: 'info' } %}
+    {% include 'components/stat-card.twig' with { label: 'লেনদেন সংখ্যা', value: rows|length ~ (total > rows|length ? ' / ' ~ total : ''), icon: 'receipt', tone: 'accent' } %}
+</div>
+
+{# Platform-wide view, super-admin only. Gated in the action as well as here —
+   this is the second lock, not the only one. #}
+{% if identity.isSuperAdmin() %}
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+        <span class="text-sm font-medium text-neutral-500">দেখা:</span>
+        <a href="/admin/ledger" class="btn btn-sm {{ scope != 'all' ? 'btn-primary' : 'btn-ghost' }}">আমার হিসাব</a>
+        <a href="/admin/ledger?scope=all" class="btn btn-sm {{ scope == 'all' ? 'btn-primary' : 'btn-ghost' }}">সব অ্যাডমিনের হিসাব</a>
+        <a href="/admin/staff" class="btn btn-sm btn-ghost">{{ icon('users', 'w-4 h-4') }} স্টাফ পরিচালনা</a>
+        <a href="/admin/withdraws" class="btn btn-sm btn-ghost">{{ icon('send', 'w-4 h-4') }} উত্তোলন অনুরোধ</a>
+    </div>
+{% endif %}
+
+{% if scope == 'all' %}
+    {# Per-person totals first, because "who has earned what" is the question
+       this scope exists to answer and it should not require reading 200 rows
+       to find out. #}
+    <section class="card mb-6 overflow-hidden">
+        <h2 class="border-b border-neutral-100 px-5 py-3.5 text-sm font-bold text-neutral-900">
+            {{ icon('users', 'w-4 h-4 inline text-primary-600') }} অ্যাডমিনভিত্তিক আয়
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="table-base">
+                <thead>
+                    <tr>
+                        <th>অ্যাডমিন</th>
+                        <th class="text-right">অর্ডার</th>
+                        <th class="text-right">আয়</th>
+                        <th class="text-right">উত্তোলন</th>
+                        <th class="text-right">জমা</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in earnings %}
+                        <tr>
+                            <td class="font-medium text-neutral-800">{{ row.username }}</td>
+                            <td class="text-right text-neutral-600">{{ row.orders }}</td>
+                            <td class="text-right font-semibold text-success-700">{{ row.earned|money }}</td>
+                            <td class="text-right text-neutral-600">{{ row.withdrawn|money }}</td>
+                            <td class="text-right font-bold text-primary-700">{{ row.available|money }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+{% endif %}
+
+<form method="get" action="/admin/ledger" class="mb-5 flex flex-wrap items-end gap-2">
+    {% if scope == 'all' %}<input type="hidden" name="scope" value="all">{% endif %}
+    <div class="min-w-52 flex-1">
+        <label for="lg-q" class="sr-only">খুঁজুন</label>
+        <input id="lg-q" type="search" name="q" value="{{ q }}" class="form-input"
+               placeholder="{{ scope == 'all' ? 'রেফারেন্স বা ইউজার দিয়ে খুঁজুন…' : 'রেফারেন্স বা অর্ডার দিয়ে খুঁজুন…' }}">
+    </div>
+
+    <select name="type" class="form-input sm:w-48">
+        <option value="">সব ধরনের লেনদেন</option>
+        {% for t in types %}
+            <option value="{{ t }}" {{ type == t ? 'selected' }}>{{ t|ledgertype }}</option>
+        {% endfor %}
+    </select>
+
+    <button type="submit" class="btn btn-primary">{{ icon('search', 'w-4 h-4') }} খুঁজুন</button>
+</form>
+
+<div class="grid gap-6 lg:grid-cols-3">
+    {# The statement. #}
+    <div class="lg:col-span-2">
+        <div class="card overflow-hidden">
+            {% if rows is empty %}
+                <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                    <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                        {{ icon('receipt', 'w-6 h-6') }}
+                    </span>
+                    <p class="text-sm text-neutral-500">
+                        {% if type %}এই ধরনের কোনো লেনদেন নেই।
+                        {% else %}এখনো কোনো লেনদেন নেই — কোনো অর্ডার অনুমোদন করলে এখানে দেখা যাবে।{% endif %}
+                    </p>
+                    <a href="/admin/orders" class="btn btn-primary btn-sm mt-2">অর্ডার কিউয়ে যান</a>
+                </div>
+            {% else %}
+            <div class="overflow-x-auto">
+                <table class="table-base">
+                    <thead>
+                        <tr>
+                            <th>রেফারেন্স</th>
+                            <th>ধরন</th>
+                            <th>বিবরণ</th>
+                            <th class="text-right">পরিমাণ</th>
+                            <th class="text-right">ব্যালেন্স</th>
+                            <th>তারিখ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                <td class="font-mono text-xs">{{ row.reference }}</td>
+                                <td><span class="badge {{ row.type|ledgerbadge }}">{{ row.type|ledgertype }}</span></td>
+                                <td class="text-sm text-neutral-600">
+                                    {{ row.description ?? (row.service_name ?? '—') }}
+                                    {% if row.order_reference %}
+                                        <a href="/admin/orders/{{ row.service_order_id }}"
+                                           class="block font-mono text-[11px] text-primary-600 hover:underline">
+                                            {{ row.order_reference }}
+                                        </a>
+                                    {% elseif scope == 'all' and row.user_name %}
+                                        <span class="block text-[11px] text-neutral-400">{{ row.user_name }}</span>
+                                    {% endif %}
+                                </td>
+                                {# The sign is drawn, not just the amount: a statement
+                                   whose numbers are all positive is a statement
+                                   nobody can balance. #}
+                                <td class="text-right font-semibold
+                                    {{ row.direction == 'debit' ? 'text-danger-600' : 'text-success-700' }}">
+                                    {{ row.direction == 'debit' ? '−' : '+' }}{{ row.amount|money }}
+                                </td>
+                                {# `balance_after` is read from the row rather than
+                                   recomputed by walking the list backwards — it was
+                                   written under a row lock at the time, which is the
+                                   only version of it that is certainly true. #}
+                                <td class="text-right text-sm text-neutral-500">
+                                    {{ row.balance_after !== null ? row.balance_after|money : '—' }}
+                                </td>
+                                <td class="whitespace-nowrap text-neutral-500">{{ row.created_at|bndate }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+        {% include 'components/pagination.twig' with {
+            page: page, perPage: perPage, total: total,
+            baseUrl: '/admin/ledger?' ~ (scope == 'all' ? 'scope=all&' : '') ~ (q ? 'q=' ~ q|url_encode ~ '&' : '') ~ (type ? 'type=' ~ type ~ '&' : ''),
+        } %}
+    </div>
+
+    {# The withdrawal request. Deliberately a separate column from the
+       statement: this is the one form on the page that spends money, and it
+       should not be sitting under a table of numbers an operator is reading
+       while trying to work out how much they have. #}
+    <div class="space-y-6">
+        <section class="card p-6">
+            <h2 class="mb-1 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('send', 'w-5 h-5 text-primary-600') }} টাকা উত্তোলন
+            </h2>
+            <p class="mb-4 text-xs text-neutral-500">
+                অনুরোধ জমা দিলেই টাকা ব্যালেন্স থেকে কেটে রাখা হয়, তাই একই টাকা দুইবার উত্তোলন করা যায় না।
+                সুপারএডমিন অনুমোদন করলে টাকা পাঠানো হবে; বাতিল হলে টাকা ফিরে আসবে।
+            </p>
+
+            {% if hasOpenWithdrawal %}
+                <div class="rounded-lg bg-info-50 px-3.5 py-3 text-sm text-info-800">
+                    আপনার একটি উত্তোলন অনুরোধ ইতিমধ্যে প্রক্রিয়াধীন আছে। সেটি শেষ হওয়ার পর নতুন করে জমা দিন।
+                </div>
+
+                {% if withdrawals %}
+                    <ul class="mt-4 space-y-2">
+                        {% for w in withdrawals %}
+                            <li class="flex items-center justify-between gap-3 border-b border-neutral-100 pb-2 text-sm">
+                                <span>
+                                    <span class="font-semibold text-neutral-800">{{ w.amount|money }}</span>
+                                    <span class="ml-2 text-xs text-neutral-400">{{ w.created_at|bndate }}</span>
+                                </span>
+                                {% include 'components/status-badge.twig' with { status: w.status } %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% else %}
+                <form method="post" action="/admin/ledger" class="space-y-4">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                    <div>
+                        <label for="aw_amount" class="form-label">পরিমাণ (৳)</label>
+                        <input id="aw_amount" name="amount" type="number" step="0.01"
+                               min="{{ minAmount }}" class="form-input" required
+                               placeholder="{{ minAmount|money }}">
+                        <p class="form-help">সর্বনিম্ন {{ minAmount|money }}। আপনার ব্যালেন্স: {{ balance|money }}</p>
+                    </div>
+
+                    <div>
+                        <label for="aw_method" class="form-label">পেমেন্ট মাধ্যম</label>
+                        <select id="aw_method" name="method" class="form-input" required>
+                            <option value="bank">ব্যাংক ট্রান্সফার</option>
+                            <option value="bkash">bKash</option>
+                            <option value="nagad">Nagad</option>
+                            <option value="rocket">Rocket</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="aw_details" class="form-label">অ্যাকাউন্টের বিবরণ</label>
+                        <textarea id="aw_details" name="account_details" rows="2" class="form-input" required
+                                  maxlength="500"
+                                  placeholder="ব্যাংক: বিকাশা/এক্সিম/আইডি ও নম্বর&#10;ওয়ালেট: নম্বর ও টাইপ"></textarea>
+                        <p class="form-help">সুপারএডমিন এটি যাচাই করেই টাকা পাঠাবেন — তাই হুবহু লিখুন।</p>
+                    </div>
+
+                    <div>
+                        <label for="aw_note" class="form-label">নোট (ঐচ্ছিক)</label>
+                        <input id="aw_note" name="note" class="form-input" maxlength="500"
+                               placeholder="চাইলে কিছু লিখতে পারেন">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-full"
+                            onclick="return confirm('উত্তোলন অনুরোধ জমা দিবেন?\n\nএই পরিমাণ এখনই আপনার ব্যালেন্স থেকে কেটে রাখা হবে।');">
+                        {{ icon('send', 'w-4 h-4') }} উত্তোলন অনুরোধ পাঠান
+                    </button>
+                </form>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

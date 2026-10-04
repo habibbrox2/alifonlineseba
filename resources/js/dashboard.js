@@ -1,5 +1,5 @@
 /* ============================================================
- * Alif Tools — dashboard interactions (Alpine.js data providers).
+ * All Seba — dashboard interactions (Alpine.js data providers).
  * ============================================================ */
 import { debounce, money } from './app.js';
 

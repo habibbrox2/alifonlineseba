@@ -7,8 +7,9 @@ namespace App\Tests\Functional;
 use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceRepository;
-use App\Repository\TransactionRepository;
+use App\Tests\Support\TestGraph;
 use App\Repository\UserRepository;
+use App\Service\OrderWindowService;
 use App\Service\ServiceManager;
 use App\ServiceProvider\ServiceField;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -39,7 +40,8 @@ final class ServiceFormFieldsTest extends \Codeception\Test\Unit
         $this->db = $container->get(ConnectionInterface::class);
         $this->manager = new ServiceManager(
             new ServiceRepository($this->db),
-            new TransactionRepository($this->db),
+            TestGraph::orders($this->db),
+            TestGraph::ledger($this->db, new UserRepository($this->db)),
             new UserRepository($this->db),
             new ActivityLogRepository($this->db),
             new NotificationRepository($this->db),
@@ -53,6 +55,9 @@ final class ServiceFormFieldsTest extends \Codeception\Test\Unit
                 new UserRepository($this->db),
                 $this->db,
             ),
+            // The default window is a real, clock-dependent gate; these tests assert
+            // on order behaviour, not on the hour of the day they happen to run.
+            OrderWindowService::alwaysOpen(),
         );
     }
 

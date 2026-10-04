@@ -1,14 +1,14 @@
 {% extends 'layouts/auth.twig' %}
 
-{% block description %}Alif Tools-এ ফ্রি ডেমো অ্যাকাউন্ট খুলুন — মোবাইল নম্বর দিয়ে সেকেন্ডেই রেজিস্ট্রেশন।{% endblock %}
+{% block description %}All Seba-এ ফ্রি অ্যাকাউন্ট খুলুন — মোবাইল নম্বর দিয়ে সেকেন্ডেই রেজিস্ট্রেশন।{% endblock %}
 {% block robots %}index, follow{% endblock %}
-{% block title %}নিবন্ধন — Alif Tools{% endblock %}
+{% block title %}নিবন্ধন — All Seba{% endblock %}
 
 {% block auth_content %}
 <div class="rounded-2xl bg-white p-6 shadow-lg sm:p-8">
     <div class="mb-6 text-center">
         <h1 class="text-2xl font-extrabold text-neutral-900">নিবন্ধন করুন</h1>
-        <p class="mt-1.5 text-sm text-neutral-500">মুহূর্তেই ডেমো অ্যাকাউন্ট খুলুন</p>
+        <p class="mt-1.5 text-sm text-neutral-500">মুহূর্তেই অ্যাকাউন্ট খুলুন</p>
     </div>
 
     <form method="post" action="/register" class="space-y-4" novalidate>
@@ -17,7 +17,7 @@
         <div>
             <label for="username" class="form-label">ইউজারনেম <span class="text-danger-600">*</span></label>
             <input id="username" type="text" name="username" value="{{ old.username ?? '' }}" class="form-input"
-                   placeholder="rahim.demo" autocomplete="username" required>
+                   placeholder="আপনার ইউজারনেম" autocomplete="username" required>
             {% if errors.username is defined %}<p class="form-error" role="alert">{{ errors.username }}</p>{% endif %}
         </div>
 
@@ -107,8 +107,8 @@
            44px tap-target rule, but extra vertical padding widens the hit area without
            disturbing the paragraph's line flow. #}
         নিবন্ধন করলে আপনি আমাদের <a href="/terms" class="underline py-0.5">শর্তাবলী</a> ও
-        <a href="/privacy" class="underline py-0.5">গোপনীয়তা নীতিতে</a> সম্মত হচ্ছেন। এটি একটি ডেমো সিস্টেম — সত্যিকারের
-        কোনো পরিচয় তথ্য দেবেন না।
+        <a href="/privacy" class="underline py-0.5">গোপনীয়তা নীতিতে</a> সম্মত হচ্ছেন। অর্ডার সম্পন্ন করার জন্য প্রয়োজনীয় তথ্য
+        ছাড়া আলাদা কোনো পরিচয় তথ্য দেবেন না।
     </p>
 </div>
 {% endblock %}

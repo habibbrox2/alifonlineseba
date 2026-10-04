@@ -2,6 +2,23 @@
 
 {% block title %}সার্ভিস ম্যানেজমেন্ট — Admin{% endblock %}
 
+{# Scoped to this page on purpose. app.css owns the bottom slot and says so:
+   the push prompt (z-index 61) and the install banner never stack, whichever is
+   visible wins. The bulk bar is a third bottom-fixed thing, and it lost that
+   contest — a real click landed on the prompt instead of প্রয়োগ করুন, because
+   the bar's buttons sit inside the prompt's 60px band. So while the admin is
+   composing a bulk action the bar takes the slot and the prompt steps aside,
+   exactly the way .app-install already steps aside for the prompt. Alpine adds
+   and removes `services-bulk-active` alongside `count`, so dismissing the
+   selection hands the space straight back. #}
+{% block page_scripts %}
+<style>
+    body.services-bulk-active .push-prompt {
+        display: none;
+    }
+</style>
+{% endblock %}
+
 {% block dashboard_content %}
 {% set isEdit = editService is defined and editService %}
 {# Rejected submissions come back as formValues so the admin does not retype them. #}
@@ -17,11 +34,69 @@
 {% set fvVariants = fv.variants|default([]) %}
 {% set fvStatus = fv.status|default(editService.status|default('active')) %}
 {% set fvSortOrder = fv.sort_order|default(editService.sort_order|default(0)) %}
+{# Labels for ServiceBulkAction::ACTIONS, which the bar is drawn from so the two
+   cannot drift. An action with no label here still renders — as its raw name,
+   which is ugly and impossible to miss in review, not invisible in production. #}
+{% set bulkActionLabels = {
+    activate: 'সক্রিয় করুন',
+    deactivate: 'নিষ্ক্রিয় করুন',
+    trash: 'ট্র্যাশে পাঠান',
+    restore: 'রিস্টোর করুন',
+    purge: 'স্থায়ীভাবে মুছুন',
+} %}
 
 {% include 'components/page-header.twig' with {
     title: 'সার্ভিস ম্যানেজমেন্ট',
-    description: 'নতুন সার্ভিস যোগ করুন, ফিল্ড ও ভ্যারিয়েন্ট কনফিগার করুন, পুরোনো সার্ভিস নিষ্ক্রিয় করুন',
+    description: (filterSet|default(false) ? 'এই ফিল্টারে ' : 'মোট ') ~ filterTotal|default(0) ~ ' টি সার্ভিস — নতুন যোগ করুন, ফিল্ড ও ভ্যারিয়েন্ট কনফিগার করুন, পুরোনো সার্ভিস নিষ্ক্রিয় করুন',
 } %}
+
+{# ---- Filter bar ----
+   One GET form rather than a row of chip links, because four dimensions of
+   filter multiply into fifteen links and each one would have to carry the other
+   three. A form cannot drop the state the admin just set, and it works with
+   JavaScript off — which matters here, since the bulk bar degrades to "submit
+   whatever is ticked" without Alpine and the filter must still hold.
+
+   `trashed` defaults to "exclude" upstream, so this select shows live services
+   unless the admin asks otherwise; that default is also what makes the bar's
+   "everything matching" button switch itself off, since an empty filter over
+   `purge` would mean the whole shop. #}
+<form method="get" action="/admin/services" class="card mb-4 flex flex-wrap items-end gap-3 px-4 py-3">
+    <div class="min-w-0 flex-1">
+        <label for="services-filter-q" class="form-label">খুঁজুন</label>
+        <input id="services-filter-q" type="text" name="q" value="{{ filterState.q }}" class="form-input"
+               placeholder="সার্ভিসের নাম বা স্লাগ">
+    </div>
+    <div>
+        <label for="services-filter-category" class="form-label">ক্যাটাগরি</label>
+        <select id="services-filter-category" name="category" class="form-input">
+            <option value="">সব ক্যাটাগরি</option>
+            {% for category in categories %}
+                <option value="{{ category.id }}" {{ filterState.category == category.id ? 'selected' }}>{{ category.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="services-filter-status" class="form-label">স্ট্যাটাস</label>
+        <select id="services-filter-status" name="status" class="form-input">
+            <option value="">সব</option>
+            <option value="active" {{ filterState.status == 'active' ? 'selected' }}>সক্রিয়</option>
+            <option value="inactive" {{ filterState.status == 'inactive' ? 'selected' }}>নিষ্ক্রিয়</option>
+        </select>
+    </div>
+    <div>
+        <label for="services-filter-trashed" class="form-label">ট্র্যাশ</label>
+        <select id="services-filter-trashed" name="trashed" class="form-input">
+            <option value="exclude" {{ filterState.trashed == 'exclude' ? 'selected' }}>সক্রিয় সার্ভিস</option>
+            <option value="only" {{ filterState.trashed == 'only' ? 'selected' }}>শুধু ট্র্যাশ</option>
+            <option value="all" {{ filterState.trashed == 'all' ? 'selected' }}>সবাই দেখুন</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">{{ icon('search', 'w-4 h-4') }} ফিল্টার</button>
+    {% if filterSet %}
+        <a href="/admin/services" class="btn btn-ghost btn-sm">{{ icon('x', 'w-4 h-4') }} ফিল্টার মুছুন</a>
+    {% endif %}
+</form>
 
 <div class="grid gap-6 lg:grid-cols-3">
     <!-- Create / Edit form -->
@@ -324,7 +399,30 @@
 
     <!-- List. min-w-0 keeps the 640px table from stretching the grid track on phones. -->
     <section class="min-w-0 lg:col-span-2">
-        <div class="card overflow-hidden">
+        {# The whole card carries the selection state: one `change` listener on a
+           common ancestor counts the ticked rows however many there are, and the
+           count is what shows the bar. Without JavaScript the page is still
+           usable — the checkboxes submit with the bar's form either way — it just
+           stops counting and stops hiding an empty bar. #}
+        <div class="card overflow-hidden" id="services-list"
+             x-data="{ count: 0, total: {{ services|length }}, matched: {{ filterTotal|default(0) }},
+                       filtered: {{ filterSet|default(false) ? 'true' : 'false' }},
+                       all: false, target: '', scope: 'selected',
+                       boxes() { return document.getElementById('services-rows').querySelectorAll('input[type=checkbox]'); },
+                       up() { return count > 0 || filtered; },
+                       confirm(action, n) {
+                           if (action === 'deactivate') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস নিষ্ক্রিয় করবেন? ইজারতে ওগুলো আর দেখা যাবে না।');
+                           if (action === 'trash') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস ট্র্যাশে পাঠাবেন? পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে এবং চাইলে রিস্টোর করা যাবে।');
+                           if (action === 'purge') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস স্থায়ীভাবে মুছে ফেলবেন? এটি আর ফেরানো যাবে না।');
+                           return true;
+                       },
+                       clear() {
+                           this.boxes().forEach(row => row.checked = false);
+                           this.count = 0; this.all = false; this.target = ''; this.scope = 'selected';
+                       } }"
+             @change="count = Array.from(boxes()).filter(b => b.checked).length;
+                      all = count > 0 && count === total"
+             x-effect="document.body.classList.toggle('services-bulk-active', up())">
             {% if trashedCount|default(0) > 0 %}
                 {# Trash bar: soft-deleted services stay here until restored or purged. #}
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-danger-50/60 px-4 py-3">
@@ -348,15 +446,35 @@
                     <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
                         {{ icon('inbox', 'w-6 h-6') }}
                     </span>
-                    <p class="text-sm text-neutral-500">কোনো সার্ভিস নেই।</p>
+                    {# "No services" and "no services *here*" are different
+                       answers, and with the filter on the second is the likely
+                       one — so the way out of it is on screen. #}
+                    <p class="text-sm text-neutral-500">
+                        {% if filterSet|default(false) %}
+                            এই ফিল্টারে কোনো সার্ভিস নেই।
+                            <a href="/admin/services" class="underline">ফিল্টার মুছে সব দেখুন</a>
+                        {% else %}
+                            কোনো সার্ভিস নেই।
+                        {% endif %}
+                    </p>
                 </div>
             {% else %}
             <div class="overflow-x-auto">
                 <table class="table-base">
                     <thead>
-                        <tr><th>সার্ভিস</th><th>ক্যাটাগরি</th><th>মূল্য</th><th>স্ট্যাটাস</th><th class="text-right">অ্যাকশন</th></tr>
+                        <tr>
+                            {# Drives the row boxes and is never itself submitted: it carries
+                               no `name`, so it cannot end up in the `ids[]` payload. #}
+                            <th class="w-10">
+                                <input type="checkbox" x-bind:checked="all"
+                                       @change="boxes().forEach(row => row.checked = $el.checked)"
+                                       class="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                                       aria-label="এই পাতার সব সার্ভিস নির্বাচন করুন">
+                            </th>
+                            <th>সার্ভিস</th><th>ক্যাটাগরি</th><th>মূল্য</th><th>স্ট্যাটাস</th><th class="text-right">অ্যাকশন</th>
+                        </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="services-rows">
                         {% set catNames = {} %}
                         {% for category in categories %}
                             {% set catNames = catNames|merge({(category.id): category.name}) %}
@@ -364,6 +482,15 @@
                         {% for service in services %}
                             {% set isTrashed = service.deleted_at is not empty %}
                             <tr class="{{ isTrashed ? 'bg-neutral-50 text-neutral-400' : (isEdit and editService.id == service.id ? 'bg-primary-50/60' : '') }}">
+                                {# `form=` associates this box with the bar's <form> below
+                                   without being inside it — the only way to collect a
+                                   selection here, because every row already carries its own
+                                   form and nested forms are not valid HTML. #}
+                                <td class="w-10">
+                                    <input type="checkbox" name="ids[]" value="{{ service.id }}" form="services-bulk"
+                                           class="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                                           aria-label="{{ service.name }} নির্বাচন করুন">
+                                </td>
                                 <td>
                                     <p class="font-semibold {{ isTrashed ? 'text-neutral-400 line-through' : 'text-neutral-800' }}">{{ service.name }}</p>
                                     <p class="font-mono text-xs text-neutral-400">{{ service.slug }}</p>
@@ -422,6 +549,101 @@
                     </tbody>
                 </table>
             </div>
+
+            {# ---- Bulk bar ---- #}
+            {# The bar's form cannot wrap the table: every row above already has its
+               own restore / toggle / delete form, and the HTML parser closes an
+               outer <form> at the first inner one — the selection would silently
+               stop submitting. So the form lives here, below the list, and the row
+               checkboxes point at it by id with `form=`.
+
+               `do` and the action ride on hidden fields rather than on the button,
+               because there is only one submission here — one form, one meaning.
+
+               The bar is fixed to the bottom of the viewport so it is reachable
+               however far down the list the admin has scrolled, and hidden until
+               something is ticked: an always-present bar over a list nobody is
+               acting on is just furniture. Both carry `x-cloak` so neither flashes
+               into view before Alpine boots. The spacer keeps the last rows from
+               sitting underneath it.
+
+               Only the destructive actions confirm, and they confirm about
+               themselves: a prompt on "সক্রিয় করুন" would train admins to click
+               through the one that matters. #}
+            <form id="services-bulk" method="post" action="/admin/services"
+                  @submit="if (!confirm(target, scope === 'filtered' ? matched : count)) $event.preventDefault()">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                <input type="hidden" name="do" value="bulk">
+                {# Where the batch ran from, so the redirect after it — and the
+                   Undo click after that — come back to this list rather than to
+                   an unfiltered one. `return_*` names because the form's own
+                   fields belong to the action. #}
+                <input type="hidden" name="return_q" value="{{ filterState.q }}">
+                <input type="hidden" name="return_category" value="{{ filterState.category }}">
+                <input type="hidden" name="return_status" value="{{ filterState.status }}">
+                <input type="hidden" name="return_trashed" value="{{ filterState.trashed }}">
+
+                <div class="h-28" x-show="up()" x-cloak></div>
+
+                {# The bar keeps its own z-40. It does not need to out-rank the push
+                   prompt, because while the bar is up the prompt is stepped
+                   aside by the scoped rule in the page_scripts block — that
+                   rule needs no CSS rebuild, unlike a new z-* utility would. #}
+                <div class="fixed inset-x-0 bottom-20 z-40 mx-auto w-full max-w-3xl px-4 sm:bottom-4"
+                     x-show="up()" x-cloak>
+                    <div class="card flex flex-wrap items-center gap-2 px-4 py-3 shadow-lg">
+                        {# Two counts, because the two scopes do not act on the same
+                           number of rows and a bar that claimed "3 selected" over
+                           a 300-row filter would be lying about the batch it is
+                           about to run. `matched` is the filter's total, which is
+                           also the ceiling the service enforces. #}
+                        <p class="mr-auto text-sm font-semibold text-neutral-800">
+                            <span x-show="scope === 'selected'">
+                                <span x-text="count"></span> টি সার্ভিস নির্বাচিত
+                            </span>
+                            <span x-show="scope === 'filtered'">
+                                ফিল্টারে মিলেছে <span x-text="matched"></span> টি সার্ভিস
+                            </span>
+                        </p>
+
+                        {# No `required`: the apply button is disabled until a target is
+                           chosen, which states the same rule where it applies. #}
+                        <select name="bulk_action" x-model="target" class="form-input sm:w-40"
+                                aria-label="বাল্ক অ্যাকশন">
+                            <option value="">অ্যাকশন বেছে নিন…</option>
+                            {% for action in bulkActions %}
+                                <option value="{{ action }}">{{ bulkActionLabels[action] ?? action }}</option>
+                            {% endfor %}
+                        </select>
+
+                        <button type="submit" class="btn btn-primary btn-sm" @click="scope = 'selected'"
+                                x-bind:disabled="target === '' || (scope === 'selected' && count === 0)">
+                            {{ icon('list-checks', 'w-4 h-4') }} প্রয়োগ করুন
+                        </button>
+
+                        {# The scope is on the button rather than in Alpine: the
+                           value below is what the server reads, so the batch is
+                           "all matching" even if this script never ran, and a
+                           stale `scope` cannot downgrade it. `runFiltered()`
+                           resolves the ids from the same filter the list was
+                           rendered from — the point being that the bar never
+                           carries more ids than a request should, so a list of
+                           thousands is still one batch.
+
+                           Rendered only when a filter is actually narrowing: with
+                           nothing set, "all matching" is the whole table, and for
+                           `purge` that is every service in the shop. #}
+                        {% if filterSet %}
+                            <button type="submit" name="bulk_scope" value="filtered" class="btn btn-sm"
+                                    @click="scope = 'filtered'">
+                                {{ icon('list-filter', 'w-4 h-4') }} ফিল্টারের সবগুলো
+                            </button>
+                        {% endif %}
+
+                        <button type="button" class="btn btn-ghost btn-sm" @click="clear()">বাতিল</button>
+                    </div>
+                </div>
+            </form>
             {% endif %}
         </div>
     </section>

@@ -32,7 +32,7 @@ final readonly class CategoryAction
             return $this->view->render('site/services/category.twig', [
                 'category' => [
                     'name' => 'সকল সার্ভিস',
-                    'description' => 'Alif Tools এর সকল ডেমো সার্ভিস একসাথে',
+                    'description' => 'All Seba এর সকল সার্ভিস একসাথে',
                     'icon' => 'layers',
                 ],
                 'services' => $services,

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Web\Account;
 
 use App\Auth\Identity;
+use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
-use App\Repository\TransactionRepository;
 use App\Service\RequestRowPresenter;
 use App\Service\StatusPresenter;
 use Psr\Http\Message\ResponseInterface;
@@ -24,7 +24,7 @@ final readonly class ServiceHistoryAction
 
     public function __construct(
         private WebViewRenderer $view,
-        private TransactionRepository $transactions,
+        private ServiceOrderRepository $orders,
         private ServiceRepository $services,
         private RequestRowPresenter $presenter,
     ) {}
@@ -44,11 +44,11 @@ final readonly class ServiceHistoryAction
         $category = (string) ($request->getQueryParams()['type'] ?? '');
 
         if ($category !== '') {
-            $data = $this->transactions->forUserByCategory($identity->id, $page, self::PER_PAGE, $category);
+            $data = $this->orders->forUserByCategory($identity->id, $page, self::PER_PAGE, $category);
             // An unknown slug returns 0 rows; that is the correct empty state,
             // same as a status filter that matches nothing.
         } else {
-            $data = $this->transactions->forUser($identity->id, $page, self::PER_PAGE, $status);
+            $data = $this->orders->forUser($identity->id, $page, self::PER_PAGE, $status);
         }
 
         $rows = $this->present($data['rows']);
@@ -65,7 +65,7 @@ final readonly class ServiceHistoryAction
             'status' => $status,
             'category' => $category,
             'categories' => $this->services->allCategories(),
-            'categoryCounts' => $this->transactions->categoryCounts($identity->id),
+            'categoryCounts' => $this->orders->categoryCounts($identity->id),
             'counts' => $this->counts($identity->id),
             'identity' => $identity,
         ]);
@@ -96,7 +96,7 @@ final readonly class ServiceHistoryAction
      */
     private function counts(int $userId): array
     {
-        $tally = $this->transactions->statusCounts($userId);
+        $tally = $this->orders->statusCounts($userId);
 
         $counts = ['all' => array_sum($tally)];
         foreach (StatusPresenter::REQUEST_STATUSES as $status) {

@@ -104,7 +104,7 @@ final class AdminCreateServiceLinkTest extends Unit
         // /services renders category.twig with a synthetic category that has no id.
         $html = $this->renderServicesPage(true, [
             'name' => 'সকল সার্ভিস',
-            'description' => 'Alif Tools এর সকল ডেমো সার্ভিস একসাথে',
+            'description' => 'All Seba এর সকল ডেমো সার্ভিস একসাথে',
             'icon' => 'layers',
         ]);
 

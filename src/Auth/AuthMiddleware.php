@@ -21,6 +21,19 @@ use Yiisoft\Session\SessionInterface;
  * Acts as a guard: guests are redirected to /login (or get 401 JSON for API
  * requests) and users without the required role get 403. With an empty role
  * any authenticated user may proceed.
+ *
+ * ## Optional mode
+ *
+ * Some endpoints have to serve guests *and* want to know who the guest is when
+ * they turn out not to be one. Web Push is the case: a signed-out visitor on
+ * /app must be able to grant permission, yet the same endpoint is what binds
+ * that browser to an account once they log in. Guarding it would break the
+ * feature; not resolving identity at all is what made every subscription
+ * anonymous (see {@see OptionalAuthMiddleware}).
+ *
+ * Optional mode still resolves and still publishes the attribute — it only
+ * declines to deny. The handler therefore reads one shape either way, and a
+ * stale session is still cleaned up rather than silently ignored.
  */
 final class AuthMiddleware implements MiddlewareInterface
 {
@@ -33,6 +46,7 @@ final class AuthMiddleware implements MiddlewareInterface
         private readonly ActivityLogRepository $logs,
         private readonly UrlGeneratorInterface $url,
         private readonly string $requiredRole = '',
+        private readonly bool $optional = false,
     ) {}
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
@@ -55,7 +69,10 @@ final class AuthMiddleware implements MiddlewareInterface
         $request = $request->withAttribute('identity', $identity);
 
         if ($identity === null) {
-            return $this->deny($request, 401);
+            // `identity` is already on the request above (as null), so the
+            // optional path hands the handler exactly the same attribute it
+            // would have seen had the caller been signed in all along.
+            return $this->optional ? $handler->handle($request) : $this->deny($request, 401);
         }
 
         if ($this->requiredRole === 'admin' && !$identity->canAccessAdmin()) {

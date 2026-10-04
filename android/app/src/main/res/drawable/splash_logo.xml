@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Alif Tools splash mark, converted from public/assets/brand/logo-mark.svg.
+<!-- All Seba splash mark, converted from public/assets/brand/logo-mark.svg.
+
      The tile rectangle is deliberately omitted: the splash backdrop is already
      brand_primary, so drawing the tile inside it would show a visible square
      seam (and on API 31+ the system masks the icon to a circle anyway).
+
      The 64x64 source art is scaled 1.1x and re-centred inside a 108x108
-     viewport so the glyph survives the 160x160dp masked icon area. -->
+     viewport so the glyph survives the 160x160dp masked icon area, so every
+     coordinate below is 18.8 + 1.1 * design_x, and the same for y.
+
+     The tick is drawn twice on purpose: a halo in the backdrop colour under a
+     white stroke, which is the only way the stroke stays legible where it
+     passes near the bolt. VectorDrawable has carried strokeColor and round
+     caps since API 21, so this needs no path outlining. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -17,19 +25,23 @@
         android:translateX="18.8"
         android:translateY="17.15">
 
-        <!-- golden alif: a vertical stroke that leans like the Arabic letter ا -->
+        <!-- bolt: speed -->
         <path
             android:fillColor="@color/brand_accent"
-            android:pathData="M36.5,12 L31,12 L23.5,47.5 L29,47.5 Z" />
+            android:pathData="M34,7 L17,37 L27,37 L24,57 L43,27 L32,27 Z" />
 
-        <!-- dot over the alif -->
+        <!-- tick halo, then the tick: verified -->
         <path
-            android:fillColor="@color/brand_white"
-            android:pathData="M32.5,15.5 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z" />
-
-        <!-- rounded baseline -->
+            android:pathData="M39,46 L45.5,52 L56,36"
+            android:strokeColor="@color/brand_primary"
+            android:strokeWidth="11"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
         <path
-            android:fillColor="@color/brand_white"
-            android:pathData="M19,51 L45,51 A2,2 0 0,1 45,55 L19,55 A2,2 0 0,1 19,51 Z" />
+            android:pathData="M39,46 L45.5,52 L56,36"
+            android:strokeColor="@color/brand_white"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
     </group>
 </vector>

@@ -24,7 +24,7 @@ final class MessageTemplates
             NotificationEvent::USER_REGISTERED => [
                 'in_app' => [
                     'title' => 'স্বাগতম!',
-                    'body' => '{username}, Alif Tools-এ আপনাকে স্বাগতম। এখন সার্ভিস অর্ডার করতে পারবেন।',
+                    'body' => '{username}, All Seba-এ আপনাকে স্বাগতম। এখন সার্ভিস অর্ডার করতে পারবেন।',
                 ],
             ],
             NotificationEvent::SERVICE_REQUEST_CREATED => [
@@ -136,6 +136,25 @@ final class MessageTemplates
                     'body' => '{referee}-এর রেফারেল বাতিল হয়েছে। কারণ: {reason}',
                 ],
             ],
+            // Withdrawal copy names the amount on both sides of the decision,
+            // because the admin's question after submitting is always "where is
+            // my money" and an unqualified "approved" does not answer it.
+            NotificationEvent::ADMIN_WITHDRAW_REQUESTED => [
+                'in_app' => ['title' => 'উত্তোলন অনুরোধ জমা হয়েছে', 'body' => '৳{amount} উত্তোলন অনুরোধ — অনুমোদনের অপেক্ষায়।'],
+                'telegram' => ['title' => 'নতুন উত্তোলন অনুরোধ', 'body' => '{amount} — অ্যাডমিন #{user_id} — অনুমোদনের অপেক্ষায়'],
+            ],
+            // These two have no fcm copy to borrow, because their only
+            // recipient is an admin — and admins work in a browser, not on the
+            // APK. They carry their own webpush wording rather than falling
+            // through to the in-app text.
+            NotificationEvent::ADMIN_WITHDRAW_APPROVED => [
+                'in_app' => ['title' => 'উত্তোলন অনুমোদিত', 'body' => '৳{amount} উত্তোলন অনুমোদিত হয়েছে। পাঠানোর পর জানানো হবে।'],
+                'webpush' => ['title' => 'উত্তোলন অনুমোদিত', 'body' => '৳{amount} উত্তোলন অনুমোদিত হয়েছে।'],
+            ],
+            NotificationEvent::ADMIN_WITHDRAW_REJECTED => [
+                'in_app' => ['title' => 'উত্তোলন বাতিল', 'body' => '৳{amount} উত্তোলন বাতিল হয়েছে। কারণ: {reason}'],
+                'webpush' => ['title' => 'উত্তোলন বাতিল', 'body' => '৳{amount} উত্তোলন বাতিল হয়েছে। কারণ: {reason}'],
+            ],
             NotificationEvent::SYSTEM_ALERT => [
                 'in_app' => ['title' => 'সিস্টেম নোটিশ', 'body' => '{reason}'],
                 'telegram' => ['title' => 'সিস্টেম অ্যালার্ট', 'body' => '{reason}'],
@@ -165,6 +184,9 @@ final class MessageTemplates
             NotificationEvent::REFERRAL_BONUS_REFERRER,
             NotificationEvent::REFERRAL_BONUS_REFEREE,
             NotificationEvent::REFERRAL_REJECTED,
+            NotificationEvent::ADMIN_WITHDRAW_REQUESTED,
+            NotificationEvent::ADMIN_WITHDRAW_APPROVED,
+            NotificationEvent::ADMIN_WITHDRAW_REJECTED,
             NotificationEvent::SYSTEM_ALERT,
         ] as $event) {
             foreach (self::forEvent($event) as $channel => $template) {

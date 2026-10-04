@@ -1,18 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" role="img" aria-label="Alif Tools">
-  <!-- Alif Tools horizontal lockup: mark + wordmark on transparent background.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="All Seba">
+  <!-- All Seba horizontal lockup on a light background: mark + wordmark on
+       transparent background.
 
-       The wordmark is a <text> run, not outlined paths. The previous version
-       drew it as seven hand-authored path outlines that were wrong: the "lif"
-       of "Alif" and the final "s" of "Tools" were absent and the "o" outline
-       was emitted twice, so it rendered as "ATOLoi". Hand-outlining a wordmark
-       is what caused that. See logo-horizontal-light.svg for the full note. -->
-  <g transform="translate(0,0)">
+       The wordmark is a <text> run, not outlined paths, and that is
+       deliberate and permanent. An earlier version drew it as hand-authored
+       path outlines; the "lif" of Alif and the final "s" of Tools were simply
+       missing and the "o" outline appeared twice, so the lockup rendered as
+       "ATOLoi" on the auth pages and on the share card. Hand-outlining a
+       wordmark is a bug waiting to happen for any future rename, which is
+       exactly what this rename is. If an exact vector lockup is ever needed,
+       convert this run with a text-to-outline tool, never by hand.
+
+       The viewBox is 320 wide rather than the 300 the old lockup used: the
+       tile is unchanged but the wordmark is a different word, and 20px of
+       slack means a slightly wider fallback font does not clip the last
+       letter. SVG loaded through <img> still lays <text> out with the system
+       font stack, so this stays one self-contained file. An XML comment
+       cannot contain a double hyphen, so these notes avoid it: ET.parse() in
+       the card generators rejects the whole file if one sneaks in. -->
+  <g>
     <rect width="64" height="64" rx="14" fill="#083f31"/>
-    <path d="M36.5 12 L31 12 L23.5 47.5 L29 47.5 Z" fill="#f5b301"/>
-    <circle cx="36.5" cy="15.5" r="4" fill="#ffffff"/>
-    <rect x="17" y="51" width="30" height="4" rx="2" fill="#ffffff"/>
+    <path d="M34 7 L17 37 L27 37 L24 57 L43 27 L32 27 Z" fill="#f5b301"/>
+    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#083f31" stroke-width="11"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#ffffff" stroke-width="7"
+          stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <text x="84" y="47" fill="#083f31"
+  <text x="84" y="45" fill="#083f31"
         font-family="system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
-        font-size="42" font-weight="700" letter-spacing="0.5">Alif Tools</text>
+        font-size="42" font-weight="700" letter-spacing="0.5">All Seba</text>
 </svg>

@@ -1,0 +1,29 @@
+{#
+    Bottom-of-screen offer to turn on browser notifications.
+
+    Rendered into every layout but shipped `hidden`: whether it applies is a
+    client-side question (push supported? permission already answered? a
+    dismissal from last week? a page that already has a push button?) and only
+    the browser can answer it. `push-prompt.js` decides and removes `hidden`.
+
+    The dismissal is a button rather than a link so it cannot become a
+    dismissible-hijack target — the same reasoning as `app-install.twig`.
+
+    Two fixed bars would overlap, so the two banners are mutually exclusive:
+    when this one is visible the app-install bar is hidden by CSS. Dismissing
+    this one hands the bottom of the screen back.
+#}
+<div id="push-prompt" class="push-prompt" data-push-prompt hidden>
+    <button type="button" class="push-prompt-close" data-push-prompt-close aria-label="বন্ধ করুন">
+        {{ icon('x', 'w-4 h-4') }}
+    </button>
+
+    <div class="mx-auto flex max-w-3xl flex-wrap items-center gap-3">
+        <div class="min-w-0 flex-1">
+            <p class="text-sm font-bold text-neutral-900">নোটিফিকেশন চালু করুন</p>
+            <p class="text-xs text-neutral-500">অর্ডার ও রিচার্জের আপডেট ব্রাউজারেই পেতে অনুমতি দিন।</p>
+            <p class="push-prompt-hint text-xs text-danger-600" data-push-prompt-hint hidden></p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm shrink-0" data-push-prompt-allow>অনুমতি দিন</button>
+    </div>
+</div>

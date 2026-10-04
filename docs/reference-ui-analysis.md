@@ -4,8 +4,8 @@
 > navigation, component hierarchy, responsive patterns). No proprietary source code, no
 > private credentials, no real users' NID/voter/TIN data and no scraping of sensitive
 > records was captured. All data used in this project is clearly-marked dummy data.
-> Reference inspected: public landing/auth pages and the owner-provided demo dashboard
-> (demo account supplied by the site owner), observed on 2026-09-26 at desktop/mobile widths.
+> Reference inspected: public landing/auth pages and the owner-provided dashboard
+> (account supplied by the site owner), observed on 2026-09-26 at desktop/mobile widths.
 
 ---
 
@@ -123,4 +123,4 @@
   sidebar for information architecture, matching the requested "Service hub / Account" groups.
 - English + Bengali copy mixed: keep Bengali-flavored UI text for authenticity but
   structure labels in English code.
-- All service execution is mock — clearly-marked demo data, no real government lookups.
+- Service execution is mocked — results carry an explicit notice, no real government lookups.

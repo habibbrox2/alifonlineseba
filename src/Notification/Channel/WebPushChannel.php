@@ -6,6 +6,7 @@ namespace App\Notification\Channel;
 
 use App\Notification\Push\VapidKeys;
 use App\Repository\PushSubscriptionRepository;
+use App\Repository\UserRepository;
 
 /**
  * Web Push (RFC 8030) delivery channel, aimed at browsers the user has not
@@ -41,6 +42,7 @@ final class WebPushChannel
 
     public function __construct(
         private readonly PushSubscriptionRepository $subscriptions,
+        private readonly UserRepository $users,
     ) {}
 
     public function isAvailable(): bool
@@ -73,12 +75,27 @@ final class WebPushChannel
      * (they simply have not opted in), and subscriptions the push service
      * reports as gone are deactivated in the same pass.
      *
+     * The per-account switch is honoured here, not only at enqueue time, for
+     * two reasons. A job enqueued before the user turned notifications off is
+     * still in the queue when they do, and honouring it at the door is what
+     * makes the switch take effect the moment they press it rather than after
+     * the backlog drains. And a direct caller (`app:webpush:check`, a future
+     * campaign sender) has not been through the manager at all.
+     *
      * @param array<string, mixed> $payload {title, body, data}
      */
     public function send(int $userId, array $payload): DeliveryResult
     {
         if (!$this->isAvailable()) {
             return DeliveryResult::permanent('VAPID keys not configured.');
+        }
+
+        // Reported as a success, not a failure: the user asked for exactly
+        // this. Retrying a job whose whole purpose is to respect an opt-out
+        // would be the queue doing the one thing that makes people turn the
+        // site permission off in their browser instead.
+        if (!$this->users->isPushEnabled($userId)) {
+            return DeliveryResult::sent();
         }
 
         $subscriptions = $this->subscriptions->activeForUser($userId);
@@ -146,7 +163,21 @@ final class WebPushChannel
         if ($body === '') {
             return DeliveryResult::sent();
         }
-        return $this->sendToOne($keys, $subscription, $body);
+
+        // Timed here rather than inside sendToOne(), because sendToOne() is
+        // also called in a loop by send(), which times the whole fan-out
+        // itself; a per-subscription number would double up there and mean
+        // nothing.
+        $start = (int) (microtime(true) * 1000);
+        $result = $this->sendToOne($keys, $subscription, $body);
+
+        return new DeliveryResult(
+            $result->ok,
+            $result->retryable,
+            $result->providerMessageId,
+            (int) (microtime(true) * 1000) - $start,
+            $result->error,
+        );
     }
 
     /**
@@ -169,7 +200,13 @@ final class WebPushChannel
 
         $sealed = $this->encrypt($body, $p256dh, $auth);
         if ($sealed === null) {
-            return DeliveryResult::permanent('Could not encrypt for this subscription.');
+            // Deliberately retryable, not permanent. Encryption runs on this
+            // host, so a failure here means the *server* is unhealthy — a
+            // missing openssl binary, an OpenSSL config that went missing, a
+            // key that would not generate. None of that says anything about
+            // the subscription, and calling it permanent would deactivate
+            // every browser in the table the first time the host hiccuped.
+            return DeliveryResult::transient('Could not encrypt for this subscription.');
         }
 
         $ch = curl_init($endpoint);
@@ -248,7 +285,7 @@ final class WebPushChannel
             return null;
         }
         $authSecret = self::base64UrlDecode($auth);
-        if ($authSecret !== 16) {
+        if (strlen($authSecret) !== 16) {
             return null;
         }
 
@@ -260,17 +297,12 @@ final class WebPushChannel
             return null;
         }
 
-        $sharedSecret = $this->deriveSharedSecret($userPublic, $sender);
+        $sharedSecret = $this->deriveSharedSecret($userPublic, $sender['key']);
         if ($sharedSecret === null) {
             return null;
         }
 
-        $details = openssl_pkey_get_details($sender);
-        $senderPublic = ($details['ec']['x'] ?? '') . ($details['ec']['y'] ?? '');
-        if (!is_string($details['ec']['x'] ?? null) || strlen($senderPublic) !== 64) {
-            return null;
-        }
-        $senderPublic = "\x04" . $senderPublic;
+        $senderPublic = $sender['point'];
 
         // IKM: as in RFC 8291 section 3.4, mixing the two public keys through
         // a label keeps the derived secrets bound to this specific pair.
@@ -356,7 +388,12 @@ final class WebPushChannel
     }
 
     /**
-     * Generate the throwaway P-256 key for one message.
+     * Generate the throwaway P-256 key for one message, and the public point
+     * that goes into the message header.
+     *
+     * Returns null, or ['key' => OpenSSLAsymmetricKey, 'point' => string] where
+     * the point is the 65-byte uncompressed encoding (0x04 || x || y) the
+     * subscriber needs in order to reproduce the shared secret.
      *
      * The in-process call is tried first because it is an order of
      * magnitude faster and needs no external binary. It is not
@@ -367,16 +404,37 @@ final class WebPushChannel
      * name. The `openssl ecparam` subprocess is the fallback for
      * exactly that case.
      *
+     * Getting the public point back out is the part that is easy to get
+     * wrong, and it is why this method returns the point rather than
+     * leaving the caller to dig it out of the key object. Asking
+     * openssl_pkey_get_details() for ['ec']['x'] looks like the obvious
+     * way and it *usually* works — but on this host it silently returns an
+     * 'ec' array holding only curve_name, curve_oid and d, with no x or y
+     * at all, whenever a failed openssl_pkey_new() ran earlier in the same
+     * process. Since the failing openssl_pkey_new() above is exactly such a
+     * call, the fallback path is the one that always loses its public key.
+     * The subprocess therefore asks the binary for the public key directly
+     * instead of guessing at it afterwards.
+     *
      * The subprocess goes through proc_open rather than shell_exec so
      * that stderr is piped instead of inherited — no shell redirect
      * syntax, which would be Windows-only — and so the argument list
      * never passes through a shell at all.
+     *
+     * @return array{key: \OpenSSLAsymmetricKey, point: string}|null
      */
-    private static function generateEphemeralKey(): ?\OpenSSLAsymmetricKey
+    private static function generateEphemeralKey(): ?array
     {
         $key = @openssl_pkey_new(['curve_name' => self::CURVE_NAME]);
         if ($key !== false) {
-            return $key;
+            $details = openssl_pkey_get_details($key);
+            $x = $details['ec']['x'] ?? null;
+            $y = $details['ec']['y'] ?? null;
+            if (is_string($x) && is_string($y)) {
+                return ['key' => $key, 'point' => "\x04" . $x . $y];
+            }
+            // A usable key whose public half cannot be read: fall through
+            // and let the binary produce a pair whose every part is known.
         }
         while (openssl_error_string() !== false) {
             // Clear the error queue so a later, unrelated call is not
@@ -386,9 +444,42 @@ final class WebPushChannel
         if (!function_exists('proc_open')) {
             return null;
         }
-        $stderr = '';
+        $pem = self::runOpenssl(['openssl', 'ecparam', '-genkey', '-name', self::CURVE_NAME], null);
+        // A nonzero exit means the binary is missing or the curve is
+        // unknown; either way there is nothing to send.
+        if ($pem === null || !str_contains($pem, 'BEGIN')) {
+            return null;
+        }
+
+        $key = openssl_pkey_get_private($pem);
+        if ($key === false) {
+            return null;
+        }
+
+        // The SubjectPublicKeyInfo DER is a fixed 91 bytes for P-256, and the
+        // uncompressed point is the last 65 of them. Asking the binary for
+        // DER rather than PEM means no base64 to trim.
+        $der = self::runOpenssl(['openssl', 'ec', '-pubout', '-outform', 'DER'], $pem);
+        if ($der === null || strlen($der) < 65) {
+            return null;
+        }
+        $point = substr($der, -65);
+        if ($point[0] !== "\x04") {
+            return null;
+        }
+
+        return ['key' => $key, 'point' => $point];
+    }
+
+    /**
+     * Run an openssl subcommand and return its stdout, or null if it failed.
+     *
+     * @param list<string> $command
+     */
+    private static function runOpenssl(array $command, ?string $stdin): ?string
+    {
         $process = @proc_open(
-            ['openssl', 'ecparam', '-genkey', '-name', self::CURVE_NAME],
+            $command,
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -399,19 +490,18 @@ final class WebPushChannel
         if (!is_resource($process)) {
             return null;
         }
+        if ($stdin !== null) {
+            fwrite($pipes[0], $stdin);
+        }
         fclose($pipes[0]);
-        $pem = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
+        $stdout = stream_get_contents($pipes[1]);
+        // stderr is read and discarded so a failure cannot fill the pipe
+        // buffer and deadlock the child.
+        stream_get_contents($pipes[2]);
         fclose($pipes[1]);
         fclose($pipes[2]);
-        // A nonzero exit means the binary is missing or the curve is
-        // unknown; either way there is nothing to send.
-        if (proc_close($process) !== 0 || !is_string($pem) || !str_contains($pem, 'BEGIN')) {
-            return null;
-        }
 
-        $key = openssl_pkey_get_private($pem);
-        return $key === false ? null : $key;
+        return proc_close($process) === 0 && is_string($stdout) ? $stdout : null;
     }
 
     /**

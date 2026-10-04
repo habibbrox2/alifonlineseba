@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="All Seba">
+  <!-- All Seba mark, maskable variant.
+
+       Two differences from logo-mark.svg, both forced by how launchers draw
+       it rather than by taste:
+
+       1. No rounded corner. A maskable icon is cropped to whatever shape the
+          device uses (a circle on Android, a squircle on iOS), so the tile
+          must bleed to the edge; a rounded tile inside a mask shows the mask
+          cutting into the rounding, which reads as a mistake.
+       2. The artwork is scaled to 80% and centred. Anything outside the inner
+          80% circle can be cropped away, and the tick is the part that would
+          go first: it sits in the bottom-right, exactly where a circular mask
+          bites hardest. The bolt alone would survive at full size, but a mark
+          that loses its tick on half the devices is not the same logo.
+
+       scripts/build-brand-icons.php renders the PNG pair from this same
+       geometry, so the installed app icon and this file cannot drift. -->
+  <rect width="64" height="64" fill="#083f31"/>
+  <g transform="translate(6.4 6.4) scale(0.8)">
+    <path d="M34 7 L17 37 L27 37 L24 57 L43 27 L32 27 Z" fill="#f5b301"/>
+    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#083f31" stroke-width="11"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#ffffff" stroke-width="7"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

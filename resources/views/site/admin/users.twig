@@ -161,7 +161,7 @@
                                                 {{ user.status == 'active' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}
                                             </button>
                                         </form>
-                                        <form method="post" action="/admin/users" onsubmit="return confirm('পাসওয়ার্ড রিসেট করবেন? (Demo1234!)')">
+                                        <form method="post" action="/admin/users" onsubmit="return confirm('পাসওয়ার্ড রিসেট করবেন? একটি নতুন এলোমেলো পাসওয়ার্ড তৈরি হবে এবং একবারই দেখানো হবে।')">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="reset">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">

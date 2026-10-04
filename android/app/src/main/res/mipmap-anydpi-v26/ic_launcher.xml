@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Alif Tools adaptive icon: dark-green tile over the system background,
-     golden alif + white dot/bar in the safe zone (66/108). -->
+<!-- All Seba adaptive icon: the primary-900 background layer under the
+     foreground layer (gold bolt + white tick) inside the 72/108 safe zone. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />

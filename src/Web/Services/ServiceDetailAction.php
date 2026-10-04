@@ -6,7 +6,8 @@ namespace App\Web\Services;
 
 use App\Auth\Identity;
 use App\Repository\ServiceRepository;
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
+use App\Service\OrderWindowService;
 use App\Service\ServiceManager;
 use App\ServiceProvider\ServiceResult;
 use Psr\Http\Message\ResponseInterface;
@@ -22,7 +23,8 @@ final readonly class ServiceDetailAction
         private WebViewRenderer $view,
         private ServiceRepository $services,
         private ServiceManager $manager,
-        private TransactionRepository $transactions,
+        private OrderWindowService $window,
+        private ServiceOrderRepository $orders,
         private SessionInterface $session,
         private UrlGeneratorInterface $url,
     ) {}
@@ -41,12 +43,12 @@ final readonly class ServiceDetailAction
         $category = $this->services->findCategoryById((int) $service['category_id']);
         $fields = $this->manager->fieldsFor($service);
         $provider = $this->manager->providerFor($service);
-        $history = $this->transactions->forUser($identity->id, 1, 5);
-        $serviceHistory = $this->transactions->forUserByService($identity->id, (int) $service['id']);
+        $history = $this->orders->forUser($identity->id, 1, 5);
+        $serviceHistory = $this->orders->forUserByService($identity->id, (int) $service['id']);
         // The variant label lives in the transaction metadata JSON; surface it
         // as a plain column for the per-service history table.
         foreach ($serviceHistory['rows'] as $i => $row) {
-            $serviceHistory['rows'][$i]['variant_label'] = \App\Repository\TransactionRepository::metadata($row)['variant'] ?? null;
+            $serviceHistory['rows'][$i]['variant_label'] = \App\Repository\ServiceOrderRepository::metadata($row)['variant'] ?? null;
         }
         $variants = \App\Service\ServiceManager::variantsFor($service);
         $rules = \App\Service\ServiceManager::rulesFor($service);
@@ -88,6 +90,7 @@ final readonly class ServiceDetailAction
             'variants' => $variants,
             'rules' => $rules,
             'result' => $result,
+            'orderWindow' => $this->window,
             'errors' => $errors,
             'prefill' => $prefill,
             'identity' => $identity,

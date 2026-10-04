@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Auth\AdminMiddleware;
 use App\Auth\ApiAuthMiddleware;
 use App\Auth\AuthMiddleware;
+use App\Auth\OptionalAuthMiddleware;
+use App\Auth\SuperAdminMiddleware;
 use App\Web\Account\DeliverableAction;
 use App\Web\Account\NotificationsAction;
 use App\Web\Account\ProfileAction;
@@ -20,12 +22,17 @@ use App\Web\Admin\AdminLogsAction;
 use App\Web\Admin\AdminNotificationsAction;
 use App\Web\Admin\AdminRechargeAction;
 use App\Web\Admin\AdminReferralsAction;
+use App\Web\Admin\AdminLedgerAction;
+use App\Web\Admin\AdminOrderAction;
+use App\Web\Admin\AdminOrdersAction;
 use App\Web\Admin\AdminServicesAction;
 use App\Web\Admin\AdminSettingsAction;
+use App\Web\Admin\AdminStaffAction;
 use App\Web\Admin\AdminTopupsAction;
 use App\Web\Admin\AdminTransactionAction;
 use App\Web\Admin\AdminTransactionsAction;
 use App\Web\Admin\AdminUsersAction;
+use App\Web\Admin\AdminWithdrawsAction;
 use App\Web\Api\AppVersionApiAction;
 use App\Web\Api\AuthApiAction;
 use App\Web\Api\DashboardApiAction;
@@ -46,6 +53,7 @@ use App\Web\Services\CategoryAction;
 use App\Web\Services\ServiceDetailAction;
 use App\Web\Site\ApkDownloadAction;
 use App\Web\Site\AppPageAction;
+use App\Web\Site\AssetLinksAction;
 use App\Web\Site\HomeAction;
 use App\Web\Site\SitemapAction;
 use App\Web\Site\StaticPageAction;
@@ -72,6 +80,14 @@ return [
     // The bytes themselves. Outside the web root, so this route is the only
     // way to reach them — see ApkDownloadAction.
     Route::get('/app/apk')->action(ApkDownloadAction::class)->name('app-apk'),
+
+    // The origin's side of the TWA trust handshake. The Android verifier
+    // fetches this exact path over HTTPS, from a device that has never signed
+    // in, so it is public and outside the auth group. Until it is configured
+    // it 404s — which is the correct, diagnosable answer. See AssetLinksAction.
+    Route::get('/.well-known/assetlinks.json')
+        ->action(AssetLinksAction::class)
+        ->name('assetlinks'),
 
     // Auth
     Route::methods(['GET', 'POST'], '/login')->action(LoginAction::class)->name('login'),
@@ -109,8 +125,16 @@ return [
     // point of offering browser push at all. The POSTs are CSRF-protected by
     // the middleware stack. See PushApiAction.
     Route::get('/api/push/key')->action(PushApiAction::class)->name('api-push-key'),
-    Route::post('/api/push/subscribe')->action(PushApiAction::class)->name('api-push-subscribe'),
-    Route::post('/api/push/unsubscribe')->action(PushApiAction::class)->name('api-push-unsubscribe'),
+
+    // These two resolve the session identity without requiring one. Being
+    // outside AuthMiddleware is what lets a guest subscribe; being inside
+    // OptionalAuthMiddleware is what stops that same request from storing
+    // `user_id = NULL` when the visitor happens to be signed in. See
+    // OptionalAuthMiddleware for what the missing attribute cost.
+    Group::create()->middleware(OptionalAuthMiddleware::class)->routes(
+        Route::post('/api/push/subscribe')->action(PushApiAction::class)->name('api-push-subscribe'),
+        Route::post('/api/push/unsubscribe')->action(PushApiAction::class)->name('api-push-unsubscribe'),
+    ),
 
     // The installed app's update check. Unauthenticated on purpose: an app
     // with an expired token must still be able to find out it needs to update.
@@ -135,7 +159,7 @@ return [
         Route::get('/profile')->action(ProfileApiAction::class)->name('api-profile'),
     ),
 
-    // Admin (admin/staff only)
+    // Admin (admin/staff/superadmin)
     Group::create('/admin')
         ->middleware(AdminMiddleware::class)
         ->routes(
@@ -149,8 +173,17 @@ return [
             Route::post('/categories')->action(AdminCategoriesAction::class)->name('admin-categories-post'),
             Route::get('/services')->action(AdminServicesAction::class)->name('admin-services'),
             Route::post('/services')->action(AdminServicesAction::class)->name('admin-services-post'),
+            // The order queue and its per-order desk. Money moves on approve, so
+            // this is where an operator spends their day.
+            Route::methods(['GET', 'POST'], '/orders')->action(AdminOrdersAction::class)->name('admin-orders'),
+            Route::methods(['GET', 'POST'], '/orders/{id}')->action(AdminOrderAction::class)->name('admin-order'),
+            // The old combined page. Kept as a redirect rather than deleted so
+            // a bookmark, a stored notification link or a chat message from
+            // before this change still lands somewhere real.
             Route::methods(['GET', 'POST'], '/transactions')->action(AdminTransactionsAction::class)->name('admin-transactions'),
             Route::methods(['GET', 'POST'], '/transactions/{id}')->action(AdminTransactionAction::class)->name('admin-transaction'),
+            // An operator's own earnings, and their withdrawal request.
+            Route::methods(['GET', 'POST'], '/ledger')->action(AdminLedgerAction::class)->name('admin-ledger'),
             Route::methods(['GET', 'POST'], '/topups')->action(AdminTopupsAction::class)->name('admin-topups'),
             Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargeAction::class)->name('admin-recharge'),
             Route::methods(['GET', 'POST'], '/referrals')->action(AdminReferralsAction::class)->name('admin-referrals'),
@@ -158,5 +191,24 @@ return [
             Route::get('/notifications')->action(AdminNotificationsAction::class)->name('admin-notifications'),
             Route::post('/notifications/{id}/retry')->action(AdminNotificationsAction::class)->name('admin-notification-retry'),
             Route::get('/activity-logs')->action(AdminLogsAction::class)->name('admin-logs'),
+        ),
+
+    // Super-admin only. A separate group rather than a per-route middleware,
+    // so the whole set is guarded by one declaration and a route added later
+    // cannot accidentally ship without it.
+    //
+    // These are the pages where one person's decision moves another person's
+    // money or authority: payouts, and who is allowed to do that at all.
+    //
+    // `Group::middleware()` is variadic, so the two guards are separate
+    // arguments. Handing it a single array instead makes it read the array as
+    // one definition and every route in the group 500s on a
+    // InvalidMiddlewareDefinitionException.
+    Group::create('/admin')
+        ->middleware(AdminMiddleware::class, SuperAdminMiddleware::class)
+        ->routes(
+            Route::methods(['GET', 'POST'], '/withdraws')->action(AdminWithdrawsAction::class)->name('admin-withdraws'),
+            Route::methods(['GET', 'POST'], '/withdraws/{id}')->action(AdminWithdrawsAction::class)->name('admin-withdraw-desk'),
+            Route::methods(['GET', 'POST'], '/staff')->action(AdminStaffAction::class)->name('admin-staff'),
         ),
 ];

@@ -8,7 +8,7 @@ use App\Auth\Identity;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\SettingsRepository;
-use App\Repository\TransactionRepository;
+use App\Repository\ServiceOrderRepository;
 use App\Repository\UserRepository;
 use App\Service\CategoryAccent;
 use Psr\Http\Message\ResponseInterface;
@@ -20,7 +20,7 @@ final readonly class DashboardAction
     public function __construct(
         private WebViewRenderer $view,
         private ServiceRepository $services,
-        private TransactionRepository $transactions,
+        private ServiceOrderRepository $orders,
         private NotificationRepository $notifications,
         private UserRepository $users,
         private SettingsRepository $settings,
@@ -34,11 +34,11 @@ final readonly class DashboardAction
 
         $categories = $this->services->allCategories();
         $allServices = $this->services->servicesByCategory();
-        $stats = $this->transactions->statsForUser($identity->id);
+        $stats = $this->orders->statsForUser($identity->id);
         // Recent searches for the dashboard panel. A small fixed list on purpose:
         // this is a shortcut back into a form, not a history page — /service-history
         // owns the full list.
-        $searches = $this->transactions->recentSearches($identity->id, 6);
+        $searches = $this->orders->recentSearches($identity->id, 6);
 
         // Attach category slug + accent to each service: the slug drives
         // client-side filtering, the accent tints each card with its category colour.
@@ -64,7 +64,7 @@ final readonly class DashboardAction
             'stats' => [
                 'total' => $stats['total'],
                 'amount' => $stats['amount'],
-                'completed' => $this->transactions->completedCount($identity->id),
+                'completed' => $this->orders->completedCount($identity->id),
             ],
             'unread' => $this->notifications->unreadCount($identity->id),
             'searches' => $searches,

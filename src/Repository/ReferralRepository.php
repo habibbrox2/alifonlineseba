@@ -10,10 +10,16 @@ use Yiisoft\Db\Connection\ConnectionInterface;
  * The referral ledger.
  *
  * One row per referred account, created the moment that account signs up with
- * a valid `?ref=` code and left `pending` until the friend's first recharge is
- * approved. The row — not the user table — is the record of what was promised,
- * which side has been paid and who signed off on it, so an admin can always
- * answer "why did this person get ৳50" from the ledger alone.
+ * a valid `?ref=` code and left `pending` until the friend's run of qualifying
+ * recharges is finished. The row — not the user table — is the record of what
+ * was promised, which side has been paid and who signed off on it, so an admin
+ * can always answer "why did this person get ৳50" from the ledger alone.
+ *
+ * Qualification is progress rather than a moment: the friend has to complete
+ * `required_count` approved recharges of at least `min_amount` each. Both are
+ * snapshotted here at creation, exactly like `referrer_amount`, so the deal a
+ * referral is judged by is the one that was on offer when the friend signed up
+ * rather than whatever the settings say today.
  *
  * `referee_id` carries a UNIQUE index: a person can be referred exactly once,
  * no matter how many codes they land on. That constraint is the last line of
@@ -36,6 +42,7 @@ final class ReferralRepository
         'id' => '{{%referral}}.[[id]]',
         'code' => '{{%referral}}.[[code]]',
         'status' => '{{%referral}}.[[status]]',
+        'completed_count' => '{{%referral}}.[[completed_count]]',
         'trigger_amount' => '{{%referral}}.[[trigger_amount]]',
         'referrer_amount' => '{{%referral}}.[[referrer_amount]]',
         'created_at' => '{{%referral}}.[[created_at]]',
@@ -62,11 +69,133 @@ final class ReferralRepository
             // already in flight must still pay what the user was promised.
             'referrer_amount' => $row['referrer_amount'] ?? 0,
             'referee_amount' => $row['referee_amount'] ?? 0,
+            // Same reasoning for the qualification rule itself: the count and
+            // the per-recharge floor are what this referral is judged against,
+            // fixed at the moment it was created. Raising the requirement later
+            // applies to new referrals only — otherwise a friend halfway
+            // through a run of five would be told they now owe three more.
+            'required_count' => max(1, (int) ($row['required_count'] ?? 5)),
+            'min_amount' => max(0.0, (float) ($row['min_amount'] ?? 0.0)),
+            'completed_count' => 0,
             'created_at' => $now,
             'updated_at' => $now,
         ])->execute();
 
         return (int) $this->db->getLastInsertID();
+    }
+
+    /**
+     * How many of this account's approved recharges qualify.
+     *
+     * "Qualifying" is deliberately narrower than "approved", and the status list
+     * here is the whole definition:
+     *
+     * - `approved` counts. Nothing else does. `pending` has not happened yet,
+     *   `review` is being decided, and `rejected` is a refusal — so none of
+     *   them can move a referral towards a payout, and none of them can be
+     *   un-counted either, because there is no "was approved then reversed"
+     *   state in `topup_request` to unwind.
+     * - `amount >= $minAmount` counts. A friend who tops up ৳10 five times has
+     *   not done what the offer said, and the operator paid ৳70 of real money
+     *   for it. `$minAmount` of 0 disables the floor, which is a legitimate
+     *   operator choice and is why the comparison is written as `<` rather than
+     *   assuming a positive threshold.
+     *
+     * Counted from the recharge table rather than incremented on approval so
+     * the number is always true of the data. It is read inside the same
+     * transaction as the payout, where the row lock the guarded UPDATE takes is
+     * what serialises two concurrent approvals.
+     *
+     * @return int
+     */
+    public function qualifyingRechargeCount(int $refereeId, float $minAmount): int
+    {
+        return (int) $this->db
+            ->createCommand(
+                'SELECT COUNT(*) FROM {{%topup_request}}'
+                . ' WHERE [[user_id]] = :u AND [[status]] = :st AND [[amount]] >= :min',
+            )
+            ->bindValues([':u' => $refereeId, ':st' => TopupRepository::APPROVED, ':min' => $minAmount])
+            ->queryScalar();
+    }
+
+    /**
+     * Record progress against a referral without paying anything.
+     *
+     * Returns false when the referral is no longer `pending`, which is the
+     * caller's signal that this run has already been settled or voided and the
+     * counter must be left alone.
+     */
+    public function recordProgress(int $referralId, int $completed): bool
+    {
+        return $this->transition($referralId, self::PENDING, self::PENDING, [
+            'completed_count' => max(0, $completed),
+        ]);
+    }
+
+    /**
+     * The referral attached to this account, read with its progress columns.
+     *
+     * Alias `remaining` is computed rather than stored so it can never drift
+     * from the two numbers it comes from.
+     */
+    /**
+     * The ledger reference that identifies one side's referral bonus, forever.
+     *
+     * This is the idempotency key, and it is what stops a double credit even
+     * when everything else is racing. `transaction.reference` carries a UNIQUE
+     * index, so a second insert of the same reference is refused by the
+     * database rather than by a check that two concurrent requests can both
+     * pass. The value is derived only from the referral id and the side, so it
+     * is stable across retries, replays and two admins clicking at once — and
+     * it fits the 32-character column.
+     *
+     * `referrer` and `referee` are the two directions of the same payout, so
+     * the side is part of the key: paying one side twice is just as wrong as
+     * paying both twice, and the two must not collide.
+     */
+    public static function bonusReference(int $referralId, string $side): string
+    {
+        return sprintf('REFBONUS-%d-%s', $referralId, $side === 'referee' ? 'RF' : 'RR');
+    }
+
+    /**
+     * Whether this side's bonus has already been written to the ledger.
+     *
+     * Read inside the payout transaction, so it is a question about committed
+     * state rather than about what this request has seen. It is belt to the
+     * unique index's braces: this gives the caller a clean "already paid"
+     * answer, and the index is what makes the guarantee hold if two transactions
+     * ever overlap.
+     */
+    public function bonusAlreadyPaid(int $referralId, string $side): bool
+    {
+        $exists = $this->db
+            ->createCommand(
+                'SELECT COUNT(*) FROM {{%transaction}} WHERE [[reference]] = :r',
+            )
+            ->bindValue(':r', self::bonusReference($referralId, $side))
+            ->queryScalar();
+
+        return (int) $exists > 0;
+    }
+
+    public function progressFor(int $refereeId): ?array
+    {
+        $row = $this->findByReferee($refereeId);
+        if ($row === null) {
+            return null;
+        }
+
+        $required = max(1, (int) ($row['required_count'] ?? 1));
+        $completed = max(0, (int) ($row['completed_count'] ?? 0));
+
+        $row['required_count'] = $required;
+        $row['completed_count'] = $completed;
+        $row['remaining'] = max(0, $required - $completed);
+        $row['qualified'] = $completed >= $required;
+
+        return $row;
     }
 
     public function findById(int $id): ?array

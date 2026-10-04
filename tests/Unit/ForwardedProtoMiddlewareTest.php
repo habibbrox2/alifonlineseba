@@ -18,7 +18,7 @@ final class ForwardedProtoMiddlewareTest extends Unit
 {
     public function testRewritesSchemeToHttpsFromTrustedProxy(): void
     {
-        $request = $this->request('http://onlinesheba.broxlab.online/login', '127.0.0.1', 'https');
+        $request = $this->request('http://allseba.online/login', '127.0.0.1', 'https');
 
         $result = $this->process($request);
 
@@ -27,7 +27,7 @@ final class ForwardedProtoMiddlewareTest extends Unit
 
     public function testKeepsSchemeWhenPeerIsNotLoopback(): void
     {
-        $request = $this->request('http://onlinesheba.broxlab.online/login', '203.0.113.10', 'https');
+        $request = $this->request('http://allseba.online/login', '203.0.113.10', 'https');
 
         $result = $this->process($request);
 
@@ -36,7 +36,7 @@ final class ForwardedProtoMiddlewareTest extends Unit
 
     public function testKeepsSchemeWhenHeaderIsPlainHttp(): void
     {
-        $request = $this->request('http://onlinesheba.broxlab.online/login', '127.0.0.1', 'http');
+        $request = $this->request('http://allseba.online/login', '127.0.0.1', 'http');
 
         $result = $this->process($request);
 
@@ -45,7 +45,7 @@ final class ForwardedProtoMiddlewareTest extends Unit
 
     public function testKeepsSchemeWhenHeaderIsAbsent(): void
     {
-        $request = $this->request('http://onlinesheba.broxlab.online/login', '127.0.0.1', null);
+        $request = $this->request('http://allseba.online/login', '127.0.0.1', null);
 
         $result = $this->process($request);
 
@@ -54,7 +54,7 @@ final class ForwardedProtoMiddlewareTest extends Unit
 
     public function testUsesFirstValueOfForwardedChain(): void
     {
-        $request = $this->request('http://onlinesheba.broxlab.online/login', '127.0.0.1', 'https, http');
+        $request = $this->request('http://allseba.online/login', '127.0.0.1', 'https, http');
 
         $result = $this->process($request);
 
@@ -63,11 +63,11 @@ final class ForwardedProtoMiddlewareTest extends Unit
 
     public function testPreservesHostAndPathWhileRewriting(): void
     {
-        $request = $this->request('http://onlinesheba.broxlab.online/service-history?page=2', '127.0.0.1', 'https');
+        $request = $this->request('http://allseba.online/service-history?page=2', '127.0.0.1', 'https');
 
         $result = $this->process($request);
 
-        assertSame('onlinesheba.broxlab.online', $result->getUri()->getHost());
+        assertSame('allseba.online', $result->getUri()->getHost());
         assertSame('/service-history', $result->getUri()->getPath());
         assertSame('page=2', $result->getUri()->getQuery());
     }

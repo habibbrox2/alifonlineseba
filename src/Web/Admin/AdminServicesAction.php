@@ -6,6 +6,7 @@ namespace App\Web\Admin;
 
 use App\Repository\ActivityLogRepository;
 use App\Repository\ServiceRepository;
+use App\Service\ServiceBulkAction;
 use App\Service\ServiceManager;
 use App\ServiceProvider\ServiceField;
 use Psr\Http\Message\ResponseInterface;
@@ -19,11 +20,23 @@ final readonly class AdminServicesAction
     /** Session key holding the rejected form payload so the view can re-render it. */
     private const FORM_KEY = 'admin_service_form';
 
+    /**
+     * Session key holding the snapshot the last bulk trash/purge left behind.
+     *
+     * Read with `pull()`, so it survives exactly one page and one Undo click.
+     * It is a snapshot and not a trash bin on purpose: what the Undo button can
+     * bring back is what the batch that is still on screen took away, and a
+     * second click reports that there is nothing left rather than re-inserting
+     * rows a later batch may already have removed again.
+     */
+    private const UNDO_KEY = 'admin_service_bulk_undo';
+
     public function __construct(
         private WebViewRenderer $view,
         private ServiceRepository $services,
         private ServiceManager $manager,
         private ActivityLogRepository $logs,
+        private ServiceBulkAction $bulk,
         private SessionInterface $session,
         private UrlGeneratorInterface $url,
     ) {}
@@ -36,6 +49,9 @@ final readonly class AdminServicesAction
             $input = (array) $request->getParsedBody();
             $do = (string) ($input['do'] ?? 'create');
             $redirectId = 0;
+            // Overwritten by the two bulk branches, which have to come back to
+            // the filter the batch was run from — see url().
+            $redirectQuery = '';
 
             if ($do === 'create') {
                 [$errors, $values] = $this->validateServiceInput($input, null);
@@ -108,15 +124,56 @@ final readonly class AdminServicesAction
                 }
             } elseif ($do === 'purge') {
                 $this->purgeService((int) ($input['id'] ?? 0), $adminId);
+            } elseif ($do === 'bulk' || $do === 'bulk_undo') {
+                // Both bulk branches answer with the same three things: one
+                // flash, one 302, and — for the destructive two — the snapshot
+                // the Undo button is built from. Kept together because the Undo
+                // form is the only consumer of both, and splitting them put the
+                // `if ($result['undo'] !== null)` in one branch and the session
+                // write in the other.
+                $state = self::stateFromInput($input);
+
+                if ($do === 'bulk_undo') {
+                    $payload = $this->session->pull(self::UNDO_KEY);
+                    $result = $this->bulk->undo(is_array($payload) ? $payload : null, $adminId);
+                } else {
+                    // One selection, one action: see ServiceBulkAction for why
+                    // this is not the per-row helpers above called in a loop
+                    // (nine rows would overwrite each other's flash), and why
+                    // its guard rules are a deliberate copy of theirs.
+                    $scope = (string) ($input['bulk_scope'] ?? ServiceBulkAction::SCOPE_SELECTED);
+                    $result = $scope === ServiceBulkAction::SCOPE_FILTERED
+                        ? $this->bulk->runFiltered($state, (string) ($input['bulk_action'] ?? ''), $adminId)
+                        : $this->bulk->run(
+                            (array) ($input['ids'] ?? []),
+                            (string) ($input['bulk_action'] ?? ''),
+                            $adminId,
+                        );
+
+                    // Written even on a refusal, so the session key always
+                    // describes the batch that is actually on screen.
+                    $this->session->set(self::UNDO_KEY, $result['undo']);
+                    if ($result['undo'] !== null) {
+                        $this->session->set('flash_undo', [
+                            'action' => $result['action'],
+                            'count' => count($result['undo']['ids'] ?: $result['undo']['items']),
+                            'state' => $state,
+                        ]);
+                    }
+                }
+
+                $this->session->set($result['ok'] ? 'flash_success' : 'flash_error', $result['message']);
+                $redirectQuery = $this->url($state);
             }
 
-            $query = $redirectId > 0 ? '?edit=' . $redirectId : '';
+            $query = $redirectId > 0 ? '?edit=' . $redirectId : $redirectQuery;
             return new \Nyholm\Psr7\Response(302, [
                 'Location' => $this->url->generate('admin-services') . $query,
             ]);
         }
 
         $query = $request->getQueryParams();
+        $state = self::state($query);
         $editId = (int) ($query['edit'] ?? 0);
         $form = $this->session->pull(self::FORM_KEY);
         $form = is_array($form) ? $form : null;
@@ -132,8 +189,21 @@ final readonly class AdminServicesAction
             $formValues = self::preselectCategoryValues((int) ($query['category'] ?? 0), $categories);
         }
 
+        // One filter definition, two callers: this list, and the bulk bar's
+        // "everything matching" scope. If the bar resolved its own set the two
+        // could disagree, and a batch acting on rows the admin cannot see is
+        // the failure this shared call exists to make impossible.
+        $filtered = $this->services->adminFiltered($state);
+
         return $this->view->render('site/admin/services.twig', [
-            'services' => $this->services->allServicesAdmin(),
+            'services' => $filtered['rows'],
+            'filterState' => $state,
+            'filterTotal' => $filtered['total'],
+            // Whether the bar may offer the filtered scope at all. Read from the
+            // service rather than duplicated here: `purge` over "no filter"
+            // would mean every service in the shop, and the guard for that
+            // belongs next to the action that would carry it out.
+            'filterSet' => ServiceBulkAction::isFilterSet($state),
             'categories' => $categories,
             'editService' => $editService,
             'formValues' => $formValues,
@@ -144,7 +214,100 @@ final readonly class AdminServicesAction
             'fieldTypes' => ServiceField::TYPES,
             'usingFieldDefaults' => $editService === null || $this->manager->formFieldConfig($editService) === null,
             'trashedCount' => $this->services->countTrashed(),
+            // The bar's <option> list, so the actions it can ask for and the ones the
+            // service accepts are the same list rather than two that can drift.
+            'bulkActions' => ServiceBulkAction::ACTIONS,
         ]);
+    }
+
+    /**
+     * The list's filter state, normalised.
+     *
+     * Read from the query string on GET and from the bulk form's hidden fields
+     * on POST, through the same door, so a redirect can rebuild the admin's
+     * view without re-implementing — and eventually contradicting — the rules
+     * the list itself runs on.
+     *
+     * Every value is clamped to the vocabulary `ServiceRepository` accepts.
+     * Not for tidiness: `runFiltered()` resolves ids from these same keys, so
+     * an unvalidated `status` or `trashed` would be a filter the bar honours
+     * and the list does not.
+     *
+     * The default hides the trash, which is a change from the unfiltered list
+     * this page used to be: soft-deleted rows now need the trash filter, the
+     * same two-click trade `users.twig` makes. Keeping them inline meant the
+     * default view doubled as "live plus dead", and a count over it could not
+     * answer "how many can I act on".
+     *
+     * @param array<string, mixed> $params
+     *
+     * @return array{q: string, category: int, status: string, trashed: string}
+     */
+    public static function state(array $params): array
+    {
+        $trashed = (string) ($params['trashed'] ?? ServiceRepository::DELETED_EXCLUDE);
+        $status = (string) ($params['status'] ?? '');
+
+        return [
+            'q' => mb_substr(trim((string) ($params['q'] ?? '')), 0, 190),
+            'category' => max(0, (int) ($params['category'] ?? 0)),
+            'status' => in_array($status, ServiceRepository::STATUSES, true) ? $status : '',
+            'trashed' => in_array(
+                $trashed,
+                [ServiceRepository::DELETED_EXCLUDE, ServiceRepository::DELETED_ONLY, ServiceRepository::DELETED_ALL],
+                true,
+            ) ? $trashed : ServiceRepository::DELETED_EXCLUDE,
+        ];
+    }
+
+    /**
+     * The same state, read from a bulk form's hidden fields.
+     *
+     * `return_*` rather than `q`/`category`/… because the bulk form's own
+     * fields are `ids[]`, `bulk_action` and `bulk_scope`, and a hidden field
+     * called `status` on the same form would read as part of the action rather
+     * than as where to come back to.
+     *
+     * @param array<string, mixed> $input
+     *
+     * @return array{q: string, category: int, status: string, trashed: string}
+     */
+    public static function stateFromInput(array $input): array
+    {
+        return self::state([
+            'q' => $input['return_q'] ?? '',
+            'category' => $input['return_category'] ?? 0,
+            'status' => $input['return_status'] ?? '',
+            'trashed' => $input['return_trashed'] ?? ServiceRepository::DELETED_EXCLUDE,
+        ]);
+    }
+
+    /**
+     * The list's query string for a state — where the redirect after a bulk
+     * action lands.
+     *
+     * Empty values are dropped rather than written as `status=` so a redirect
+     * never carries a key the filter bar will not show as chosen.
+     *
+     * @param array{q: string, category: int, status: string, trashed: string} $state
+     */
+    private function url(array $state): string
+    {
+        $query = [];
+        if ($state['q'] !== '') {
+            $query[] = 'q=' . urlencode($state['q']);
+        }
+        if ($state['category'] > 0) {
+            $query[] = 'category=' . $state['category'];
+        }
+        if ($state['status'] !== '') {
+            $query[] = 'status=' . urlencode($state['status']);
+        }
+        if ($state['trashed'] !== ServiceRepository::DELETED_EXCLUDE) {
+            $query[] = 'trashed=' . urlencode($state['trashed']);
+        }
+
+        return $query === [] ? '' : '?' . implode('&', $query);
     }
 
     /**
@@ -219,7 +382,7 @@ final readonly class AdminServicesAction
 
     /**
      * Move a service to the trash. Nothing is lost: the row stays, so the slug
-     * stays reserved and every transaction keeps its foreign key.
+     * stays reserved and every order keeps its foreign key.
      */
     private function trashService(int $id, ?int $adminId): void
     {
@@ -237,11 +400,11 @@ final readonly class AdminServicesAction
             return;
         }
 
-        $orders = $this->services->transactionCount($id);
+        $orders = $this->services->orderCount($id);
         $this->logs->create([
             'user_id' => $adminId,
             'action' => 'admin.service.trashed',
-            'description' => "Service '{$service['name']}' moved to trash ({$orders} transaction(s) kept)",
+            'description' => "Service '{$service['name']}' moved to trash ({$orders} order(s) kept)",
             'metadata' => ['service_id' => $id, 'slug' => $service['slug']],
         ]);
         $this->session->set('flash_success', $orders > 0
@@ -285,7 +448,7 @@ final readonly class AdminServicesAction
         $this->logs->create([
             'user_id' => $adminId,
             'action' => 'admin.service.purged',
-            'description' => "Service '{$service['name']}' permanently deleted ({$orders} transaction(s) kept)",
+            'description' => "Service '{$service['name']}' permanently deleted ({$orders} order(s) kept)",
             'metadata' => ['service_id' => $id, 'slug' => $service['slug']],
         ]);
         $this->session->set('flash_success', $orders > 0
