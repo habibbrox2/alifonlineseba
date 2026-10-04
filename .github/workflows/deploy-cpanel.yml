@@ -747,7 +747,12 @@ jobs:
           else
             problems=""
             grep -qF 'RewriteEngine On' "$ht" || problems="${problems}RewriteEngine missing; "
-            grep -qF 'RewriteRule ^ index.php [L]' "$ht" || problems="${problems}front controller missing; "
+            # [END] is an equally valid front-controller flag on Apache 2.4
+            # (it additionally skips the per-directory re-processing [L]
+            # triggers), so accept either rather than pinning one spelling.
+            if ! grep -qF 'RewriteRule ^ index.php [L]' "$ht" && ! grep -qF 'RewriteRule ^ index.php [END]' "$ht"; then
+              problems="${problems}front controller missing; "
+            fi
             if [ -z "$problems" ]; then
               echo "::check::.htaccess|front controller present|ok"
             else
