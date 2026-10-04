@@ -8,8 +8,8 @@
     <string name="appName">Alif Tools</string>
     <string name="launcherName">Alif Tools</string>
 
-    <string name="hostName" translatable="false">allseba.dgtts.org</string>
-    <string name="launchUrl" translatable="false">https://allseba.dgtts.org/</string>
+    <string name="hostName" translatable="false">allseba.online</string>
+    <string name="launchUrl" translatable="false">https://allseba.online/</string>
 
     <!-- Must match the FileProvider authority declared in the manifest. -->
     <string name="providerAuthority" translatable="false">online.broxlab.aliftools.twa.fileprovider</string>

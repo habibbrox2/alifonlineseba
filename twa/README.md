@@ -1,6 +1,6 @@
 # Alif Tools — Android app (Trusted Web Activity)
 
-A **Trusted Web Activity**: the real `https://allseba.dgtts.org`, rendered full
+A **Trusted Web Activity**: the real `https://allseba.online`, rendered full
 screen by Chrome, wrapped in an APK the user installs from `/app/apk`. It is a *thin*
 app — there is no bundled site, no offline copy, no duplicated API client. Whatever
 `main` deploys is what the app shows, with no store review in between.
@@ -134,7 +134,7 @@ failure mode when they don't is a browser bar rather than an error message:
 |---|---|---|
 | 1 | `applicationId` = `online.broxlab.aliftools.twa` | [`app/build.gradle.kts`](app/build.gradle.kts) |
 | 2 | `TWA_FINGERPRINTS` = that id + the SHA-256 of the signing cert | `.env` |
-| 3 | `TWA_ORIGIN` = `https://allseba.dgtts.org` | `.env` |
+| 3 | `TWA_ORIGIN` = `https://allseba.online` | `.env` |
 
 Work through it in this order, because each step depends on the one before:
 
@@ -150,7 +150,7 @@ php yii app:twa:fingerprints --cert=release.cer --package=online.broxlab.aliftoo
 It prints the two lines to paste:
 
 ```dotenv
-TWA_ORIGIN=https://allseba.dgtts.org
+TWA_ORIGIN=https://allseba.online
 TWA_FINGERPRINTS=online.broxlab.aliftools.twa@SHA256:AA:BB:CC:…
 ```
 
@@ -167,7 +167,7 @@ Then check the origin actually publishes it:
 
 ```bash
 php yii app:twa:fingerprints          # prints the document the site will serve
-curl -i https://allseba.dgtts.org/.well-known/assetlinks.json
+curl -i https://allseba.online/.well-known/assetlinks.json
 ```
 
 `200` with a statement naming `online.broxlab.aliftools.twa` is the pass condition. A
@@ -176,7 +176,7 @@ empty `[]` is never served on purpose, because that reads as "this site belongs 
 app". Google has an online checker for the finished article:
 
 ```
-https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://allseba.dgtts.org&relation=delegate_permission/common.handle_all_urls
+https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://allseba.online&relation=delegate_permission/common.handle_all_urls
 ```
 
 `TWA_ORIGIN` is configuration, never the request's `Host` header — see

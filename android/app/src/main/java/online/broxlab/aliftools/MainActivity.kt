@@ -168,7 +168,7 @@ class MainActivity : ComponentActivity() {
                     arguments = listOf(navArgument("id") { type = NavType.LongType }),
                     deepLinks = listOf(
                         navDeepLink { uriPattern = "aliftools://requests/{id}" },
-                        navDeepLink { uriPattern = "https://allseba.dgtts.org/requests/{id}" },
+                        navDeepLink { uriPattern = "https://allseba.online/requests/{id}" },
                     ),
                 ) { entry ->
                     ServiceRequestDetailScreen(

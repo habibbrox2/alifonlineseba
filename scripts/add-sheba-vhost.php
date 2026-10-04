@@ -4,7 +4,7 @@
  * One-off: put digital-sheba behind Apache on :8080 for the Cloudflare tunnel.
  *
  * The tunnel (df90132c-89ef-45d9-a680-eb59a954c476, "th-tools-onlinesheba")
- * forwards allseba.dgtts.org -> http://127.0.0.1:8080, but nothing was listening
+ * forwards allseba.online -> http://127.0.0.1:8080, but nothing was listening
  * there. This adds the matching Listen directive and vhost.
  *
  * Do NOT strip X-Forwarded-Proto here. cloudflared dials the origin from
@@ -22,8 +22,8 @@ $conf = 'D:/xampp/apache/conf/httpd.conf';
 $vhosts = 'D:/xampp/apache/conf/extra/httpd-vhosts.conf';
 
 $docRoot = 'D:/xampp-server/digital-sheba/public';
-$serverName = 'allseba.dgtts.org';
-$serverAliases = ['www.allseba.dgtts.org', '127.0.0.1', 'localhost'];
+$serverName = 'allseba.online';
+$serverAliases = ['www.allseba.online', '127.0.0.1', 'localhost'];
 $serverAlias = implode(' ', $serverAliases);
 
 function readFileOrFail(string $path): string
@@ -55,7 +55,7 @@ if (preg_match('/^\s*Listen\s+8080\s*$/m', $confBody) === 1) {
         exit(1);
     }
     $at = $m[0][1] + strlen($m[0][0]);
-    $insert = "\n\n# digital-sheba — origin for the Cloudflare tunnel (allseba.dgtts.org).\n# Added by scripts/add-sheba-vhost.php; remove the block to undo.\nListen 8080";
+    $insert = "\n\n# digital-sheba — origin for the Cloudflare tunnel (allseba.online).\n# Added by scripts/add-sheba-vhost.php; remove the block to undo.\nListen 8080";
     $confBody = substr($confBody, 0, $at) . $insert . substr($confBody, $at);
     writeFileOrFail($conf, $confBody);
     echo "httpd.conf: added Listen 8080\n";

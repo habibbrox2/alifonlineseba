@@ -302,15 +302,15 @@ cd /home/aliftools/alif_tools && php yii app:notification:work --limit=5 -v
 3. `rm -rf runtime/cache`
 4. অপচ্ছন্ন করুন: `runtime/logs`, পুরনো `runtime/diag-*.php`
 
-## ১০. Cloudflare Tunnel দিয়ে ডিপ্লয় (allseba.dgtts.org)
+## ১০. Cloudflare Tunnel দিয়ে ডিপ্লয় (allseba.online)
 
-> **এই সেকশনটি এখন legacy।** প্রকাশ্য সাইট `allseba.dgtts.org` cPanel sharedhosting-এ
+> **এই সেকশনটি এখন legacy।** প্রকাশ্য সাইট `allseba.online` cPanel sharedhosting-এ
 > SSH দিয়ে আসে (ধাপ ১১) — vhost cPanel-ই সামলায়, তাই Cloudflare tunnel বা লোকাল
 > XAMPP-এর কোনো দরকার নেই। নিচের নির্দেশনা শুধু তখনই মানে, যখন আপনি **ইচ্ছাকৃতভাবে**
 > লোকাল মেশিন থেকেই টানেল চালাতে চান। `scripts/add-sheba-vhost.php`-এর কাজও সেই একই
 > পরিস্থিতির জন্য; cPanel ডিপ্লয়ে এটি চালাবেন না।
 
-শেয়ার্ড হোস্টিং না করে লোকাল মেশিন (XAMPP) থেকেই অ্যাপটি সরাসরি `https://allseba.dgtts.org`-এ
+শেয়ার্ড হোস্টিং না করে লোকাল মেশিন (XAMPP) থেকেই অ্যাপটি সরাসরি `https://allseba.online`-এ
 প্রকাশ করা যায়। Cloudflare Tunnel মানে কোনো পাবলিক IP বা পোর্ট ফোরওয়ার্ড লাগে না —
 cloudflared লোকাল Apache-এর দিকে একটি encrypted connection ধরে রাখে, আর Cloudflare-এর
 edge থেকে ট্রাফিক সেই connection-এর ভেতর দিয়ে আসে। TLS সার্টিফিকেট ও DNS দুটোই
@@ -331,8 +331,8 @@ Cloudflare সামলায়, তাই Let's Encrypt বা কোনো �
 cloudflared tunnel create th-tools-onlinesheba
 
 # ২. ডোমেইন → টানেল (ক্লাউডফ্লেয়ারের জোনে CNAME, proxied)
-cloudflared tunnel route dns th-tools-onlinesheba allseba.dgtts.org
-cloudflared tunnel route dns th-tools-onlinesheba www.allseba.dgtts.org
+cloudflared tunnel route dns th-tools-onlinesheba allseba.online
+cloudflared tunnel route dns th-tools-onlinesheba www.allseba.online
 
 # ৩. লোকাল কনফিগ: ~/.cloudflared/config.yml
 #    ingress-এ হোস্টনেম → লোকাল সার্ভিস, শেষে অবশ্যই http_status:404
@@ -347,9 +347,9 @@ tunnel: df90132c-89ef-45d9-a680-eb59a954c476
 credentials-file: C:\Users\Alif\.cloudflared\df90132c-89ef-45d9-a680-eb59a954c476.json
 
 ingress:
-  - hostname: allseba.dgtts.org
+  - hostname: allseba.online
     service: http://127.0.0.1:8080
-  - hostname: www.allseba.dgtts.org
+  - hostname: www.allseba.online
     service: http://127.0.0.1:8080
   - service: http_status:404
 ```
@@ -358,7 +358,7 @@ ingress:
 
 ```bash
 cloudflared tunnel ingress validate
-cloudflared tunnel ingress rule https://allseba.dgtts.org
+cloudflared tunnel ingress rule https://allseba.online
 ```
 
 **ingress নিয়ম:** প্রতিটি হোস্টনেমের জন্য একটা নিয়ম, আর একদম শেষে ক্যাচ-অল
@@ -370,8 +370,8 @@ cloudflared tunnel ingress rule https://allseba.dgtts.org
 
 ```apache
 <VirtualHost *:8080>
-    ServerName allseba.dgtts.org
-    ServerAlias www.allseba.dgtts.org 127.0.0.1 localhost
+    ServerName allseba.online
+    ServerAlias www.allseba.online 127.0.0.1 localhost
     DocumentRoot "D:/xampp-server/digital-sheba/public"
 
     <Directory "D:/xampp-server/digital-sheba/public">
@@ -392,7 +392,7 @@ php scripts/add-sheba-vhost.php
 
 উপরের `ServerAlias`-এ ইচ্ছাকৃতভাবে পুরনো ডোমেইন `onlinesheba.broxlab.online`
 নেই — নতুন মেশিনে সেটা দরকারও হবে না। বিদ্যমান কনফিগে ওই alias এখনো আছে, যাতে
-আগে থেকে বানানো APK ইনস্টলগুলো ভাঙে না। নতুন APK সবাই `allseba.dgtts.org`-এ চলে গেলে
+আগে থেকে বানানো APK ইনস্টলগুলো ভাঙে না। নতুন APK সবাই `allseba.online`-এ চলে গেলে
 alias আর tunnel ingress — দুটোই সরিয়ে দিন।
 
 ### ১০.৪ ⚠️ X-Forwarded-Proto মুছবেন না
@@ -414,8 +414,8 @@ RequestHeader unset X-Forwarded-Proto
 চেক:
 
 ```bash
-curl -sI https://allseba.dgtts.org/ | grep -i '^set-cookie'
-# ALIF_SESSION=...; Domain=allseba.dgtts.org; Path=/; Secure; HttpOnly; SameSite=Lax
+curl -sI https://allseba.online/ | grep -i '^set-cookie'
+# ALIF_SESSION=...; Domain=allseba.online; Path=/; Secure; HttpOnly; SameSite=Lax
 ```
 
 `Secure` না থাকলে vhost আবার দেখুন।
@@ -425,8 +425,8 @@ curl -sI https://allseba.dgtts.org/ | grep -i '^set-cookie'
 ```dotenv
 APP_ENV=prod
 APP_DEBUG=false
-APP_URL=https://allseba.dgtts.org
-TWA_ORIGIN=https://allseba.dgtts.org
+APP_URL=https://allseba.online
+TWA_ORIGIN=https://allseba.online
 TWA_FINGERPRINTS=
 ```
 
@@ -440,8 +440,8 @@ TWA_FINGERPRINTS=
 # টানেল সত্যিই আপস্ট্রিমে আছে কি না
 cloudflared tunnel info th-tools-onlinesheba
 # সব পেজ ঠিক ডোমেইন দিয়ে হিট করছে কি না
-curl -sI https://allseba.dgtts.org/ | head -1
-curl -sI https://allseba.dgtts.org/app | head -1
+curl -sI https://allseba.online/ | head -1
+curl -sI https://allseba.online/app | head -1
 ```
 
 `httpd -f .../conf/httpd.conf -t` দিয়ে vhost সিনট্যাক্স, `cloudflared tunnel ingress validate`
@@ -470,7 +470,7 @@ php yii app:twa:fingerprints --cert=path/to/release.cer --package=online.broxlab
 ```
 
 কমান্ডটি `TWA_ORIGIN` ও `TWA_FINGERPRINTS`-এর জন্য ঠিক-ঠিক লাইন ছাপে (`.env`-এ কপি করে
-ফাইলটা রিস্টার্ট দিন)। এরপর `https://allseba.dgtts.org/.well-known/assetlinks.json`
+ফাইলটা রিস্টার্ট দিন)। এরপর `https://allseba.online/.well-known/assetlinks.json`
 ২০০ দিতে হবে, `twa/twa-manifest.json`-এর `host`/`startUrl` ও
 `android/app/build.gradle.kts`-এর `API_BASE_URL` একই ডোমেইনে থাকতে হবে — না হলে
 TWA অ্যাপ ডোমেইন ভালিডেশন ব্যর্থ করবে।
@@ -551,7 +551,7 @@ checkout → composer install → npm run build → php yii list (স্মো�
 | নাম | মান |
 |---|---|
 | `CPANEL_PATH` | **আবশ্যক** — অ্যাপের রুট পাথ, যেমন `/home/<cpanel-user>/alif_tools`। ডিফল্ট নেই: এই রিপোজিটরি public, তাই cPanel-এর ইউজারনেম ফাইলে বেঁচে থাকা ঠিক নয় |
-| `DEPLOY_HEALTH_URL` | ডিফল্ট `https://allseba.dgtts.org` |
+| `DEPLOY_HEALTH_URL` | ডিফল্ট `https://allseba.online` |
 | `CPANEL_SSH_PORT` | ডিফল্ট `22` (অনেক হোস্টে `2222`) |
 | `CPANEL_PHP_BIN` | খালি রাখলে হোস্টে `/opt/cpanel/ea-php82/...`, `/usr/local/bin/php`, `/usr/bin/php` ক্রমে খোঁজে |
 
