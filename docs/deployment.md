@@ -475,8 +475,9 @@ TWA অ্যাপ ডোমেইন ভালিডেশন ব্যর্�
 
 ```
 checkout → composer install → npm run build → php yii list (স্মোক টেস্ট)
+        → migrate:new (ডেটাবেজ প্রিফ্লাইট) → maintenance.lock তোলা
         → ফাইল ট্রান্সফার (rsync, না থাকলে tar) → rm runtime/cache → migrate:up
-        → maintenance.lock তোলা → curl হেলথ চেক → lock নামানো
+        → lock নামানো → curl হেলথ চেক
 ```
 
 বিল্ড **রানারে** হয়, সার্ভারে নয় — কারণ cPanel-এ composer/Node নাও থাকতে পারে, আর
@@ -590,7 +591,8 @@ rsync চলাকালীন সার্ভারের কোড ফোল�
 ### ১২.১ কীভাবে কাজ করে
 
 ```
-main-এ পুশ → runtime/maintenance.lock তৈরি → ট্রান্সফার (rsync/tar) → migrate
+main-এ পুশ → migrate:new (ডিটাবেজ চেক) → runtime/maintenance.lock তৈরি
+           → ট্রান্সফার (rsync/tar) → migrate
            → lock মুছে যায় → / ও /login-এ 200 নিশ্চিত → গ্রিন
 ```
 
