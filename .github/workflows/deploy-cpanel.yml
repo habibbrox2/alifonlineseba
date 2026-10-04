@@ -172,9 +172,20 @@ jobs:
           # A cleared lock is not proof of a healthy site: if the deploy that
           # failed left a half-written vendor/, the real error only shows up
           # here. Report it rather than calling it green.
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -L "$HEALTH_URL" || echo 000)
+          #
+          # No -L here either, for the same reason as the deploy's own health
+          # check: a redirect to an unrelated site is not this app coming back.
+          code=$(curl -sS -o /dev/null -D "$RUNNER_TEMP/live.headers" \
+            -w '%{http_code}' --max-time 30 "$HEALTH_URL" || echo 000)
           echo "$HEALTH_URL → $code"
           if [ "$code" != "200" ]; then
+            location=$(grep -i '^location:' "$RUNNER_TEMP/live.headers" | tail -1 | tr -d '\r' || true)
+            # An `if`, not a `[ … ] && echo`: under `set -e` a failing test at
+            # the end of a list would exit the step here, before the message
+            # below the actual problem could be printed.
+            if [ -n "$location" ]; then
+              echo "::error::$HEALTH_URL redirects to ${location#*: } — the health URL is not being served by this deployment."
+            fi
             echo "::error::The lock is cleared but the site does not answer — the previous deploy is still broken."
             exit 1
           fi
@@ -620,23 +631,43 @@ jobs:
           # Three tries: the first request after a deploy can still lose a race
           # with an opcache reset or a Cloudflare fetch, and locking the site
           # again over a single flaky 502 would be worse than waiting.
+          #
+          # No -L. Following redirects here is how a deploy verifies a site
+          # that is not this one: a domain parked on a WordPress install that
+          # 301s somewhere else answers 200 for "/" and 404s for "/login",
+          # which reads exactly like a broken application. The status code of
+          # the URL we asked for is the only thing that says anything about
+          # what we deployed, and a redirect is not a 200 — it is the domain
+          # pointing somewhere the operator has to look at.
           ok=1
           for attempt in 1 2 3; do
             for path in / /login; do
               url="$HEALTH_URL$path"
-              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -L "$url" || echo 000)
-              echo "[attempt $attempt] $url → $code"
-              if [ "$code" != "200" ]; then
-                ok=0
-                break
+              # -D dumps the response headers so a redirect's Location can be
+              # named in the log; -w pulls the code and the URL curl ended on.
+              code=$(curl -sS -o /dev/null -D "$RUNNER_TEMP/health.headers" \
+                -w '%{http_code}' --max-time 30 "$url" || echo 000)
+              if [ "$code" = "200" ]; then
+                echo "[attempt $attempt] $url → 200"
+                continue
               fi
+              echo "[attempt $attempt] $url → $code"
+              # A 3xx is a domain misconfiguration, not a slow start, so it is
+              # worth naming rather than retrying three times before failing.
+              location=$(grep -i '^location:' "$RUNNER_TEMP/health.headers" | tail -1 | tr -d '\r' || true)
+              if [ -n "$location" ]; then
+                echo "::error::$url redirects to ${location#*: } — the health URL is not being served by this deployment."
+              fi
+              ok=0
+              break
             done
             [ "$ok" = "1" ] && break
             sleep 10
           done
 
           if [ "$ok" != "1" ]; then
-            echo "::error::The site does not answer after the deploy."
+            echo "::error::$HEALTH_URL does not serve this app after the deploy."
+            echo "::error::Check that the domain resolves to this cPanel account and that its document root is the deployed public/ directory."
             exit 1
           fi
 
