@@ -20,6 +20,20 @@ use Yiisoft\Db\Migration\RevertibleMigrationInterface;
  */
 final class M240109000000_CreateNotificationInfrastructure implements RevertibleMigrationInterface
 {
+    /**
+     * Every table gets its charset stated outright.
+     *
+     * Without it a table inherits whatever the database defaults to, and on the
+     * cPanel host that is latin1 — which cannot represent Bengali. Seeding
+     * `স্বাগতম!` then dies with "Incorrect string value ... for column title",
+     * under strict SQL mode. The local MariaDB is non-strict and silently stored
+     * `??????!` instead, so this only ever showed up on the real host.
+     *
+     * Being explicit also stops the schema from changing meaning if someone
+     * alters the database default later.
+     */
+    private const CHARSET = 'CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+
     public function up(MigrationBuilder $b): void
     {
         // ---- A. Event columns on the existing table -------------------------
@@ -44,7 +58,7 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
             'last_error' => 'string(500) NULL',
             'created_at' => 'datetime NOT NULL',
             'updated_at' => 'datetime NOT NULL',
-        ]));
+        ], self::CHARSET));
         // The uniqueness IS the idempotency guarantee: a replayed business
         // action re-enqueues with the same key and becomes a no-op.
         $this->safe(fn () => $b->createIndex('{{%notification_queue}}', 'uk_queue_dedupe', ['dedupe_key'], 'UNIQUE'));
@@ -68,7 +82,7 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
             'failed_at' => 'datetime NULL',
             'created_at' => 'datetime NOT NULL',
             'updated_at' => 'datetime NOT NULL',
-        ]));
+        ], self::CHARSET));
         $this->safe(fn () => $b->createIndex('{{%notification_delivery}}', 'uk_delivery_provider_message', ['provider_message_id'], 'UNIQUE'));
         $this->safe(fn () => $b->createIndex('{{%notification_delivery}}', 'ix_delivery_status_created', ['status', 'created_at']));
         $this->safe(fn () => $b->addForeignKey('{{%notification_delivery}}', 'fk_delivery_queue', 'queue_id', '{{%notification_queue}}', 'id'));
@@ -84,7 +98,7 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
             'last_seen_at' => 'datetime NULL',
             'created_at' => 'datetime NOT NULL',
             'updated_at' => 'datetime NOT NULL',
-        ]));
+        ], self::CHARSET));
         // A token is the identity of a device: unique index = idempotent upsert
         // AND the deactivation lookup in one place.
         $this->safe(fn () => $b->createIndex('{{%notification_device}}', 'uk_device_token', ['device_token'], 'UNIQUE'));
@@ -99,7 +113,7 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
             'enabled' => "tinyint NOT NULL DEFAULT '1'",
             'created_at' => 'datetime NOT NULL',
             'updated_at' => 'datetime NOT NULL',
-        ]));
+        ], self::CHARSET));
         // Overrides only: no row = global default. Keeps the table tiny and
         // the global default changeable without a migration.
         $this->safe(fn () => $b->createIndex('{{%notification_preference}}', 'uk_preference_user_event_channel', ['user_id', 'event', 'channel'], 'UNIQUE'));
@@ -115,7 +129,7 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
             'external_id' => 'string(190) NULL',
             'created_at' => 'datetime NOT NULL',
             'updated_at' => 'datetime NOT NULL',
-        ]));
+        ], self::CHARSET));
         $this->safe(fn () => $b->createIndex('{{%notification_template}}', 'uk_template_event_channel_locale', ['event', 'channel', 'locale'], 'UNIQUE'));
 
         // ---- C. Machine auth + bot ------------------------------------------
@@ -128,7 +142,7 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
             'last_used_at' => 'datetime NULL',
             'revoked_at' => 'datetime NULL',
             'created_at' => 'datetime NOT NULL',
-        ]));
+        ], self::CHARSET));
         $this->safe(fn () => $b->createIndex('{{%api_token}}', 'uk_api_token_hash', ['token_hash'], 'UNIQUE'));
         $this->safe(fn () => $b->createIndex('{{%api_token}}', 'ix_api_token_user', ['user_id']));
         $this->safe(fn () => $b->addForeignKey('{{%api_token}}', 'fk_api_token_user', 'user_id', '{{%user}}', 'id'));
@@ -144,7 +158,7 @@ final class M240109000000_CreateNotificationInfrastructure implements Revertible
             'is_active' => "tinyint NOT NULL DEFAULT '1'",
             'created_at' => 'datetime NOT NULL',
             'updated_at' => 'datetime NOT NULL',
-        ]));
+        ], self::CHARSET));
         // chat_id is the addressing primitive, not proof of identity — one row
         // per admin Telegram account, nothing else stored.
         $this->safe(fn () => $b->createIndex('{{%bot_connection}}', 'uk_bot_chat', ['chat_id'], 'UNIQUE'));
