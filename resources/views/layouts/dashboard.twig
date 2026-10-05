@@ -190,6 +190,9 @@
                         <span>{{ flash_error }}</span>
                     </div>
                 {% endif %}
+                {# Signed-in pages only, and only while this account's push switch
+                   is off — see the partial for why it has no dismissal. #}
+                {% include 'partials/push-reminder.twig' %}
                 {% block dashboard_content %}{% endblock %}
             </div>
         </main>

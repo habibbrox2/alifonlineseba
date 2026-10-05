@@ -6,6 +6,7 @@ namespace App\Console;
 
 use App\Notification\Channel\FcmChannel;
 use App\Notification\Channel\TelegramChannel;
+use App\Notification\Channel\WhatsAppChannel;
 use App\Notification\Channel\WebPushChannel;
 use App\Notification\QueueRepository;
 use App\Repository\DeviceRepository;
@@ -33,6 +34,7 @@ final class NotificationWorkCommand extends Command
         private readonly FcmChannel $fcm,
         private readonly TelegramChannel $telegram,
         private readonly WebPushChannel $webpush,
+        private readonly WhatsAppChannel $whatsapp,
     ) {
         parent::__construct();
     }
@@ -121,6 +123,12 @@ final class NotificationWorkCommand extends Command
             // the fan-out is inside WebPushChannel, so this is the same
             // shape as the two above.
             'webpush' => $this->webpush->send($userId, $payload),
+            // Number-based, opt-in: the fan-out only queued this row because
+            // `user.whatsapp_no` is filled in. Until the driver existed the
+            // match had no arm for it, and every WhatsApp row dead-lettered as
+            // "Unknown channel" — the notifications were being written and
+            // then thrown away.
+            'whatsapp' => $this->whatsapp->send($userId, $payload),
             // Unknown/disabled channel: dead-letter with a clear reason
             // instead of retrying something that can never succeed.
             default => \App\Notification\Channel\DeliveryResult::permanent("Unknown channel '{$channel}'."),

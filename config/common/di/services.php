@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Notification\Channel\FcmChannel;
 use App\Notification\Channel\TelegramChannel;
+use App\Notification\Channel\WhatsAppChannel;
 use App\Notification\Channel\WebPushChannel;
 use App\Notification\NotificationManager;
 use App\Notification\QueueRepository;
@@ -12,6 +13,8 @@ use App\Repository\AppReleaseRepository;
 use App\Repository\BotConnectionRepository;
 use App\Repository\DeviceRepository;
 use App\Service\AppReleaseService;
+use App\Service\EmailSender;
+use App\Service\PasswordResetService;
 use App\Repository\SettingsRepository;
 use App\Service\DeliverableStorage;
 use App\Service\OrderWindowService;
@@ -52,10 +55,22 @@ return [
     NotificationManager::class => NotificationManager::class,
     FcmChannel::class => FcmChannel::class,
     TelegramChannel::class => TelegramChannel::class,
+    // WhatsApp reaches the accounts that live on a phone number and never
+    // install anything. Meta Cloud API only — see the channel's docblock for
+    // why the unofficial libraries are ruled out.
+    WhatsAppChannel::class => WhatsAppChannel::class,
     // Web Push reaches the browsers that never install the app — including
     // every admin, who works from a browser rather than from the APK. It is a
     // plain class with two repository dependencies, so the container would
     // autowire it; it is listed for the same reason as the two above, so the
     // set of notification channels is one readable list.
     WebPushChannel::class => WebPushChannel::class,
+
+    // Password recovery. Listed rather than left to autowiring for the same
+    // reason as the channels above: the reset flow's dependencies are the
+    // three delivery drivers plus the throttle, and having them named here is
+    // what makes "which channels can a reset go out on" answerable by reading
+    // one file.
+    EmailSender::class => EmailSender::class,
+    PasswordResetService::class => PasswordResetService::class,
 ];

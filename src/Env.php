@@ -16,6 +16,13 @@ final class Env
         'APP_ENV' => 'dev',
         'APP_DEBUG' => 'false',
         'APP_URL' => 'http://localhost:8080',
+        // The one host that search engines are allowed to index. Empty = "same
+        // as APP_URL". It only differs while a staging/beta copy of this app
+        // is being published from elsewhere (beta.allseba.online), where APP_URL
+        // must point at the copy — its own URLs, sitemap, deep links — but every
+        // page must still answer X-Robots-Tag: noindex so the copy never
+        // competes with production in the index. See App\Web\NoIndexMiddleware.
+        'CANONICAL_URL' => '',
         'DB_DSN' => 'mysql:host=127.0.0.1;port=3306;dbname=th_tools;charset=utf8mb4',
         'DB_USERNAME' => 'root',
         'DB_PASSWORD' => '',

@@ -6,6 +6,17 @@
     dismissal from last week? a page that already has a push button?) and only
     the browser can answer it. `push-prompt.js` decides and removes `hidden`.
 
+    The markup ships for *guests* too, even though the offer is theirs never
+    to see, and that asymmetry is deliberate. The same module re-posts an
+    existing subscription from any page, which is how an anonymous subscriber
+    (no account, `push_subscription.user_id IS NULL`) gets its row repaired
+    after the browser rotates an endpoint — a guest must keep that, or the
+    repair is only available to people who signed in. What a guest must not
+    get is the *ask*: a permission granted from a signed-out page can be
+    posted, but it binds to no account, so it can only ever feed the anonymous
+    broadcast list. `data-signed-in` is how the browser learns which of the
+    two it is looking at.
+
     The dismissal is a button rather than a link so it cannot become a
     dismissible-hijack target — the same reasoning as `app-install.twig`.
 
@@ -13,7 +24,7 @@
     when this one is visible the app-install bar is hidden by CSS. Dismissing
     this one hands the bottom of the screen back.
 #}
-<div id="push-prompt" class="push-prompt" data-push-prompt hidden>
+<div id="push-prompt" class="push-prompt" data-push-prompt data-signed-in="{{ identity is not empty ? '1' : '0' }}" hidden>
     <button type="button" class="push-prompt-close" data-push-prompt-close aria-label="বন্ধ করুন">
         {{ icon('x', 'w-4 h-4') }}
     </button>

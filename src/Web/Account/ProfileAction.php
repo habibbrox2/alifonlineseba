@@ -66,10 +66,41 @@ final readonly class ProfileAction
                 $this->togglePush($identity, (string) ($input['enabled'] ?? '0'));
             } else {
                 $email = trim((string) ($input['email'] ?? ''));
+                $whatsapp = self::normalizePhone((string) ($input['whatsapp_no'] ?? ''));
+                $telegram = trim((string) ($input['telegram_no'] ?? ''));
+
                 if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     $errors['email'] = 'সঠিক ইমেইল দিন।';
-                } else {
-                    $this->users->update($identity->id, ['email' => $email ?: null]);
+                }
+                if (($input['whatsapp_no'] ?? '') !== '' && !self::isPhoneLike($whatsapp)) {
+                    $errors['whatsapp_no'] = 'সঠিক হোয়াটসঅ্যাপ নম্বর দিন (যেমন 01712345678)।';
+                }
+                if ($telegram !== '' && !self::isTelegramHandle($telegram)) {
+                    $errors['telegram_no'] = 'সঠিক টেলিগ্রাম ইউজারনেম বা নম্বর দিন।';
+                }
+                // Two people can legitimately share a WhatsApp line, so this is
+                // a *duplicate* check rather than a unique constraint: it stops
+                // a copy-paste mistake from silently rerouting somebody else's
+                // notifications, without refusing a household that has one phone.
+                if ($errors === [] && $whatsapp !== '' && $whatsapp !== (string) ($row['phone'] ?? '')) {
+                    $owner = $this->users->findByContact('whatsapp', $whatsapp);
+                    if ($owner !== null && $owner !== (int) $identity->id) {
+                        $errors['whatsapp_no'] = 'এই নম্বরটি অন্য একটি অ্যাকাউন্টে যুক্ত আছে।';
+                    }
+                }
+                if ($errors === [] && $telegram !== '' && $telegram !== (string) ($row['phone'] ?? '')) {
+                    $owner = $this->users->findByContact('telegram', $telegram);
+                    if ($owner !== null && $owner !== (int) $identity->id) {
+                        $errors['telegram_no'] = 'এই টেলিগ্রাম আইডি অন্য একটি অ্যাকাউন্টে যুক্ত আছে।';
+                    }
+                }
+
+                if ($errors === []) {
+                    $this->users->update($identity->id, [
+                        'email' => $email ?: null,
+                        'whatsapp_no' => $whatsapp ?: null,
+                        'telegram_no' => $telegram ?: null,
+                    ]);
                     $this->session->set('flash_success', 'প্রোফাইল আপডেট হয়েছে।');
                 }
             }
@@ -77,6 +108,15 @@ final readonly class ProfileAction
             if ($errors === []) {
                 return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('profile')]);
             }
+
+            // Redisplay what was typed rather than the stored row: a validation
+            // error that silently reverts the form to the old values is how a
+            // person ends up retyping the same field three times.
+            $row = array_merge($row ?? [], [
+                'email' => $email ?? ($row['email'] ?? null),
+                'whatsapp_no' => $whatsapp ?? ($row['whatsapp_no'] ?? null),
+                'telegram_no' => $telegram ?? ($row['telegram_no'] ?? null),
+            ]);
         }
 
         $activity = $this->logs->forUser($identity->id, 1, 8);
@@ -101,6 +141,45 @@ final readonly class ProfileAction
             'pushConfigured' => $vapid !== null,
             'vapidPublicKey' => $vapid?->publicKey(),
         ]);
+    }
+
+    /**
+     * Digits with an optional country prefix, as the column stores them.
+     *
+     * Spaces, dashes and parentheses are stripped rather than rejected: the
+     * number arrives from a human copying it out of their phone's contact card
+     * as often as from a form, and "01712-345 678" is the same number.
+     */
+    private static function normalizePhone(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $digits = preg_replace('/[^0-9+]/', '', $value) ?? '';
+        if (str_starts_with($digits, '+880')) {
+            $digits = '0' . substr($digits, 4);
+        }
+        return $digits;
+    }
+
+    /** 8–15 digits after normalization — the international E.164 envelope. */
+    private static function isPhoneLike(string $value): bool
+    {
+        $digits = ltrim($value, '+');
+        return preg_match('/^[0-9]{8,15}$/', $digits) === 1;
+    }
+
+    /**
+     * An @handle or a phone number, because Telegram is addressed either way
+     * depending on whether the person has ever opened the bot.
+     */
+    private static function isTelegramHandle(string $value): bool
+    {
+        if (preg_match('/^@?[a-zA-Z][a-zA-Z0-9_]{3,31}$/', $value) === 1) {
+            return true;
+        }
+        return preg_match('/^\+?[0-9]{8,15}$/', $value) === 1;
     }
 
     /**

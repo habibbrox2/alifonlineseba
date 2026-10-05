@@ -107,6 +107,7 @@ bash scripts/setup.sh
 | ডাটাবেস | `CREATE DATABASE IF NOT EXISTS` — নো-অপ |
 | `migrate:up` | *No new migrations found* |
 | `app:seed` | আগের থাকা সার্ভিস/ইউজার স্কিপ করে |
+| `app:super-admin` | কোনো পরিবর্তন লেখে না ("Already an active super-admin") |
 
 অপশন:
 
@@ -160,6 +161,14 @@ rm -rf runtime/cache                  # কনফিগ ক্যাশ রি�
 
 - `migrate:up` আইডেম্পোটেন্ট — একই কমান্ড আবার চালালে বলে *Nothing to migrate*; ভয় নেই।
 - `app:seed` শুধু **খালি/নতুন** ক্যাটালগে রো যোগ করে; আগে থেকে থাকা সার্ভিস/ইউজার স্কিপ হয় (ট্রানজেকশন হিস্ট্রি অক্ষত থাকে)। সিড করা অ্যাডমিনের পাসওয়ার্ড প্রথম লগইনের পরপরই বদলে ফেলুন।
+- `app:seed` শুধু **admin** রোলের একটা অ্যাকাউন্ট দেয়, **সুপারএডমিন নয়**। `/admin/staff`, `/admin/withdraws` ও প্ল্যাটফর্ম-ওয়াইড লেজার শুধু `superadmin` রোল ধরে খোলে, আর ওই পেজ থেকেই প্রথম সুপারএডমিন নিয়োগ করা যায় — তাই ডিপ্লয়ের পর একবার চালাতেই হবে:
+
+  ```bash
+  php yii app:super-admin --promote=admin    # সিড করা admin-কেই সুপারএডমিন বানান (পাসওয়ার্ড অপরিবর্তিত)
+  php yii app:super-admin                    # অথবা আলাদা `superadmin` অ্যাকাউন্ট + জেনারেটেড পাসওয়ার্ড
+  ```
+
+  দুটোই আইডেম্পোটেন্ট — দুবার চালালে দ্বিতীয়বার কিছু লেখে না। পরিবর্তন `activity_log`-এ `admin.superadmin_promoted` হিসেবে জমা হয়।
 
 SSH না থাকলে: লোকালে উপরের কমান্ডগুলো চালিয়ে পুরো ফোল্ডার আপলোড করুন; `runtime/cache/` খালি করে আপলোড করুন।
 
@@ -481,6 +490,104 @@ php yii app:twa:fingerprints --cert=path/to/release.cer --package=online.broxlab
 `android/app/build.gradle.kts`-এর `API_BASE_URL` একই ডোমেইনে থাকতে হবে — না হলে
 TWA অ্যাপ ডোমেইন ভালিডেশন ব্যর্থ করবে।
 
+### ১০.৯ বেটা প্রিভিউ: beta.allseba.online
+
+প্রোডাকশন `allseba.online` cPanel-এ থাকলেও লোকাল অ্যাপটির একটা প্রিভিউ কপি
+`beta.allseba.online`-এ আলাদা একটা টানেলে প্রকাশ করা যায় — প্রোডাকশন DNS বা vhost
+একেবারে না ছুঁয়েই।
+
+বিন্যাস:
+
+```
+beta.allseba.online → Cloudflare edge → টানেল allseba-beta (QUIC)
+                     → cloudflared (লোকাল) → http://127.0.0.1:8099
+                     → php -S 127.0.0.1:8099 -t public public/index.php
+```
+
+**আলাদা টানেল কেন:** ইনস্টল করা `cloudflared` সার্ভিসটি চলে
+`tunnel run --token-file C:\ProgramData\cloudflared\token` — সেটা remotely managed,
+তাই `~/.cloudflared/config.yml` পড়ে না। প্রোডাকশনের টানেল ও কনফিগ অপ্রভাবিত রাখতে বেটার
+জন্য নিজস্ব টানেল (`allseba-beta`), নিজস্ব কনফিগ (`~/.cloudflared/beta.yml`) ও নিজস্ব
+Windows সার্ভিস (`cloudflared-beta`)।
+
+```bash
+cloudflared tunnel create allseba-beta
+cloudflared tunnel route dns allseba-beta beta.allseba.online
+cloudflared tunnel --config ~/.cloudflared/beta.yml run
+```
+
+### ১০.৯.১ সার্চ ইনডেক্স থেকে বাইরে রাখা
+
+বেটা কপির `APP_URL` নিজের দিকে থাকে (sitemap, canonical, deep link ঠিক থাকে), কিন্তু
+তাহলে কোন হোস্টটি আসল সাইট তা বোঝা যায় না। তাই আলাদা করে `CANONICAL_URL` — যে হোস্ট
+ইনডেক্স হবে:
+
+```dotenv
+APP_URL=https://beta.allseba.online
+CANONICAL_URL=https://allseba.online
+```
+
+`App\Web\NoIndexMiddleware` অনুরোধের হোস্ট `CANONICAL_URL`-এর সাথে না মিললে প্রতিটি
+রেসপন্সে `X-Robots-Tag: noindex, nofollow` বসায় (HTML, JSON, sitemap, এরর — সব)। প্রোডাকশনে
+হোস্ট মিলে যায়, তাই কোনো হেডার যোগ হয় না — আগের আচরণ হুবহু একই।
+
+হেডার ব্যবহার করা হয়েছে, `<meta>` নয়, কারণ একটা টেমপ্লেট `robots` ব্লক ভুলে দিলেও
+ক্রলার হেডারটা পায়।
+
+**`robots.txt` এখন রুট** (`App\Web\Site\RobotsAction`) — `Sitemap:` লাইনটা `APP_URL`
+থেকে তৈরি হয়, তাই বেটায় `https://beta.allseba.online/sitemap.xml` দেখায়। স্ট্যাটিক
+`public/robots.txt` ফাইলটা মুছে দেওয়া হয়েছে; না মুচলে Apache-এর "existing files সরাসরি
+সার্ভ" নিয়ম ও ডেভ সার্ভারের `is_file()` চেক রুটের আগেই static ফাইলটাই ফেরত দিত — সেটাই
+একমাত্র কারণ `Disallow: /` এখানে বসানো হয়নি (ভুল `CANONICAL_URL` হলে সেটা প্রোডাকশনকেই
+ইনডেক্স থেকে ফেলে দিত)।
+
+যাচাই:
+
+```bash
+curl -4 -sI https://beta.allseba.online/ | grep -i x-robots-tag     # header আসে
+curl -4 -s https://beta.allseba.online/robots.txt | tail -1         # নিজের sitemap
+```
+
+> `curl -4` না দিলে এই মেশিনে কাজ করে না: Cloudflare AAAA রেকর্ড ফেরত দেয়, আর লোকাল
+> IPv6 কার্যকর নয়, তাই সংযোগই হয় না (অ্যাপের সমস্যা নয়)।
+
+### ১০.৯.২ লগনের পরেই চালু থাকা
+
+টানেল নিজে থেকে চালু হওয়ার দুইভাব আছে — যেটা এখন ইনস্টল করা সেটা প্রথমে।
+
+**১. Startup ফোল্ডার (ইনস্টল করা আছে, অ্যাডমিন লাগে না)** — সাধারণ কমান্ড প্রম্পটে:
+
+```bat
+scripts\install-beta-tunnel-startup.bat
+```
+
+এটি `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\cloudflared-beta.vbs`
+ফাইলটি লেখে, যা প্রতিবার লগনে টানেলটি উইন্ডো ছাড়াই চালু করে। VBS ব্যবহারের কারণ:
+`cloudflared` একটি কনসোল প্রোগ্রাম, তাই Startup-এ সরাসরি `.bat` বা `.lnk` রাখলে প্রতিবার
+লগনে একটা কনসোল উইন্ডো ফ্ল্যাশ করে; `WScript.Shell.Run`-এর window style `0` ঠিক সেটাই
+ঠেকায়। বারবার চালালে আগের ফাইলটির উপরে লেখে হয়, তাই নিরাপদে রিপ্লে করা যায়।
+
+বন্ধ করতে:
+
+```bat
+del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\cloudflared-beta.vbs"
+```
+
+**২. Windows সার্ভিস (অ্যাডমিন লাগে, লগআউটের পরেও টিকে থাকে)** — Administrator কমান্ড প্রম্পটে:
+
+```bat
+scripts\install-beta-tunnel-service.bat
+```
+
+স্ক্রিপ্টটি `cloudflared-beta` সার্ভিস বানায় (auto start, মরলে ১ মিনিট পরপর রিস্টার্ট),
+বারবার চালালে নিরাপদে আগেরটা মুছে নতুন করে বানায়। এটি `scripts/setup.sh`-এর মতোই
+idempotent; টানেল বা DNS রেকর্ড স্পর্শ করে না, আর প্রোডাকশনের `cloudflared` সার্ভিসকে
+ছোঁয় না।
+
+দুটো একসঙ্গে চালাবেন না — তাহলে একই টানেল দুইবার কানেক্ট করবে।
+
+লক্ষ্য রাখুন: টানেলের সামনে যে `php -S 127.0.0.1:8099` সার্ভারটা দরকার সেটা এখনো
+ইনস্টল করা নেই — সেটা চালু না থাকলে টানেল 502 দেবে (§১০.৭ দেখুন)।
 ## ১১. GitHub Actions দিয়ে অটো ডিপ্লয় (cPanel)
 
 `.github/workflows/deploy-cpanel.yml` — `main`-এ পুশ করলেই ধাপে ধাপে সাইট আপডেট হবে:

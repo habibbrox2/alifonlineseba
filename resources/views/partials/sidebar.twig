@@ -43,11 +43,11 @@
             {% set adminItems = adminItems|merge([
                 { label: 'উত্তোলন অনুরোধ', href: '/admin/withdraws', icon: 'send', match: 'admin-withdraws' },
                 { label: 'স্টাফ পরিচালনা', href: '/admin/staff', icon: 'users', match: 'admin-staff' },
+                { label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' },
             ]) %}
         {% endif %}
         {% set adminItems = adminItems|merge([
             { label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring', match: 'admin-notifications' },
-            { label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' },
         ]) %}
         {% set groups = groups|merge([{ label: 'অ্যাডমিন', icon: 'shield', items: adminItems }]) %}
     {% endif %}

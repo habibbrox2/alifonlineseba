@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Web\FlashMiddleware;
 use App\Web\ForwardedProtoMiddleware;
 use App\Web\JsonBodyMiddleware;
+use App\Web\NoIndexMiddleware;
 use App\Web\NotFound\NotFoundHandler;
 use App\Web\SecurityHeadersMiddleware;
 use Yiisoft\Csrf\CsrfTokenMiddleware;
@@ -32,6 +33,11 @@ return [
                     [
                         ErrorCatcher::class,
                         SecurityHeadersMiddleware::class,
+                        // Grouped with the other response headers, inside
+                        // ErrorCatcher. A beta copy reached through a
+                        // non-canonical host must be marked noindex on every
+                        // page it serves.
+                        NoIndexMiddleware::class,
                         // Rewrites the scheme first, then the request is caught so that
                         // SecureCookieSession sees the proxy-aware scheme.
                         ForwardedProtoMiddleware::class,

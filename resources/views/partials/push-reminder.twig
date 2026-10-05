@@ -1,0 +1,43 @@
+{#
+    The standing "your notifications are off" reminder.
+
+    `partials/push-prompt.twig` is a one-off *offer*: it is dismissible, it is
+    quiet for a fortnight afterwards, and it disappears the moment permission
+    is answered. That is the right shape for a first ask and the wrong shape
+    for someone who has already decided — switched push off in /profile, or
+    answered the browser once and never heard anything. This bar is what
+    replaces it: it has no dismissal and no expiry, and it keeps rendering on
+    every authenticated page until `push_enabled` is 1.
+
+    Three deliberate asymmetries:
+
+      - It is server-rendered, not revealed by JS. "Permanent" has to survive
+        a dismissal, a 14-day window and a second browser, and none of those are
+        things the client can be trusted to remember consistently.
+      - It is not dismissible. A reminder that can be dismissed is a prompt,
+        and the prompt already exists. What is missing is the *nagging*, which
+        is the whole point: push is off by default for a new account, and a
+        person who never learns that their order finished never finds out.
+      - It does not render on `/profile` or `/app`, the two pages that carry
+        the switch itself. Telling someone to go and do the thing on the page
+        where they are already doing it is noise.
+
+    It is also in-flow rather than a fixed overlay, so "permanent" costs a
+    single line at the top of the page instead of the bottom of the screen.
+
+    The account switch is read by `IdentityViewInjection` (`pushEnabled`), and
+    `vapidEnabled` comes from `PushViewInjection` — a deployment with no keys
+    must not be told to turn on notifications it cannot deliver.
+#}
+{% if identity and vapidEnabled and not pushEnabled and currentPath not in ['/profile', '/app'] %}
+    <div class="alert alert-info" role="status" data-push-reminder>
+        {{ icon('bell-ring', 'w-5 h-5 shrink-0') }}
+        <div class="min-w-0 flex-1">
+            <p class="font-semibold">অ্যাকাউন্ট নোটিফিকেশন বন্ধ আছে</p>
+            <p class="text-xs">
+                অর্ডার ও রিচার্জের আপডেট এই ব্রাউজারে আসবে না — অ্যাকাউন্ট সুইচ চালু না করা পর্যন্ত কোনো ব্রাউজারেই পাঠানো হবে না।
+            </p>
+        </div>
+        <a href="/profile" class="btn btn-primary btn-sm shrink-0">সেটিংসে যান</a>
+    </div>
+{% endif %}

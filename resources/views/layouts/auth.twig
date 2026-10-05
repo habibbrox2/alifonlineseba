@@ -22,6 +22,23 @@
 
     <main class="flex flex-1 items-center justify-center px-4 py-8 sm:px-6">
         <div class="w-full max-w-md">
+            {# The signed-out pages are the ones that most need to say what
+               just happened: the recovery flow answers with a redirect and a
+               one-shot flash, so without this banner the visitor is bounced to
+               the next screen and told nothing at all. Same classes as the
+               dashboard layout, so a message looks identical wherever it lands. #}
+            {% if flash_success is defined and flash_success %}
+                <div class="alert alert-success" role="status">
+                    {{ icon('check-circle', 'w-5 h-5 shrink-0') }}
+                    <span>{{ flash_success }}</span>
+                </div>
+            {% endif %}
+            {% if flash_error is defined and flash_error %}
+                <div class="alert alert-danger" role="alert">
+                    {{ icon('alert-circle', 'w-5 h-5 shrink-0') }}
+                    <span>{{ flash_error }}</span>
+                </div>
+            {% endif %}
             {% block auth_content %}{% endblock %}
         </div>
     </main>

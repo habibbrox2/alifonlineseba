@@ -54,6 +54,26 @@
                     {% if errors.email is defined %}<p class="form-error" role="alert">{{ errors.email }}</p>{% endif %}
                 </div>
 
+                {# ————— Messaging channels —————
+                   Providing a number *is* the opt-in: NotificationManager
+                   queues WhatsApp/Telegram copies precisely when one of these
+                   is filled in, so the placeholder has to say what filling it
+                   in means rather than just what a number looks like. #}
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="whatsapp_no" class="form-label">হোয়াটসঅ্যাপ নম্বর (ঐচ্ছিক)</label>
+                        <input id="whatsapp_no" type="tel" name="whatsapp_no" inputmode="tel" value="{{ user.whatsapp_no ?? '' }}" class="form-input" placeholder="01712345678">
+                        <p class="mt-1 text-xs text-neutral-400">দিলে সব নোটিফিকেশন হোয়াটসঅ্যাপেও আসবে।</p>
+                        {% if errors.whatsapp_no is defined %}<p class="form-error" role="alert">{{ errors.whatsapp_no }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="telegram_no" class="form-label">টেলিগ্রাম (ঐচ্ছিক)</label>
+                        <input id="telegram_no" type="text" name="telegram_no" value="{{ user.telegram_no ?? '' }}" class="form-input" placeholder="@username বা 01712345678">
+                        <p class="mt-1 text-xs text-neutral-400">দিলে সব নোটিফিকেশন টেলিগ্রামেও আসবে।</p>
+                        {% if errors.telegram_no is defined %}<p class="form-error" role="alert">{{ errors.telegram_no }}</p>{% endif %}
+                    </div>
+                </div>
+
                 <button type="submit" class="btn btn-primary">{{ icon('save', 'w-4 h-4') }} সেভ করুন</button>
             </form>
         </section>

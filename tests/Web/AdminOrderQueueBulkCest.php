@@ -326,7 +326,7 @@ final class AdminOrderQueueBulkCest
         // Filtered onto this one order so that the row ticked below is the row
         // the export is then asked for: the first page of a shared database is
         // not this file's to assume anything about.
-        $I->amOnPage('/admin/orders&q=' . urlencode($reference));
+        $I->amOnPage('/admin/orders?q=' . urlencode($reference));
 
         $I->checkOption('input[name="ids[]"][value="' . $orderId . '"]');
 
@@ -455,17 +455,23 @@ final class AdminOrderQueueBulkCest
     }
 
     /**
-     * A real order off the queue, so the export is asked for something that exists.
+     * A real pending order off the queue, so the export is asked for something
+     * that exists *and* can be ticked.
      *
      * The caller then filters the list down to this one and ticks it, rather
      * than ticking whatever happens to be on the first page: the point of the
      * export test is what comes back over HTTP, and the top of a shared
      * database's queue is not this file's to assume anything about.
+     *
+     * `pending` and nothing else, because that is the one status the panel
+     * draws a selection box for — `admin/orders.twig` gates the checkbox on it,
+     * so a `failed` or `processing` row is on the page but cannot be ticked,
+     * and this test would fail for a reason that has nothing to do with export.
      */
     private function firstServiceOrderId(): int
     {
         $id = (int) $this->db()
-            ->createCommand('SELECT [[id]] FROM {{%service_order}} WHERE [[service_id]] IS NOT NULL ORDER BY [[id]] DESC LIMIT 1')
+            ->createCommand("SELECT [[id]] FROM {{%service_order}} WHERE [[service_id]] IS NOT NULL AND [[status]] = 'pending' ORDER BY [[id]] DESC LIMIT 1")
             ->queryScalar();
 
         Assert::assertGreaterThan(

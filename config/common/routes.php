@@ -45,9 +45,11 @@ use App\Web\Api\ServiceRequestDetailApiAction;
 use App\Web\Api\ServiceRequestsWatchApiAction;
 use App\Web\Api\ServicesApiAction;
 use App\Web\Api\TransactionsApiAction;
+use App\Web\Auth\ForgotPasswordAction;
 use App\Web\Auth\LoginAction;
 use App\Web\Auth\LogoutAction;
 use App\Web\Auth\RegisterAction;
+use App\Web\Auth\ResetPasswordAction;
 use App\Web\Dashboard\DashboardAction;
 use App\Web\Services\CategoryAction;
 use App\Web\Services\ServiceDetailAction;
@@ -55,6 +57,7 @@ use App\Web\Site\ApkDownloadAction;
 use App\Web\Site\AppPageAction;
 use App\Web\Site\AssetLinksAction;
 use App\Web\Site\HomeAction;
+use App\Web\Site\RobotsAction;
 use App\Web\Site\SitemapAction;
 use App\Web\Site\StaticPageAction;
 use Yiisoft\Router\Group;
@@ -64,6 +67,9 @@ return [
     // Public site
     Route::get('/')->action(HomeAction::class)->name('home'),
     Route::get('/sitemap.xml')->action(SitemapAction::class)->name('sitemap'),
+    // Routed, not a file in public/, so the Sitemap line names the host this
+    // copy is actually served from instead of a hardcoded production domain.
+    Route::get('/robots.txt')->action(RobotsAction::class)->name('robots'),
     Route::get('/about')
         ->action(static fn (StaticPageAction $page) => $page('about'))
         ->name('about'),
@@ -93,6 +99,14 @@ return [
     Route::methods(['GET', 'POST'], '/login')->action(LoginAction::class)->name('login'),
     Route::methods(['GET', 'POST'], '/register')->action(RegisterAction::class)->name('register'),
     Route::post('/logout')->action(LogoutAction::class)->name('logout'),
+    // Recovery. Public by definition — the visitor is by definition signed
+    // out — and CSRF-protected by the global middleware, so a third party
+    // cannot fire resets from a page of theirs. The throttling that keeps
+    // this from being an account-enumeration oracle lives inside
+    // PasswordResetService, not in a middleware: the rate limit is per
+    // identifier, not per route.
+    Route::methods(['GET', 'POST'], '/forgot-password')->action(ForgotPasswordAction::class)->name('forgot-password'),
+    Route::methods(['GET', 'POST'], '/reset-password')->action(ResetPasswordAction::class)->name('reset-password'),
 
     // Authenticated app
     Group::create()->middleware(AuthMiddleware::class)->routes(
@@ -187,7 +201,6 @@ return [
             Route::methods(['GET', 'POST'], '/topups')->action(AdminTopupsAction::class)->name('admin-topups'),
             Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargeAction::class)->name('admin-recharge'),
             Route::methods(['GET', 'POST'], '/referrals')->action(AdminReferralsAction::class)->name('admin-referrals'),
-            Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsAction::class)->name('admin-settings'),
             Route::get('/notifications')->action(AdminNotificationsAction::class)->name('admin-notifications'),
             Route::post('/notifications/{id}/retry')->action(AdminNotificationsAction::class)->name('admin-notification-retry'),
             Route::get('/activity-logs')->action(AdminLogsAction::class)->name('admin-logs'),
@@ -210,5 +223,12 @@ return [
             Route::methods(['GET', 'POST'], '/withdraws')->action(AdminWithdrawsAction::class)->name('admin-withdraws'),
             Route::methods(['GET', 'POST'], '/withdraws/{id}')->action(AdminWithdrawsAction::class)->name('admin-withdraw-desk'),
             Route::methods(['GET', 'POST'], '/staff')->action(AdminStaffAction::class)->name('admin-staff'),
+            // Site settings *and* the recharge rules inside them (min/max,
+            // receipt, wallet numbers) are owner decisions: they change what
+            // every user is asked to pay and where the money goes. The admin's
+            // half of that workflow — reviewing and approving a recharge
+            // request at /topups and /recharges/{id} — stays in the group
+            // above; only the *rules* move here.
+            Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsAction::class)->name('admin-settings'),
         ),
 ];

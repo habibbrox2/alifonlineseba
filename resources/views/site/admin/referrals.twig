@@ -4,7 +4,10 @@
 
 {% block dashboard_content %}
 {% set headActions %}
-    {% if enabled %}
+    {# The program's rules live in /admin/settings, which is an owner page;
+       an admin who cannot open it must not be handed a link that bounces
+       them back here with a refusal. #}
+    {% if enabled and identity.isSuperAdmin() %}
         <a href="{{ settingsUrl }}" class="btn btn-ghost btn-sm">
             {{ icon('settings', 'w-4 h-4') }} প্রোগ্রাম সেটিংস
         </a>

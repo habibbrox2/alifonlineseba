@@ -55,6 +55,70 @@ final class UserRepository
     }
 
     /**
+     * The live account that already claims a contact channel, or null.
+     *
+     * Used by the profile form to refuse a WhatsApp/Telegram number that belongs
+     * to somebody else — notifications are routed by these columns, so two
+     * accounts claiming one number would split a person's alerts between them.
+     * Uniqueness is enforced here rather than by an index because a household
+     * sharing a single WhatsApp line is legitimate and a UNIQUE constraint
+     * would refuse the second account outright.
+     */
+    public function findByContact(string $channel, string $value): ?int
+    {
+        $column = match ($channel) {
+            'whatsapp' => 'whatsapp_no',
+            'telegram' => 'telegram_no',
+            'phone' => 'phone',
+            'email' => 'email',
+            default => null,
+        };
+        if ($column === null || $value === '') {
+            return null;
+        }
+
+        $row = $this->db
+            ->createCommand(
+                "SELECT [[id]] FROM {{%user}} WHERE [[{$column}]] = :v AND [[deleted_at]] IS NULL LIMIT 1"
+            )
+            ->bindValue(':v', $value)
+            ->queryScalar();
+
+        return $row === false || $row === null ? null : (int) $row;
+    }
+
+    /**
+     * Where a user can be reached on a messaging channel, or null.
+     *
+     * Absent columns read as null rather than throwing: the window between
+     * `git pull` and `yii migrate` must not turn every notification dispatch
+     * into a 500.
+     */
+    public function contactOn(string $channel, int $userId): ?string
+    {
+        $column = match ($channel) {
+            'whatsapp' => 'whatsapp_no',
+            'telegram' => 'telegram_no',
+            default => null,
+        };
+        if ($column === null) {
+            return null;
+        }
+
+        try {
+            $value = $this->db
+                ->createCommand("SELECT [[{$column}]] FROM {{%user}} WHERE [[id]] = :id")
+                ->bindValue(':id', $userId)
+                ->queryScalar();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $value = is_string($value) ? trim($value) : '';
+        return $value === '' ? null : $value;
+    }
+
+    /**
      * These deliberately ignore `deleted_at`: username / phone / email carry
      * UNIQUE indexes, so a trashed user still reserves theirs. Re-creating the
      * account is only possible by restoring it.

@@ -52,6 +52,19 @@ php -S 127.0.0.1:8099 -t public public/index.php
 | `admin` | `Admin1234!` | admin (ব্যালেন্স ৳5,000) |
 | `rahim.demo` | `Demo1234!` | user (ব্যালেন্স ৳200) |
 
+### সুপারএডমিন
+
+`/admin/staff`, `/admin/withdraws` আর প্ল্যাটফর্ম-ওয়াইড লেজার শুধু `superadmin` রোল ধরে খোলে।
+প্রথম সুপারএডমিন ওয়েব প্যানেল থেকে নিয়োগ করা যায় না — ওই পেজটাই সুপারএডমিন-দ্বারা-সুরক্ষিত — তাই একমাত্র পথ হলো CLI:
+
+```bash
+php yii app:super-admin                     # নতুন `superadmin` অ্যাকাউন্ট + জেনারেটেড পাসওয়ার্ড (একবারই দেখায়)
+php yii app:super-admin --promote=admin     # আগের অ্যাকাউন্টকেই সুপারএডমিন বানান (পাসওয়ার্ড অপরিবর্তিত)
+php yii app:super-admin --dry-run          # কী বদলাবে দেখান, কিছু লেখে না
+```
+
+প্রতিটি পরিবর্তন `activity_log`-এ `admin.superadmin_created` / `admin.superadmin_promoted` হিসেবে জমা হয়।
+
 ## টেস্ট
 
 ```bash

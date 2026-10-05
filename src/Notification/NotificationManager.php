@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notification;
 
 use App\Notification\Push\VapidKeys;
+use App\Repository\BotConnectionRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\UserRepository;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -23,6 +24,9 @@ final class NotificationManager
         private readonly TemplateRenderer $templates,
         private readonly UserRepository $users,
         private readonly ConnectionInterface $db,
+        // Nullable so the long list of tests that hand-builds a manager keeps
+        // compiling without a sixth argument; the container always supplies it.
+        private readonly ?BotConnectionRepository $bots = null,
     ) {}
 
     /**
@@ -63,7 +67,20 @@ final class NotificationManager
 
         // Channel fan-out: one queue row per configured channel the user can
         // actually receive. in_app is done; the rest are queued for the worker.
-        foreach ($spec['channels'] as $channel) {
+        //
+        // WhatsApp and Telegram are *additive* here rather than fixed by the
+        // event matrix: when a person has put a number on their profile they
+        // have asked to be reached on it, and the promise is that they hear
+        // about everything there — not that they hear about the handful of
+        // events that happened to list the channel. The matrix stays the
+        // floor (webpush/fcm/telegram-for-staff), the contact columns raise it.
+        $channels = array_values(array_unique([...$spec['channels'], ...$this->contactChannels($userId)]));
+
+        // Hoisted out of the loop below and computed once: it is a per-user
+        // lookup, not a per-channel one.
+        $recipientIsStaff = $this->isStaff($userId);
+
+        foreach ($channels as $channel) {
             if ($channel === 'in_app') {
                 continue;
             }
@@ -71,7 +88,7 @@ final class NotificationManager
                 continue;
             }
 
-            $channelTemplate = $this->templates->render($event, $channel, $params);
+            $channelTemplate = $this->templates->render($event, $channel, $params, $recipientIsStaff);
             $this->queue->enqueue([
                 'event' => $event,
                 'user_id' => $userId,
@@ -140,7 +157,7 @@ final class NotificationManager
                     } catch (\Throwable) {
                     }
                 }
-                foreach (array_diff($spec['channels'], ['in_app']) as $channel) {
+                foreach (array_values(array_unique([...array_diff($spec['channels'], ['in_app']), ...$this->contactChannels($adminId)])) as $channel) {
                     // The admin loop deliberately skips wantsChannel() — that
                     // helper exists to hold telegram *back* from users, and
                     // running it here would stop staff getting Telegram at all.
@@ -150,7 +167,10 @@ final class NotificationManager
                     if ($channel === 'webpush' && !$this->pushAllowed($adminId)) {
                         continue;
                     }
-                    $channelTemplate = $this->templates->render($event, $channel, $params);
+                    // Recipients here came from adminIds(), so they are staff by
+                    // construction and the seeded telegram wording is the right
+                    // one — the same words this loop has always sent.
+                    $channelTemplate = $this->templates->render($event, $channel, $params, true);
                     $this->queue->enqueue([
                         'event' => $event,
                         'user_id' => $adminId,
@@ -200,19 +220,66 @@ final class NotificationManager
     }
 
     /**
+     * Channels an account can be reached on, from their profile's contact
+     * columns. Presence of a column *is* the consent (see the migration):
+     * nobody types a WhatsApp number into their profile by accident, and a
+     * separate preference row would just be a second thing to keep in sync
+     * with the first.
+     *
+     * The two channels are handled differently because they reach people in
+     * different ways:
+     *
+     *   whatsapp is a number — `user.whatsapp_no` is exactly the right
+     *   primitive, and the Cloud API delivers to it.
+     *
+     *   telegram is a *chat*: the bot can only write into a conversation the
+     *   person started. A `telegram_no` in the profile may be a phone number,
+     *   a handle or a username, and none of those is an address the bot can
+     *   use, so a Telegram fan-out needs a live bot connection and nothing
+     *   less — hence the `activeChatIds()` check here.
+     *
+     * One method serves both loops on purpose: the user loop adds these to the
+     * event matrix, the admin loop adds them to the matrix minus `in_app`, and
+     * "may this person be reached here" is the same question either way.
+     *
+     * @return string[]
+     */
+    private function contactChannels(int $userId): array
+    {
+        $channels = [];
+        if ($this->users->contactOn('whatsapp', $userId) !== null) {
+            $channels[] = 'whatsapp';
+        }
+        if (
+            $this->users->contactOn('telegram', $userId) !== null
+            && $this->bots !== null
+            && $this->bots->activeChatIds($userId) !== []
+        ) {
+            $channels[] = 'telegram';
+        }
+        return $channels;
+    }
+
+    /**
      * Preference + availability gate. Absence of an override row means the
      * global default (on); a channel with no live transport never queues.
      */
     private function wantsChannel(string $event, string $channel, int $userId): bool
     {
         if ($channel === 'telegram') {
-            // Telegram is admins-only; the admin loop handles it. Users never
-            // get customer copy over a third-party chat platform.
-            return false;
+            // Staff still get Telegram unconditionally — the admin fan-out
+            // below skips this helper for exactly that reason. A regular user
+            // gets it only by having put a number on their profile *and* the
+            // bot having a chat to answer on.
+            return in_array('telegram', $this->contactChannels($userId), true);
         }
         if ($channel === 'whatsapp') {
-            // Opt-in only. Phase 5 wires channel_connection; until then, off.
-            return false;
+            // Opt-in by profile: a filled-in number is the recorded consent.
+            // Queued even while Meta credentials are absent (same reasoning as
+            // fcm below) — the row is the integration point, and re-dispatching
+            // an order-completed alert after somebody wires the token up is not
+            // possible.
+            return $this->users->contactOn('whatsapp', $userId) !== null;
         }
         if ($channel === 'webpush') {
             return $this->pushAllowed($userId);
@@ -243,6 +310,27 @@ final class NotificationManager
     private function pushAllowed(int $userId): bool
     {
         return $this->users->isPushEnabled($userId) && VapidKeys::fromEnv() !== null;
+    }
+
+    /**
+     * Is this account one of the people who work here?
+     *
+     * Used only to pick copy: the seeded `telegram` lines were written for
+     * staff (see {@see TemplateRenderer::render()}), and Phase 4 opened that
+     * channel to ordinary customers. An admin who is also a customer — staff
+     * do place their own orders — is still staff for this purpose, so the
+     * admin-facing wording is right for them.
+     */
+    private function isStaff(int $userId): bool
+    {
+        $role = $this->db
+            ->createCommand(
+                "SELECT [[role]] FROM {{%user}} WHERE [[id]] = :id AND [[status]] = 'active' AND [[deleted_at]] IS NULL"
+            )
+            ->bindValue(':id', $userId)
+            ->queryScalar();
+
+        return in_array((string) $role, ['admin', 'staff'], true);
     }
 
     /** @return int[] */
