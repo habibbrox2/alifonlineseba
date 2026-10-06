@@ -153,14 +153,49 @@ jobs:
             IdentityFile ~/.ssh/deploy_key
             IdentitiesOnly yes
             StrictHostKeyChecking yes
+            ConnectTimeout 15
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
           EOF
           chmod 600 ~/.ssh/config
+
+          # Transient SSH drops ("Connection closed by <host> port 22", exit
+          # 255) used to kill a whole deploy mid-flight on this shared host.
+          # ~/.ssh/ssh-retry retries the entire remote command with backoff
+          # instead. stdin is buffered to a temp file first so every attempt —
+          # a heredoc-fed remote script or the tar-over-SSH stream alike —
+          # replays from the top rather than resuming mid-stream.
+          cat > ~/.ssh/ssh-retry <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -uo pipefail
+          max=${SSH_RETRIES:-3}
+          delay=5
+          stdin_file=$(mktemp)
+          trap 'rm -f "$stdin_file"' EXIT
+          cat > "$stdin_file"
+          attempt=1
+          while true; do
+            if "$@" < "$stdin_file"; then
+              exit 0
+            fi
+            status=$?
+            if [ "$attempt" -ge "$max" ]; then
+              echo "::error::ssh-retry: gave up after $attempt attempts (last exit $status): $*" >&2
+              exit "$status"
+            fi
+            echo "::warning::ssh attempt $attempt failed (exit $status); retrying in ${delay}s" >&2
+            sleep "$delay"
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+          done
+          WRAPPER
+          chmod +x ~/.ssh/ssh-retry
 
       - name: Remove the lock and confirm the site is live
         run: |
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
-          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          ~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
           set -euo pipefail
           if [ -f "$DEPLOY_PATH/runtime/maintenance.lock" ]; then
             rm -f "$DEPLOY_PATH/runtime/maintenance.lock"
@@ -354,10 +389,44 @@ jobs:
             IdentityFile ~/.ssh/deploy_key
             IdentitiesOnly yes
             StrictHostKeyChecking yes
+            ConnectTimeout 15
             ServerAliveInterval 30
+            ServerAliveCountMax 3
           EOF
           chmod 600 ~/.ssh/config
-          ssh -o BatchMode=yes cpanel 'echo "SSH OK: $(pwd)"'
+
+          # Transient SSH drops ("Connection closed by <host> port 22", exit
+          # 255) used to kill a whole deploy mid-flight on this shared host.
+          # ~/.ssh/ssh-retry retries the entire remote command with backoff
+          # instead. stdin is buffered to a temp file first so every attempt —
+          # a heredoc-fed remote script or the tar-over-SSH stream alike —
+          # replays from the top rather than resuming mid-stream.
+          cat > ~/.ssh/ssh-retry <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -uo pipefail
+          max=${SSH_RETRIES:-3}
+          delay=5
+          stdin_file=$(mktemp)
+          trap 'rm -f "$stdin_file"' EXIT
+          cat > "$stdin_file"
+          attempt=1
+          while true; do
+            if "$@" < "$stdin_file"; then
+              exit 0
+            fi
+            status=$?
+            if [ "$attempt" -ge "$max" ]; then
+              echo "::error::ssh-retry: gave up after $attempt attempts (last exit $status): $*" >&2
+              exit "$status"
+            fi
+            echo "::warning::ssh attempt $attempt failed (exit $status); retrying in ${delay}s" >&2
+            sleep "$delay"
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+          done
+          WRAPPER
+          chmod +x ~/.ssh/ssh-retry
+          ~/.ssh/ssh-retry ssh -o BatchMode=yes cpanel 'echo "SSH OK: $(pwd)"'
 
       # ---------------------------------------------------------------- deploy
 
@@ -371,7 +440,7 @@ jobs:
           # quotes, spaces or a `$` in it intact instead of breaking the shell.
           env_q=$(printf '%q' "$DEPLOY_PATH")
           b64_q=$(printf '%q' "$CPANEL_ENV_B64")
-          output=$(ssh cpanel "DEPLOY_PATH=$env_q CPANEL_ENV_B64=$b64_q bash -s" <<'REMOTE'
+          output=$(~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q CPANEL_ENV_B64=$b64_q bash -s" <<'REMOTE'
           set -euo pipefail
           mkdir -p "$DEPLOY_PATH"
           # rsync is the better transfer (incremental, one pass, built-in
@@ -455,7 +524,7 @@ jobs:
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
           reason_q=$(printf '%q' "$REASON")
-          ssh cpanel "DEPLOY_PATH=$env_q REASON=$reason_q bash -s" <<'REMOTE'
+          ~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q REASON=$reason_q bash -s" <<'REMOTE'
           set -euo pipefail
           mkdir -p "$DEPLOY_PATH/runtime"
           # First line of this file is shown on the page, so keep it to one
@@ -494,7 +563,7 @@ jobs:
           printf './*.log\n' >> "$tar_ex"
 
           if [ "$TRANSFER_MODE" = rsync ]; then
-            rsync \
+            ~/.ssh/ssh-retry rsync \
               --archive \
               --compress \
               --delete \
@@ -531,12 +600,12 @@ jobs:
             path_q=$(printf '%q' "$DEPLOY_PATH")
             # Keep the previous manifest before the new one lands; the prune
             # step below needs it to know what used to be there.
-            ssh cpanel "cd $path_q && mv -f .deploy-manifest .deploy-manifest.old 2>/dev/null || true"
+            ~/.ssh/ssh-retry ssh cpanel "cd $path_q && mv -f .deploy-manifest .deploy-manifest.old 2>/dev/null || true"
             # The compressed stream goes over as-is and the remote tar's own
             # -z unpacks it. Decompressing here as well would feed tar plain
             # bytes and it would fail with "gzip: stdin: not in gzip format".
-            cat "$tarball" | ssh cpanel "tar -xzf - -C $path_q --no-same-owner"
-            ssh cpanel "cat > $path_q/.deploy-manifest" < "$manifest"
+            cat "$tarball" | ~/.ssh/ssh-retry ssh cpanel "tar -xzf - -C $path_q --no-same-owner"
+            ~/.ssh/ssh-retry ssh cpanel "cat > $path_q/.deploy-manifest" < "$manifest"
             echo "Transfer complete ($(du -h "$tarball" | cut -f1) compressed)."
           fi
 
@@ -552,7 +621,7 @@ jobs:
         run: |
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
-          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          ~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
           # Deliberately not `set -e`: removing leftovers must never be able to
           # fail a deploy whose code is already on disk and correct.
           set -uo pipefail
@@ -586,7 +655,7 @@ jobs:
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
           php_q=$(printf '%q' "$CPANEL_PHP_BIN")
-          ssh cpanel "DEPLOY_PATH=$env_q CPANEL_PHP_BIN=$php_q bash -s" <<'REMOTE'
+          ~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q CPANEL_PHP_BIN=$php_q bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
 
@@ -649,7 +718,7 @@ jobs:
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
           php_q=$(printf '%q' "$CPANEL_PHP_BIN")
-          output=$(ssh cpanel "DEPLOY_PATH=$env_q CPANEL_PHP_BIN=$php_q bash -s" <<'REMOTE'
+          output=$(~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q CPANEL_PHP_BIN=$php_q bash -s" <<'REMOTE'
           set -uo pipefail
 
           # Report, never fail: every branch below falls through to exit 0.
@@ -822,7 +891,7 @@ jobs:
         run: |
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
-          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          ~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
           set -euo pipefail
           rm -f "$DEPLOY_PATH/runtime/maintenance.lock"
           echo "Maintenance mode off."
@@ -885,7 +954,7 @@ jobs:
         run: |
           set -euo pipefail
           env_q=$(printf '%q' "$DEPLOY_PATH")
-          ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
+          ~/.ssh/ssh-retry ssh cpanel "DEPLOY_PATH=$env_q bash -s" <<'REMOTE'
           set -euo pipefail
           mkdir -p "$DEPLOY_PATH/runtime"
           printf '%s\n' "Deploy failed — the site is being repaired." \
