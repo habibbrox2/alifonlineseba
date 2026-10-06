@@ -16,8 +16,8 @@
        would thin out to about one pixel.
 
   The shape is the same brand mark as the launcher icon: the leaning alif
-  stroke, its dot, and the baseline bar. Keeping the two in sync is the point
-  consistent is the point: a notification that does not look like the app that
+  stroke, its dot, and the baseline bar. Keeping the two in sync is the point:
+  a notification that does not look like the app that
   raised it reads as spam, and users block the app to make it stop.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
