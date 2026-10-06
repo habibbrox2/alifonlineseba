@@ -210,7 +210,7 @@
         </tr>
         <tr>
             <td class="label">জন্ম তারিখ / Date of Birth</td>
-            <td class="value">{{ date_of_birth|default('—') }}</td>
+            <td class="value">{{ date_of_birth|displaydate|default('—') }}</td>
         </tr>
         <tr>
             <td class="label">জন্মস্থান / Birth Place</td>
@@ -237,7 +237,7 @@
         </tr>
         <tr>
             <td class="label">ইস্যু তারিখ / Issue Date</td>
-            <td class="value">{{ issue_date|default('—') }}</td>
+            <td class="value">{{ issue_date|displaydate|default('—') }}</td>
         </tr>
     </table>
 
