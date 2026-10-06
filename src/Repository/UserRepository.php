@@ -133,6 +133,11 @@ final class UserRepository
         return $this->exists('{{%user}}', 'phone', $phone, $exceptId);
     }
 
+    public function emailExists(string $email, ?int $exceptId = null): bool
+    {
+        return $this->exists('{{%user}}', 'email', $email, $exceptId);
+    }
+
     public function create(array $row): int
     {
         $now = date('Y-m-d H:i:s');

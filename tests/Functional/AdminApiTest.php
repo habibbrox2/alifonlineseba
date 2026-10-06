@@ -65,6 +65,9 @@ final class AdminApiTest extends \Codeception\Test\Unit
     /** @var int[] */
     private array $orderIds = [];
 
+    /** @var int[] */
+    private array $withdrawIds = [];
+
     /** @var array<string, array{id: int, setting_value: string, updated_by: int|null}> */
     private array $settingsSnapshot = [];
 
@@ -115,15 +118,27 @@ final class AdminApiTest extends \Codeception\Test\Unit
         foreach ($this->topupIds as $id) {
             $this->db->createCommand()->delete('{{%topup_request}}', ['id' => $id])->execute();
         }
+        foreach ($this->withdrawIds as $id) {
+            $this->db->createCommand()->delete('{{%admin_withdraw_request}}', ['id' => $id])->execute();
+        }
+        // Restore settings BEFORE deleting users: putMany() writes updated_by=<test user id>
+        // into site_setting (FK fk_site_setting_user -> user.id), so deleting the user first
+        // would violate the foreign key on the next save's cleanup.
+        $this->restoreSettings($this->settingsSnapshot);
         foreach ($this->userIds as $id) {
             $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%notification_queue}}', ['user_id' => $id])->execute();
+            $this->db->createCommand()->delete('{{%notification}}', ['user_id' => $id])->execute();
+            // Recharge approvals credit the user, which writes ledger rows keyed by user_id;
+            // withdraw decisions write rows keyed by admin_id. Clean both before dropping the user.
+            $this->db->createCommand()->delete('{{%transaction}}', ['user_id' => $id])->execute();
+            $this->db->createCommand()->delete('{{%transaction}}', ['admin_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%user}}', ['id' => $id])->execute();
         }
 
-        $this->restoreSettings($this->settingsSnapshot);
         $this->orderIds = [];
         $this->topupIds = [];
+        $this->withdrawIds = [];
         $this->userIds = [];
         $this->settingsSnapshot = [];
     }
@@ -178,6 +193,25 @@ final class AdminApiTest extends \Codeception\Test\Unit
         ])->execute();
         $id = (int) $this->db->getLastInsertID();
         $this->topupIds[] = $id;
+        return $id;
+    }
+
+    private function makeWithdraw(int $adminId, string $status = 'pending', array $extra = []): int
+    {
+        $now = date('Y-m-d H:i:s');
+        $this->db->createCommand()->insert('{{%admin_withdraw_request}}', [
+            'admin_id' => $adminId,
+            'amount' => 250.0,
+            'method' => 'bank',
+            'account_details' => 'AC 0123456789, Functional Test Bank',
+            'note' => 'functional test payout',
+            'status' => $status,
+            'created_at' => $now,
+            'updated_at' => $now,
+            ...$extra,
+        ])->execute();
+        $id = (int) $this->db->getLastInsertID();
+        $this->withdrawIds[] = $id;
         return $id;
     }
 
@@ -265,6 +299,9 @@ final class AdminApiTest extends \Codeception\Test\Unit
         if (preg_match('#^/api/admin/withdraws$#', $uri)) {
             return new AdminWithdrawsApiAction($this->withdraws, $this->withdrawService);
         }
+        if (preg_match('#^/api/admin/withdraws/\d+$#', $uri)) {
+            return new AdminWithdrawsApiAction($this->withdraws, $this->withdrawService);
+        }
         if (preg_match('#^/api/admin/staff$#', $uri)) {
             return new AdminStaffApiAction($this->users);
         }
@@ -327,6 +364,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
             'user POST orders' => [$tag, 'user', 'POST', '/api/admin/orders'],
             'user GET staff' => [$tag, 'user', 'GET', '/api/admin/staff'],
             'staff GET settings' => [$tag, 'staff', 'GET', '/api/admin/settings'],
+            'user POST withdraws/1' => [$tag, 'user', 'POST', '/api/admin/withdraws/1'],
         ];
     }
 
@@ -422,6 +460,10 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $this->assertSame(200, $response->getStatusCode());
         $this->assertTrue($payload['success']);
         $this->assertArrayHasKey('user_id', $payload['data']);
+        // The API creates the row directly, so the harness never
+        // saw it — track it here or every run after the first
+        // collides on the hardcoded phone and the test leaks.
+        $this->userIds[] = (int) $payload['data']['user_id'];
         $this->assertSame("ইউজার 'newadminuser_{$this->suffix}' তৈরি হয়েছে।", $payload['data']['message']);
     }
 
@@ -679,6 +721,241 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $this->assertArrayHasKey('stats', $payload['data']);
     }
 
+    // ---- Withdraw decisions (POST /withdraws/{id}, superadmin only) ----
+
+    public function testWithdrawPostIsForbiddenToAdmin(): void
+    {
+        $admin = $this->makeUser('wdpostrbac', 'admin');
+        $owner = $this->makeUser('wdpostowner', 'admin');
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $response = $this->call($admin, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'approve',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+    }
+
+    public function testWithdrawApproveDecidesPendingRequest(): void
+    {
+        $sa = $this->makeUser('wdapprove', 'superadmin');
+        $owner = $this->makeUser('wdapproveowner', 'admin');
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'approve',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertSame('৳250.00 উত্তোলন অনুমোদিত হয়েছে।', $payload['data']['message']);
+        $this->assertSame('approved', (string) $payload['data']['withdraw']['status']);
+
+        $row = $this->withdraws->findById($withdrawId);
+        $this->assertSame('approved', (string) $row['status']);
+        $this->assertSame($sa->id, (int) $row['reviewed_by']);
+    }
+
+    public function testWithdrawRejectRequiresReason(): void
+    {
+        $sa = $this->makeUser('wdfnnoreason', 'superadmin');
+        $owner = $this->makeUser('wdfnowner', 'admin');
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'reject',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('বাতিলের একটি কারণ লিখুন।', $payload['message']);
+
+        // A refusal must leave the request open, with the hold in place.
+        $row = $this->withdraws->findById($withdrawId);
+        $this->assertSame('pending', (string) $row['status']);
+        $this->assertNull($row['reviewed_by']);
+    }
+
+    public function testWithdrawRejectRefundsTheHeldAmount(): void
+    {
+        $sa = $this->makeUser('wdrefund', 'superadmin');
+        $owner = $this->makeUser('wdrefundowner', 'admin');
+        // The hold left the balance at request time, so start the owner
+        // where AdminWithdrawService::request() would have.
+        $this->db->createCommand()->update('{{%user}}', ['balance' => 500.00], ['id' => $owner->id])->execute();
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'reject',
+            'reason' => 'account details did not match',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertSame('উত্তোলন অনুরোধ বাতিল হয়েছে এবং টাকা ব্যালেন্সে ফিরে গেছে।', $payload['data']['message']);
+
+        $row = $this->withdraws->findById($withdrawId);
+        $this->assertSame('rejected', (string) $row['status']);
+        $this->assertSame('account details did not match', (string) $row['reject_reason']);
+
+        // The hold came back through the ledger, not a bare UPDATE.
+        $ownerRow = $this->users->findById($owner->id);
+        $this->assertEqualsWithDelta(750.00, (float) $ownerRow['balance'], 0.001);
+
+        $refundCount = (int) $this->db->createCommand(
+            'SELECT COUNT(*) FROM {{%transaction}}'
+            . ' WHERE [[admin_id]] = :aid AND [[type]] = :type AND [[direction]] = :dir'
+        )->bindValues([
+            ':aid' => $owner->id,
+            ':type' => \App\Repository\TransactionRepository::TYPE_WITHDRAW_REFUND,
+            ':dir' => \App\Repository\TransactionRepository::DIRECTION_CREDIT,
+        ])->queryScalar();
+        $this->assertSame(1, $refundCount);
+    }
+
+    public function testWithdrawSelfApprovalIsRefused(): void
+    {
+        $sa = $this->makeUser('wdself', 'superadmin');
+        $withdrawId = $this->makeWithdraw($sa->id);
+
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'approve',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('নিজের উত্তোলন অনুরোধ নিজে অনুমোদন করা যায় না।', $payload['message']);
+
+        $row = $this->withdraws->findById($withdrawId);
+        $this->assertSame('pending', (string) $row['status']);
+    }
+
+    public function testWithdrawDoubleApproveIsRefused(): void
+    {
+        $sa = $this->makeUser('wddouble', 'superadmin');
+        $owner = $this->makeUser('wddoubleowner', 'admin');
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], ['do' => 'approve']);
+
+        // A replayed decision must not record a second reviewer.
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], ['do' => 'approve']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('এই অনুরোধটি আগেই প্রক্রিয়া হয়েছে।', $payload['message']);
+    }
+
+    public function testWithdrawUnknownActionIsRefused(): void
+    {
+        $sa = $this->makeUser('wdunknown', 'superadmin');
+        $owner = $this->makeUser('wdunknownowner', 'admin');
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'explode',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('অজানা অ্যাকশন।', $payload['message']);
+    }
+
+    public function testWithdrawMissingIdReturnsNotFound(): void
+    {
+        $sa = $this->makeUser('wdmissing', 'superadmin');
+
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/999999999', ['id' => '999999999'], [
+            'do' => 'approve',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('উত্তোলন অনুরোধ পাওয়া যায়নি।', $payload['message']);
+    }
+
+    public function testWithdrawClaimThenReleaseReturnsToQueue(): void
+    {
+        $sa = $this->makeUser('wdclaim', 'superadmin');
+        $owner = $this->makeUser('wdclaimowner', 'admin');
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $claimResponse = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'claim',
+        ]);
+        $claim = $this->decode($claimResponse);
+        $this->assertSame(200, $claimResponse->getStatusCode());
+        $this->assertTrue($claim['success']);
+        $this->assertSame('অনুরোধটি আপনার নামে ধরা হয়েছে।', $claim['data']['message']);
+        $this->assertSame('review', (string) $claim['data']['withdraw']['status']);
+
+        $row = $this->withdraws->findById($withdrawId);
+        $this->assertSame('review', (string) $row['status']);
+        $this->assertSame($sa->id, (int) $row['claimed_by']);
+
+        $releaseResponse = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'release',
+        ]);
+        $release = $this->decode($releaseResponse);
+        $this->assertSame(200, $releaseResponse->getStatusCode());
+        $this->assertTrue($release['success']);
+        $this->assertSame('অনুরোধটি তালিকায় ফিরিয়ে দেওয়া হয়েছে।', $release['data']['message']);
+
+        $row = $this->withdraws->findById($withdrawId);
+        $this->assertSame('pending', (string) $row['status']);
+        $this->assertNull($row['claimed_by']);
+    }
+
+    public function testWithdrawClaimHeldByAnotherSuperAdminIsRefused(): void
+    {
+        $sa1 = $this->makeUser('wdclaim1', 'superadmin');
+        $sa2 = $this->makeUser('wdclaim2', 'superadmin');
+        $owner = $this->makeUser('wdholdowner', 'admin');
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $this->call($sa1, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], ['do' => 'claim']);
+
+        $response = $this->call($sa2, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], ['do' => 'claim']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('এই অনুরোধটি অন্য একজন সুপারএডমিন ধরে আছেন।', $payload['message']);
+    }
+
+    public function testWithdrawRejectAfterClaimStillRefunds(): void
+    {
+        $sa = $this->makeUser('wdrejectclaim', 'superadmin');
+        $owner = $this->makeUser('wdrejectclaimowner', 'admin');
+        $this->db->createCommand()->update('{{%user}}', ['balance' => 500.00], ['id' => $owner->id])->execute();
+        $withdrawId = $this->makeWithdraw($owner->id);
+
+        $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], ['do' => 'claim']);
+
+        $response = $this->call($sa, 'POST', '/api/admin/withdraws/' . $withdrawId, ['id' => (string) $withdrawId], [
+            'do' => 'reject',
+            'reason' => 'details unverifiable',
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+
+        $row = $this->withdraws->findById($withdrawId);
+        $this->assertSame('rejected', (string) $row['status']);
+        $ownerRow = $this->users->findById($owner->id);
+        $this->assertEqualsWithDelta(750.00, (float) $ownerRow['balance'], 0.001);
+    }
+
     // ---- Settings (superadmin only) --------------------------------------
 
     public function testSettingsReadIsForbiddenToAdmin(): void
@@ -710,8 +987,15 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $sa = $this->makeUser('setpost', 'superadmin');
         $this->snapshotSettings();
 
+        // The endpoint takes the whole form the way the web desk
+        // submits it — the bonus fields are required on every save,
+        // so a complete body is what a real client sends.
         $response = $this->call($sa, 'POST', '/api/admin/settings', [], [
             'site_tagline' => 'admin-api-tagline',
+            'topup_min_amount' => '10',
+            'topup_max_amount' => '5000',
+            'referrer_bonus_amount' => '50',
+            'referee_bonus_amount' => '50',
         ]);
         $payload = $this->decode($response);
 

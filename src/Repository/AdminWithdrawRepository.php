@@ -124,6 +124,7 @@ final class AdminWithdrawRepository
                 ':pending' => self::PENDING,
                 ':now' => date('Y-m-d H:i:s'),
                 ':id' => $id,
+                ':review' => self::REVIEW,
                 ':who' => $reviewerId,
             ])
             ->execute();

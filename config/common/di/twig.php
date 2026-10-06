@@ -22,6 +22,11 @@ return [
 
         $environment = new TwigEnvironment(new FilesystemLoader($templates), [
             'cache' => $cachePath,
+            // Templates are compiled into runtime/twig and, with debug off, Twig
+            // would never recompile them after an edit — a changed view silently
+            // kept rendering the old markup. auto_reload costs one stat per
+            // render and picks edits up immediately.
+            'auto_reload' => true,
             'autoescape' => 'html',
             'debug' => \App\Env::isDev(),
             'strict_variables' => false,

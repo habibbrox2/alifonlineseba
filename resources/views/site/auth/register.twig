@@ -11,29 +11,50 @@
         <p class="mt-1.5 text-sm text-neutral-500">মুহূর্তেই অ্যাকাউন্ট খুলুন</p>
     </div>
 
-    <form method="post" action="/register" class="space-y-4" novalidate>
+    {# Live validation. The same rules as AuthService::register() run in the
+       browser (thRegister, defined in the scripts block below), so a typo is
+       reported as it is typed instead of after a round trip — and after a
+       server-side submit the seeded errors keep updating the same way, which
+       is what "always live" means here. Without JS (or with Alpine asleep) the
+       form is untouched: the inputs keep their server-rendered values, the
+       error paragraphs fall back to the text the server rendered, and the POST
+       still carries everything. #}
+    <form id="register-form" method="post" action="/register" class="space-y-4" novalidate
+          x-data="thRegister()" @submit="guard($event)">
         <input type="hidden" name="_csrf" value="{{ csrf }}">
 
         <div>
             <label for="full_name" class="form-label">পুরো নাম <span class="text-danger-600">*</span></label>
             <input id="full_name" type="text" name="full_name" value="{{ old.full_name ?? '' }}" class="form-input"
-                   placeholder="যেমন: রহিম উদ্দিন" autocomplete="name" required>
+                   placeholder="যেমন: রহিম উদ্দিন" autocomplete="name" required
+                   x-model="v.full_name" @blur="touch('full_name')"
+                   :class="bad('full_name') ? 'border-danger-200' : ''"
+                   :aria-invalid="bad('full_name') ? 'true' : 'false'">
             <p class="mt-1 text-xs text-neutral-400">অর্ডার ও প্রোফাইলে এই নামটিই দেখা হবে।</p>
-            {% if errors.full_name is defined %}<p class="form-error" role="alert">{{ errors.full_name }}</p>{% endif %}
+            <p class="form-error" role="alert" data-error-for="full_name"
+               x-show="bad('full_name')" x-text="msg('full_name')">{{ errors.full_name|default('') }}</p>
         </div>
 
         <div>
             <label for="username" class="form-label">ইউজারনেম <span class="text-danger-600">*</span></label>
             <input id="username" type="text" name="username" value="{{ old.username ?? '' }}" class="form-input"
-                   placeholder="আপনার ইউজারনেম" autocomplete="username" required>
-            {% if errors.username is defined %}<p class="form-error" role="alert">{{ errors.username }}</p>{% endif %}
+                   placeholder="আপনার ইউজারনেম" autocomplete="username" required
+                   x-model="v.username" @blur="touch('username')"
+                   :class="bad('username') ? 'border-danger-200' : ''"
+                   :aria-invalid="bad('username') ? 'true' : 'false'">
+            <p class="form-error" role="alert" data-error-for="username"
+               x-show="bad('username')" x-text="msg('username')">{{ errors.username|default('') }}</p>
         </div>
 
         <div>
             <label for="phone" class="form-label">মোবাইল নম্বর <span class="text-danger-600">*</span></label>
             <input id="phone" type="tel" name="phone" value="{{ old.phone ?? '' }}" class="form-input"
-                   placeholder="01712345678" autocomplete="tel" required>
-            {% if errors.phone is defined %}<p class="form-error" role="alert">{{ errors.phone }}</p>{% endif %}
+                   placeholder="01712345678" autocomplete="tel" required
+                   x-model="v.phone" @blur="touch('phone')"
+                   :class="bad('phone') ? 'border-danger-200' : ''"
+                   :aria-invalid="bad('phone') ? 'true' : 'false'">
+            <p class="form-error" role="alert" data-error-for="phone"
+               x-show="bad('phone')" x-text="msg('phone')">{{ errors.phone|default('') }}</p>
         </div>
 
         {# Referral code from ?ref= on the share link. Shown as a normal,
@@ -81,22 +102,34 @@
         <div>
             <label for="email" class="form-label">ইমেইল (ঐচ্ছিক)</label>
             <input id="email" type="email" name="email" value="{{ old.email ?? '' }}" class="form-input"
-                   placeholder="you@example.com" autocomplete="email">
-            {% if errors.email is defined %}<p class="form-error" role="alert">{{ errors.email }}</p>{% endif %}
+                   placeholder="you@example.com" autocomplete="email"
+                   x-model="v.email" @blur="touch('email')"
+                   :class="bad('email') ? 'border-danger-200' : ''"
+                   :aria-invalid="bad('email') ? 'true' : 'false'">
+            <p class="form-error" role="alert" data-error-for="email"
+               x-show="bad('email')" x-text="msg('email')">{{ errors.email|default('') }}</p>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
             <div>
                 <label for="password" class="form-label">পাসওয়ার্ড <span class="text-danger-600">*</span></label>
                 <input id="password" type="password" name="password" class="form-input" placeholder="কমপক্ষে ৬ অক্ষর"
-                       autocomplete="new-password" required>
-                {% if errors.password is defined %}<p class="form-error" role="alert">{{ errors.password }}</p>{% endif %}
+                       autocomplete="new-password" required
+                       x-model="v.password" @blur="touch('password')"
+                       :class="bad('password') ? 'border-danger-200' : ''"
+                       :aria-invalid="bad('password') ? 'true' : 'false'">
+                <p class="form-error" role="alert" data-error-for="password"
+                   x-show="bad('password')" x-text="msg('password')">{{ errors.password|default('') }}</p>
             </div>
             <div>
                 <label for="password_confirm" class="form-label">পাসওয়ার্ড নিশ্চিত করুন <span class="text-danger-600">*</span></label>
                 <input id="password_confirm" type="password" name="password_confirm" class="form-input"
-                       placeholder="আবার লিখুন" autocomplete="new-password" required>
-                {% if errors.password_confirm is defined %}<p class="form-error" role="alert">{{ errors.password_confirm }}</p>{% endif %}
+                       placeholder="আবার লিখুন" autocomplete="new-password" required
+                       x-model="v.password_confirm" @blur="touch('password_confirm')"
+                       :class="bad('password_confirm') ? 'border-danger-200' : ''"
+                       :aria-invalid="bad('password_confirm') ? 'true' : 'false'">
+                <p class="form-error" role="alert" data-error-for="password_confirm"
+                   x-show="bad('password_confirm')" x-text="msg('password_confirm')">{{ errors.password_confirm|default('') }}</p>
             </div>
         </div>
 
@@ -114,9 +147,127 @@
         {# py-0.5: these are inline links inside a sentence, so they stay exempt from the
            44px tap-target rule, but extra vertical padding widens the hit area without
            disturbing the paragraph's line flow. #}
-        নিবন্ধন করলে আপনি আমাদের <a href="/terms" class="underline py-0.5">শর্তাবলী</a> ও
+        নিবন্ধন করলে আপনি আমাদের <a href="/terms" class="underline py-0.5">        শর্তাবলী</a> ও
         <a href="/privacy" class="underline py-0.5">গোপনীয়তা নীতিতে</a> সম্মত হচ্ছেন। অর্ডার সম্পন্ন করার জন্য প্রয়োজনীয় তথ্য
         ছাড়া আলাদা কোনো পরিচয় তথ্য দেবেন না।
     </p>
 </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ parent() }}
+    <script>
+    window.thRegister = function () {
+        'use strict';
+
+        var FIELDS = ['full_name', 'username', 'phone', 'email', 'password', 'password_confirm'];
+        // Read before Alpine binds x-model, so this is exactly what the server
+        // rendered — the seeded value of every field, empty for the passwords
+        // (they are never repopulated).
+        var form = document.getElementById('register-form');
+        function read(name) {
+            var el = form && form.elements[name];
+            return el ? String(el.value) : '';
+        }
+
+        // The server's own errors, lifted out of the fallback text of each
+        // [data-error-for] paragraph before Alpine takes that text over. They
+        // are shown until the visitor touches the field — a duplicate username
+        // is not something a rule in this file can re-check — and from then on
+        // the live rules below own the message.
+        var server = {};
+        var touched = {};
+        FIELDS.forEach(function (name) {
+            touched[name] = false;
+            var p = form && form.querySelector('[data-error-for="' + name + '"]');
+            var text = p ? String(p.textContent || '').trim() : '';
+            if (text) { server[name] = text; }
+        });
+
+        var v = {};
+        FIELDS.forEach(function (name) { v[name] = read(name); });
+        v.password = read('password');
+        v.password_confirm = read('password_confirm');
+
+        // Mirror of AuthService::register(): same rules, same messages, so it
+        // never matters which of the two catches a mistake. The server stays
+        // the authority — a duplicate handle, and anything a browser cannot
+        // know, still comes back from the POST.
+        //
+        // Both arguments are handed in rather than read from `v` out here:
+        // Alpine re-runs a directive only for properties it read through its
+        // own proxy, and this closure holds the plain object, so a message
+        // computed from it would be frozen at its first rendering — the value
+        // would move under the message and the message would never move.
+        function rule(name, value, password) {
+            // AuthService::register() trims full_name, username, phone and email
+            // before checking them (and the POST carries the raw text, which the
+            // server trims again). The trim has to happen here too: without it a
+            // trailing space would be an error the browser raises and the server
+            // never does, and the form would refuse to go somewhere it is welcome.
+            var trimmed;
+            switch (name) {
+                case 'full_name':
+                    trimmed = value.trim();
+                    if (trimmed === '' || trimmed.length < 2) {
+                        return 'Enter your full name (at least 2 characters).';
+                    }
+                    return trimmed.length > 120 ? 'Full name may not exceed 120 characters.' : '';
+                case 'username':
+                    value = value.trim();
+                    if (value.length < 3) { return 'Username must be at least 3 characters.'; }
+                    return /^[a-zA-Z0-9_.]+$/.test(value)
+                        ? ''
+                        : 'Username may only contain letters, numbers, dot and underscore.';
+                case 'phone':
+                    return /^01[3-9]\d{8}$/.test(value.trim())
+                        ? ''
+                        : 'Enter a valid Bangladeshi mobile number (e.g. 01712345678).';
+                case 'email':
+                    value = value.trim();
+                    if (value === '') { return ''; }
+                    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) ? '' : 'Enter a valid email address.';
+                case 'password':
+                    return value.length < 6 ? 'Password must be at least 6 characters.' : '';
+                case 'password_confirm':
+                    return value === password ? '' : 'Passwords do not match.';
+            }
+            return '';
+        }
+
+        return {
+            v: v,
+            server: server,
+            touched: touched,
+            // Derived, not stored: every read below goes through `this`, which
+            // is what makes the message live — Alpine re-runs x-show/x-text as
+            // soon as `v`, `touched` or `server` change, so the text keeps up
+            // while typing, after a blur, and after a failed submit alike.
+            msg: function (name) {
+                return this.touched[name]
+                    ? rule(name, this.v[name] || '', this.v.password || '')
+                    : (this.server[name] || '');
+            },
+            bad: function (name) { return this.msg(name) !== ''; },
+            touch: function (name) { this.touched[name] = true; },
+            // Submit: mark every field, then stop the POST only if something is
+            // still wrong — the first invalid field gets the focus so the
+            // visitor lands on the reason the button did nothing. A form that
+            // passes every browser rule is submitted as normal; only the server
+            // can tell whether a username is already taken.
+            guard: function (event) {
+                var self = this;
+                var first = null;
+                FIELDS.forEach(function (name) {
+                    self.touched[name] = true;
+                    if (first === null && self.bad(name)) { first = name; }
+                });
+                if (first === null) { return; }
+                event.preventDefault();
+                var el = form && form.elements[first];
+                if (el) { el.focus(); }
+            },
+        };
+    };
+    </script>
 {% endblock %}

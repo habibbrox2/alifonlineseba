@@ -7,6 +7,8 @@ namespace App\Service;
 use App\Auth\AuthThrottle;
 use App\Auth\IdentityRepository;
 use App\Env;
+use App\Repository\UserRepository;
+use Yiisoft\Db\Exception\IntegrityException;
 
 /**
  * High-level auth operations with validation + throttling.
@@ -17,6 +19,7 @@ final class AuthService
         private readonly IdentityRepository $identities,
         private readonly AuthThrottle $throttle,
         private readonly ReferralService $referrals,
+        private readonly UserRepository $users,
     ) {}
 
     /**
@@ -64,23 +67,48 @@ final class AuthService
             return ['errors' => $errors, 'userId' => null];
         }
 
+        // Uniqueness. `username`, `phone` and `email` carry UNIQUE indexes, so
+        // a value somebody else already holds does not fail validation — it
+        // fails the INSERT, and the visitor gets a 500 page instead of a form
+        // error. Every other entry point (admin create, staff/super-admin
+        // CLI) asks UserRepository first; signup has to as well. The lookups
+        // deliberately ignore `deleted_at`, exactly as the indexes do, so a
+        // trashed account keeps reserving its handle.
+        $duplicates = $this->duplicateErrors($username, $phone, $email);
+        if ($duplicates !== []) {
+            return ['errors' => $duplicates, 'userId' => null];
+        }
+
         // `?ref=` from the share link. Unvalidated on purpose here — the
         // service decides what a code means and silently ignores the rest.
         $referrer = $this->referrals->resolveCode((string) ($input['referral_code'] ?? ''));
 
-        $userId = $this->identities->register([
-            'full_name' => $fullName,
-            'username' => $username,
-            'phone' => $phone,
-            'email' => $email ?: null,
-            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
-            // Resolved BEFORE insert: the code names an account that already
-            // exists, so it can be checked (and the new user stamped with it)
-            // in the same statement. A bad code resolves to null and the
-            // signup proceeds normally — never block a registration over a
-            // bonus.
-            'referred_by' => $referrer['id'] ?? null,
-        ], $ip, $userAgent);
+        try {
+            $userId = $this->identities->register([
+                'full_name' => $fullName,
+                'username' => $username,
+                'phone' => $phone,
+                'email' => $email ?: null,
+                'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                // Resolved BEFORE insert: the code names an account that already
+                // exists, so it can be checked (and the new user stamped with it)
+                // in the same statement. A bad code resolves to null and the
+                // signup proceeds normally — never block a registration over a
+                // bonus.
+                'referred_by' => $referrer['id'] ?? null,
+            ], $ip, $userAgent);
+        } catch (IntegrityException $e) {
+            // The checks above lost a race — two signups for the same handle
+            // in the same instant. Answer on the form rather than as a 500,
+            // but only when a duplicate really is what broke: any other
+            // integrity failure (a collision on a generated api_key, say) is
+            // not this method's to translate.
+            $duplicates = $this->duplicateErrors($username, $phone, $email);
+            if ($duplicates === []) {
+                throw $e;
+            }
+            return ['errors' => $duplicates, 'userId' => null];
+        }
 
         // Attached after the insert: the referral row has a foreign key to the
         // new account, so it cannot be written first.
@@ -124,5 +152,27 @@ final class AuthService
 
         $this->throttle->clear($throttleKey);
         return ['errors' => [], 'message' => null];
+    }
+
+    /**
+     * Which of the three login identifiers are already on an account, as
+     * form errors. Blank values are skipped — an empty email is stored as
+     * NULL and never collides with anything.
+     *
+     * @return array<string, string>
+     */
+    private function duplicateErrors(string $username, string $phone, string $email): array
+    {
+        $errors = [];
+        if ($username !== '' && $this->users->usernameExists($username)) {
+            $errors['username'] = 'This username is already taken.';
+        }
+        if ($phone !== '' && $this->users->phoneExists($phone)) {
+            $errors['phone'] = 'An account with this mobile number already exists.';
+        }
+        if ($email !== '' && $this->users->emailExists($email)) {
+            $errors['email'] = 'This email address is already in use.';
+        }
+        return $errors;
     }
 }

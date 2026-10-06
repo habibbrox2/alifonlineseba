@@ -185,7 +185,7 @@ return [
     ),
 
     // Admin JSON API (auth required — bearer token OR session)
-    Group::create('/api/admin')->middleware(AdminMiddleware::class)->routes(
+    Group::create('/api/admin')->middleware(AdminApiMiddleware::class)->routes(
         Route::get('/dashboard')->action(AdminDashboardApiAction::class)->name('api-admin-dashboard'),
         Route::methods(['GET', 'POST'], '/users')->action(AdminUsersApiAction::class)->name('api-admin-users'),
         Route::methods(['GET', 'POST'], '/orders')->action(AdminOrdersApiAction::class)->name('api-admin-orders'),
@@ -193,6 +193,10 @@ return [
         Route::get('/topups')->action(AdminTopupsApiAction::class)->name('api-admin-topups'),
         Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargesApiAction::class)->name('api-admin-recharges'),
         Route::get('/withdraws')->action(AdminWithdrawsApiAction::class)->name('api-admin-withdraws'),
+        // The decision desk. Same action, same AdminWithdrawService as
+        // the web /admin/withdraws/{id} desk — the Android super-admin
+        // gets exactly the same approve/reject rules as the browser.
+        Route::methods(['POST'], '/withdraws/{id}')->action(AdminWithdrawsApiAction::class)->name('api-admin-withdraw'),
         Route::get('/staff')->action(AdminStaffApiAction::class)->name('api-admin-staff'),
         Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsApiAction::class)->name('api-admin-settings'),
         Route::get('/logs')->action(AdminLogsApiAction::class)->name('api-admin-logs'),

@@ -18,10 +18,11 @@ use Yiisoft\Yii\View\Renderer\WebViewRenderer;
  *
  * Two ways in, one form at the end:
  *
- *   ?token=…      the emailed link. The token is a query parameter because it
- *                 *is* the credential — it came out of the user's own mailbox,
- *                 and putting it in the URL keeps the POST body to the new
- *                 password alone.
+ *   ?token=…      the emailed link, on the GET. The form that link renders
+ *                 posts back to /reset-password with the token in a hidden
+ *                 field rather than in the action URL — a credential in a URL
+ *                 is re-sent on every validation bounce and lands in access
+ *                 logs — so a POST has to read it from the body.
  *   session       the OTP path, pinned by ForgotPasswordAction. The code is
  *                 posted, never put in a URL: a six-digit secret in a query
  *                 string lands in access logs, browser history and the
@@ -49,6 +50,18 @@ final readonly class ResetPasswordAction
 
         $query = $request->getQueryParams();
         $token = trim((string) ($query['token'] ?? ''));
+
+        // On a POST the query string is expected to be empty — see the form's
+        // own note in reset-password.twig — so the token arrives in the body.
+        // Ignoring it here meant the emailed link never worked at all: no
+        // query token and no session-pinned OTP row is "nothing to verify",
+        // which bounced a perfectly good link back to /forgot-password the
+        // moment the visitor pressed save, without ever reading the secret.
+        if ($token === '' && $request->getMethod() === 'POST') {
+            $body = (array) $request->getParsedBody();
+            $token = trim((string) ($body['token'] ?? ''));
+        }
+
         $pending = $this->session->get('reset_pending');
         $pending = is_array($pending) ? $pending : null;
 

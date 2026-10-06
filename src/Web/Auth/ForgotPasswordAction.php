@@ -64,10 +64,20 @@ final readonly class ForgotPasswordAction
                     (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
                 );
 
-                if ($result['sent'] && $result['channel'] !== 'email') {
+                if ($result['channel'] !== 'email') {
                     // Pins *which* row the verify step may spend. Not a secret
                     // (it is useless without the code) — it is what stops a
                     // session from spending a row it was never issued.
+                    //
+                    // Pinned even when nothing was delivered ($rowId is null
+                    // in that case). The redirect below is the same either
+                    // way, so bouncing back only when the send failed would
+                    // let the flow's second hop tell a stranger which accounts
+                    // really have the channel on file — exactly what the
+                    // identical response below exists to prevent. And a pin
+                    // without a row refuses every code at verify time, so the
+                    // visitor lands on the form they asked for and is told the
+                    // same "code is invalid" any wrong guess gets.
                     $this->session->set('reset_pending', [
                         'rowId' => $result['rowId'],
                         'channel' => $result['channel'],

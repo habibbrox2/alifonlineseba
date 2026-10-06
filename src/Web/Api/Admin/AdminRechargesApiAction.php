@@ -53,7 +53,9 @@ final readonly class AdminRechargesApiAction
 
     private function approve(array $row, Identity $identity): ResponseInterface
     {
-        [$ok] = $this->topupService->approve($row['id'], (int) $identity->id);
+        // The MySQL driver hands back integer PKs as strings; the
+        // service signatures are strict int, so cast before crossing.
+        [$ok] = $this->topupService->approve((int) $row['id'], (int) $identity->id);
 
         return $ok
             ? Api::ok(['message' => 'রিচার্জ অনুমোদিত হয়েছে।'])
@@ -63,7 +65,7 @@ final readonly class AdminRechargesApiAction
     private function reject(array $row, array $input, Identity $identity): ResponseInterface
     {
         $note = trim((string) ($input['note'] ?? ''));
-        [$ok] = $this->topupService->reject($row['id'], (int) $identity->id, $note);
+        [$ok] = $this->topupService->reject((int) $row['id'], (int) $identity->id, $note);
 
         return $ok
             ? Api::ok(['message' => 'রিচার্জ বাতিল করা হয়েছে।'])
