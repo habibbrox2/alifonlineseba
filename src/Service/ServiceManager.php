@@ -11,14 +11,19 @@ use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
+use App\Repository\ServiceSubmissionRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
+use App\ServiceProvider\MockNidMakeService;
 use App\ServiceProvider\MockNidService;
 use App\ServiceProvider\MockTinService;
 use App\ServiceProvider\MockVoterService;
 use App\ServiceProvider\ServiceField;
 use App\ServiceProvider\ServiceProviderInterface;
 use App\ServiceProvider\ServiceResult;
+use Nyholm\Psr7\UploadedFile;
+use Psr\Http\Message\UploadedFileInterface;
+use RuntimeException;
 
 /**
  * Resolves mock providers per service and executes them with balance + logging.
@@ -35,6 +40,21 @@ final class ServiceManager
      */
     public const ADMIN_QUEUE = '/admin/orders';
 
+    /**
+     * Seconds an auto-generating order shows as `processing` before it is
+     * built.
+     *
+     * Not decoration. It is the honest report: rendering a card embeds two
+     * images and runs a typesetter, and doing it inside the submit request
+     * would hold the customer's browser open for the whole of it and give them
+     * no way to leave the page while it worked. Settling on the next read
+     * instead keeps the request that took the money fast, and gives the poll a
+     * genuine thing to report. Anything under about two seconds reads as a
+     * glitch; this is long enough to look like work and short enough that
+     * nobody waits.
+     */
+    public const AUTO_SETTLE_DELAY_SECONDS = 3;
+
     /** @var array<string, ServiceProviderInterface> */
     private array $providers;
 
@@ -47,8 +67,44 @@ final class ServiceManager
         private readonly NotificationRepository $notifications,
         private readonly NotificationManager $notify,
         private readonly OrderWindowService $window,
+        /**
+         * Optional only so the six tests that build this class by hand keep
+         * working without a storage root. Production always autowires it, and a
+         * service with an image field and no storage is refused in
+         * `storeUploadedImages()` rather than quietly dropping the file.
+         *
+         * Kept ninth deliberately: every existing construction site passes the
+         * storage in this position, and appending after it is what lets them
+         * keep working at all.
+         */
+        private readonly ?ImageUploadStorage $images = null,
+        /**
+         * Where the form answers are kept in a queryable shape.
+         *
+         * Optional for the same reason: production autowires it, and an order
+         * placed without it still succeeds — the answers are in
+         * `metadata.input` either way, so this table is a readable copy rather
+         * than the only copy.
+         */
+        private readonly ?ServiceSubmissionRepository $submissions = null,
+        /**
+         * Turns an auto-generating order into the file it promised.
+         *
+         * Optional for the same reason as the rest, and because a
+         * ServiceManager built by a test that never settles an order has no
+         * business needing a PDF renderer. An order whose provider says it
+         * auto-generates but has no renderer is completed with an error rather
+         * than being left in `processing` for ever.
+         */
+        private readonly ?NidMakePdfRenderer $cards = null,
+        private readonly ?DeliverableStorage $deliverables = null,
     ) {
-        $mocks = [new MockNidService(), new MockVoterService(), new MockTinService()];
+        $mocks = [
+            new MockNidService(),
+            new MockNidMakeService(),
+            new MockVoterService(),
+            new MockTinService(),
+        ];
         $this->providers = [];
         foreach ($mocks as $provider) {
             $this->providers[$provider->key()] = $provider;
@@ -70,6 +126,11 @@ final class ServiceManager
             return null;
         }
         $slug = (string) $service['slug'];
+        // `nid-make` also contains `nid`, so the more specific slug is matched
+        // first — otherwise this service would resolve to the plain NID lookup.
+        if (str_contains($slug, 'nid-make')) {
+            return $this->providers['mock-nid-make'];
+        }
         if (str_contains($slug, 'nid')) {
             return $this->providers['mock-nid'];
         }
@@ -129,6 +190,11 @@ final class ServiceManager
                 (bool) ($item['required'] ?? $definition->required),
                 $definition->placeholder,
                 $definition->help,
+                // The stored entry only carries `{name, required}`, so
+                // everything else has to come from the provider definition.
+                // Dropping it here would silently un-bundle every image budget
+                // on any service an admin has ever configured a field on.
+                $definition->maxBytes,
             );
         }
 
@@ -319,13 +385,154 @@ final class ServiceManager
     }
 
     /**
+     * Persist the images attached to an order and hand back their stored paths.
+     *
+     * Three rules are the point of this method:
+     *
+     * 1. Only a configured field of type `image` is read. The posted file array
+     *    is untrusted input, so an upload named for a field the form does not
+     *    show — or for one that is a plain text box — is ignored rather than
+     *    stored against whatever happened to be nearby.
+     * 2. The stored *path* becomes the field's value, which is why an image field
+     *    has to bypass the scalar check above: a file that is still in the
+     *    browser is not an answer. It also means the path travels into the
+     *    order metadata, so a retry or the PDF step can find the bytes again
+     *    without the form being filled in twice.
+     * 3. One bad upload does not leave the good ones behind. A failure returns
+     *    the errors *and* deletes everything already written in this call, and
+     *    the caller carries the successful paths so a later refusal can undo
+     *    them too.
+     *
+     * @param ServiceField[] $fields
+     * @param array<string, UploadedFileInterface> $files
+     * @return array{errors: array<string, string>, values: array<string, string>, stored: string[]}
+     */
+    private function storeUploadedImages(array $fields, array $files, string $slug): array
+    {
+        $errors = [];
+        $values = [];
+        $stored = [];
+
+        foreach ($fields as $field) {
+            if ($field->type !== 'image') {
+                continue;
+            }
+
+            $file = $files[$field->name] ?? null;
+            if (!$file instanceof UploadedFileInterface || $file->getError() === UPLOAD_ERR_NO_FILE) {
+                if ($field->required) {
+                    $errors[$field->name] = $field->label . ' আবশ্যক।';
+                }
+                continue;
+            }
+
+            if ($this->images === null) {
+                $errors[$field->name] = 'ছবি আপলোড সাময়িকভাবে বন্ধ। একটু পরে আবার চেষ্টা করুন।';
+                continue;
+            }
+
+            try {
+                // The field's own budget, not a service-wide one: a photo and a
+                // signature are answers to different questions and are not
+                // worth the same number of bytes.
+                $saved = $this->images->store($file, 'order-' . $slug, $field->maxBytes);
+            } catch (RuntimeException $e) {
+                $errors[$field->name] = $e->getMessage();
+                continue;
+            }
+
+            $values[$field->name] = $saved['path'];
+            $stored[] = $saved['path'];
+        }
+
+        if ($errors !== []) {
+            $this->discardImages($stored);
+            $stored = [];
+            $values = [];
+        }
+
+        return ['errors' => $errors, 'values' => $values, 'stored' => $stored];
+    }
+
+    /**
+     * Delete images written during this submit.
+     *
+     * Best effort by design: this only runs on a path that has already failed,
+     * so a storage that cannot be reached must not replace one error with
+     * another, and the files are hashed names outside the web root either way.
+     *
+     * @param string[] $paths
+     */
+    private function discardImages(array $paths): void
+    {
+        if ($this->images === null) {
+            return;
+        }
+
+        foreach ($paths as $path) {
+            $this->images->delete($path);
+        }
+    }
+
+    /**
+     * Store the form answers for an order as field-keyed JSON.
+     *
+     * `$input` here has already been through `pickConfiguredInput()` and merged
+     * with the stored image paths, so it is exactly the set of answers this
+     * order was accepted with — including the hashed storage paths, which are
+     * what makes the NID card PDF able to find the photo again.
+     *
+     * Best effort by design. The copy in `service_order.metadata` is already
+     * written and is what a retry reads, so a failure here must not replace one
+     * completed order with an error — it only means the queryable copy is
+     * missing, and every reader of it falls back.
+     *
+     * @param array<string, mixed> $values
+     */
+    private function recordSubmission(
+        int $orderId,
+        Identity $user,
+        array $service,
+        string $provider,
+        array $values,
+    ): void {
+        if ($this->submissions === null) {
+            return;
+        }
+
+        try {
+            $this->submissions->save(
+                $orderId,
+                $user->id,
+                isset($service['id']) ? (int) $service['id'] : null,
+                $provider,
+                $values,
+            );
+        } catch (\Throwable) {
+            // Deliberately swallowed — see the note above. Logging it would be
+            // reasonable, but there is no logger in this class and inventing one
+            // for a best-effort copy is a bigger change than the failure is.
+        }
+    }
+
+    /**
      * Charge the user and open an order in `pending`.
      *
      * The order is deliberately *not* executed here: the history page owns the
      * lifecycle, so a user can cancel a pending order and get the money back.
+     *
+     * @param array<string, UploadedFileInterface> $files Uploaded files keyed by
+     *        field name, from the PSR-7 request. Only fields of type `image` are
+     *        read; everything else in the array is ignored.
      */
-    public function submit(array $service, Identity $user, array $input, string $ip, string $userAgent): ServiceResult
-    {
+    public function submit(
+        array $service,
+        Identity $user,
+        array $input,
+        string $ip,
+        string $userAgent,
+        array $files = [],
+    ): ServiceResult {
         // The operator's daily intake window (default 08:00–22:00 Bangladesh
         // time) gates *placing* an order and nothing else. start()/retry() stay
         // reachable overnight on purpose: those requests are already paid for,
@@ -361,6 +568,12 @@ final class ServiceManager
 
         $missing = [];
         foreach ($fields as $field) {
+            // An image field is answered by a file, not by a posted value, so
+            // there is nothing in `$input` to check yet — `storeUploadedImages()`
+            // is what decides, and it reports the same "label আবশ্যক।" shape.
+            if ($field->type === 'image') {
+                continue;
+            }
             if ($field->required && trim((string) ($input[$field->name] ?? '')) === '') {
                 $missing[$field->name] = $field->label . ' আবশ্যক।';
             }
@@ -369,6 +582,31 @@ final class ServiceManager
             return ServiceResult::fail('Validation failed.', $missing);
         }
 
+        // One format for every date field, decided here rather than per
+        // provider: the browser shows `06-10-2026`, the row stores
+        // `2026-10-06`, and ServiceDate is the only thing allowed to convert
+        // between them. A value it cannot read fails *before* any money moves,
+        // with the same message on every service — which is what makes the
+        // format on the form a promise rather than a hint.
+        $dates = ServiceDate::normaliseFields($fields, $input);
+        if ($dates['errors'] !== []) {
+            return ServiceResult::fail('Validation failed.', $dates['errors']);
+        }
+        // array_replace, not `+`: the key already exists holding the raw
+        // answer, and the union operator would keep that one.
+        $input = array_replace($input, $dates['values']);
+
+        // Images are written to disk here, before the order exists, so that a
+        // refused upload costs the user a form error and nothing else. Every path
+        // stored along the way is remembered and taken back down if the order
+        // then fails to open, because the storage layout is hashed: an orphan
+        // there would never be found, let alone collected.
+        $images = $this->storeUploadedImages($fields, $files, (string) ($service['slug'] ?? 'service'));
+        if ($images['errors'] !== []) {
+            return ServiceResult::fail('Validation failed.', $images['errors']);
+        }
+        $input += $images['values'];
+
         // The charge is a ledger entry, not a bare column update: the order
         // sitting in the queue has to be explainable as "this much left this
         // account at this moment", and that is only true if there is a row
@@ -376,12 +614,18 @@ final class ServiceManager
         // to point at — a debit with no order reference is money that vanished.
         $reference = self::newReference();
 
+        // An auto-generating order is born `processing`: there is no operator
+        // step for it to wait in, and `pending` is exactly the queue an admin
+        // works through — putting one there would be the review process this
+        // service is meant not to have.
+        $autoGenerate = $provider->autoGenerate();
+
         $orderId = $this->orders->create([
             'user_id' => $user->id,
             'service_id' => (int) $service['id'],
             'reference' => $reference,
             'amount' => $price,
-            'status' => StatusPresenter::PENDING,
+            'status' => $autoGenerate ? StatusPresenter::PROCESSING : StatusPresenter::PENDING,
             'metadata' => [
                 'provider' => $provider->key(),
                 'input_keys' => array_keys($input),
@@ -390,6 +634,11 @@ final class ServiceManager
                 'service_name' => (string) ($service['name'] ?? 'Service'),
                 'variant' => $variant['label'] ?? null,
                 'free_search' => $usedFreeSearch,
+                // The two facts `settleAutoOrders()` needs and cannot infer:
+                // that this provider builds its own output, and when the clock
+                // started for it. Both are written once, here, and never edited.
+                'auto_generate' => $autoGenerate,
+                'auto_started_at' => $autoGenerate ? time() : null,
             ],
         ]);
 
@@ -400,14 +649,22 @@ final class ServiceManager
                 'description' => sprintf('সার্ভিস অর্ডার %s', $reference),
                 'metadata' => ['service_name' => (string) ($service['name'] ?? '')],
             ]);
+
             if (!$charged) {
                 // The order row exists but nothing was taken for it. Remove it
                 // rather than leaving a queue entry nobody is going to fulfil
                 // and cannot be cancelled for a refund (there is no money).
                 $this->orders->update($orderId, ['status' => StatusPresenter::CANCELLED]);
+                $this->discardImages($images['stored']);
                 return ServiceResult::fail('অর্ডারটি গ্রহণ করা যায়নি — ব্যালেন্স পরিবর্তন হয়নি।');
             }
         }
+
+        // Written once the order is real: it has an id to point at, and it is
+        // past the point where a failed charge would cancel the row — and
+        // cancelling cascades this submission away with it, so writing it
+        // earlier would mean writing a row that is about to be deleted.
+        $this->recordSubmission($orderId, $user, $service, $provider->key(), $input);
 
         // Two audiences, two landing pages. The customer wants the row that
         // was just created; staff want the queue entry that needs a decision,
@@ -427,10 +684,165 @@ final class ServiceManager
 
         return new ServiceResult(
             true,
-            'অনুরোধটি গ্রহণ করা হয়েছে। এখন সার্ভিস হিস্ট্রি থেকে চালু করতে পারবেন।',
-            ['_reference' => $reference, '_request_id' => $orderId, '_status' => StatusPresenter::PENDING],
+            $autoGenerate
+                ? 'আপনার এনআইডি কার্ড তৈরি হচ্ছে। একটু পরেই সার্ভিস হিস্ট্রি থেকে ডাউনলোড করতে পারবেন।'
+                : 'অনুরোধটি গ্রহণ করা হয়েছে। এখন সার্ভিস হিস্ট্রি থেকে চালু করতে পারবেন।',
+            [
+                '_reference' => $reference,
+                '_request_id' => $orderId,
+                '_status' => $autoGenerate ? StatusPresenter::PROCESSING : StatusPresenter::PENDING,
+            ],
             [],
         );
+    }
+
+    /**
+     * Build the output for any auto-generating order whose delay has elapsed.
+     *
+     * Called from the two places that read a customer's orders — the history
+     * page and the poller that watches it — so the file appears on the same
+     * tick the user would have refreshed on anyway. Nothing else has to run:
+     * no cron, no worker, no queue.
+     *
+     * A GET that writes is unusual enough to be worth defending. Three things
+     * keep it honest:
+     *
+     *  - the work is idempotent, because the status guard below is a single
+     *    conditional UPDATE. Two polls racing produce one card; the loser
+     *    matches zero rows and deletes the file it had already written.
+     *  - it only ever touches rows whose own metadata says they are
+     *    auto-generating, so it cannot touch an order an operator is working.
+     *  - and a customer who never opens the page again still has a `pending`
+     *    order rather than a half-built one, because nothing is written until
+     *    the guard passes.
+     *
+     * @param array<int, array<string, mixed>> $orders raw `service_order` rows
+     */
+    public function settleAutoOrders(array $orders): void
+    {
+        if ($this->cards === null || $this->deliverables === null) {
+            return;
+        }
+
+        foreach ($orders as $row) {
+            $this->settleOne($row);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function settleOne(array $row): void
+    {
+        $id = (int) ($row['id'] ?? 0);
+        if ($id <= 0 || (string) ($row['status'] ?? '') !== StatusPresenter::PROCESSING) {
+            return;
+        }
+
+        $metadata = ServiceOrderRepository::metadata($row);
+        if (($metadata['auto_generate'] ?? false) !== true) {
+            return;
+        }
+
+        $startedAt = (int) ($metadata['auto_started_at'] ?? 0);
+        if ($startedAt > 0 && (time() - $startedAt) < self::AUTO_SETTLE_DELAY_SECONDS) {
+            return; // Still inside the window the customer is meant to see.
+        }
+
+        $input = is_array($metadata['input'] ?? null) ? $metadata['input'] : [];
+        $provider = $this->providers[(string) ($metadata['provider'] ?? '')] ?? null;
+        if ($provider === null || $input === []) {
+            return;
+        }
+
+        $result = $provider->execute($input);
+        if (!$result->success) {
+            // Leave it `processing`: a card that will not render is worth a
+            // second attempt on the next tick, not a terminal failure the
+            // customer did not cause. The reason goes in the metadata anyway,
+            // because an order that never finishes looks exactly like one that
+            // is merely still going without it.
+            $this->orders->setStatusIf(
+                $id,
+                StatusPresenter::PROCESSING,
+                StatusPresenter::PROCESSING,
+                ['auto_error' => $result->message ?: 'provider rejected the stored answers'],
+            );
+            return;
+        }
+
+        // Claim the row before building anything. `status = processing` in the
+        // WHERE clause is what makes a second concurrent poll match zero rows,
+        // and the loser then deletes the file it had already written rather
+        // than leaving two cards for one order.
+        $claimed = $this->orders->setStatusIf(
+            $id,
+            StatusPresenter::COMPLETED,
+            StatusPresenter::PROCESSING,
+            [
+                'result' => $result->data,
+                'settled_at' => date('Y-m-d H:i:s'),
+            ],
+        );
+
+        try {
+            $pdf = $this->cards->render($input, [
+                'reference' => (string) ($row['reference'] ?? ''),
+                'generated_at' => date('d/m/Y h:i A'),
+            ]);
+            $stored = $this->deliverables->store(self::syntheticUpload($pdf, $this->cardFilename($row)), $id);
+        } catch (\Throwable $e) {
+            if ($claimed) {
+                // Put it back the way it was so the next tick retries, rather
+                // than leaving a completed order with nothing to download. The
+                // message is kept on the row for the same reason as above.
+                $this->orders->setStatusIf(
+                    $id,
+                    StatusPresenter::PROCESSING,
+                    StatusPresenter::COMPLETED,
+                    ['auto_error' => $e->getMessage()],
+                );
+            }
+            return;
+        }
+
+        if (!$claimed) {
+            $this->deliverables->delete($stored['path']);
+            return;
+        }
+
+        // Two writes, and deliberately no re-assertion of the status between
+        // them: a cancellation landing in between must stay cancelled, and the
+        // columns are harmless on a cancelled order — the file is never served
+        // from one.
+        $this->orders->attachDeliverable($id, $stored, (int) $row['user_id']);
+    }
+
+    /**
+     * Wrap rendered bytes as an upload {@see DeliverableStorage::store()} accepts.
+     *
+     * It takes an `UploadedFileInterface` because it was built for an admin
+     * dragging a file out of a folder, and reusing that validator — the
+     * extension derived from sniffed bytes, the size ceiling, the directory
+     * per order — is worth more than a second entry point that would have to
+     * duplicate all of it. `moveTo()` falls back to a stream copy for a file
+     * that never came through an HTTP POST, which is exactly this case.
+     */
+    private static function syntheticUpload(string $bytes, string $name): UploadedFileInterface
+    {
+        $stream = fopen('php://temp', 'r+b');
+        fwrite($stream, $bytes);
+        rewind($stream);
+
+        return new UploadedFile($stream, strlen($bytes), UPLOAD_ERR_OK, $name, 'application/pdf');
+    }
+
+    /** A download name built from the reference, so no user text reaches a header. */
+    private function cardFilename(array $row): string
+    {
+        $reference = preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($row['reference'] ?? ''));
+
+        return 'nid-card-' . ($reference === '' ? 'order' : $reference) . '.pdf';
     }
 
     /**

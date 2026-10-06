@@ -90,8 +90,15 @@
         import { initPushPrompt } from '{{ asset('/assets/js/push-prompt.js') }}';
         initPushPrompt();
     </script>
+    {# Date fields appear only on service forms, but they are rendered by the
+       shared row component rather than by a page, so there is no better place
+       than here — one module, one pass over `[data-date-field]`, and no
+       calendar library behind either (see resources/js/date-field.js). #}
+    <script type="module">
+        import { initDateFields } from '{{ asset('/assets/js/date-field.js') }}';
+        initDateFields();
+    </script>
     {% block page_scripts %}{% endblock %}
-    <script defer src="/assets/js/alpine.min.js"></script>
     {% block scripts %}{% endblock %}
 </head>
 <body class="flex min-h-full flex-col">
@@ -101,5 +108,30 @@
        pages and the app page alike. #}
     {% include 'partials/app-install.twig' %}
     {% include 'partials/push-prompt.twig' %}
+
+    {# Alpine boots LAST, at the very end of <body>, and that position is load-
+       bearing — do not move this back into <head>.
+
+       Alpine's cdn build ends with `queueMicrotask(() => Alpine.start())`, and
+       the HTML spec runs a microtask checkpoint after *each* deferred script.
+       So a deferred <script defer> in <head> does not merely finish before the
+       body's deferred scripts — Alpine.start() already has. Any component whose
+       x-data calls a global defined by a body-rendered script is then evaluated
+       a microtask too early, and every binding inside it throws
+       "ReferenceError: <fn> is not defined".
+
+       That is not a cosmetic failure: with no data object in scope the
+       expressions fall through to same-named window globals, so `x-show="open"`
+       reads window.open and `@click.outside="close()"` calls window.close() —
+       the browser answers "Scripts may close only the windows that were opened
+       by them". See components/icon-picker.twig and the dashboard provider for
+       the two that broke on this.
+
+       Deferred scripts run in document order, and everything that can define
+       such a provider now sits above this tag, so all of them have executed by
+       the time start() walks the DOM. `defer` is still needed for this tag: it
+       keeps Alpine out of the parser's way until the document is complete, and
+       Alpine tolerates being started on an already-parsed document. #}
+    <script defer src="/assets/js/alpine.min.js"></script>
 </body>
 </html>

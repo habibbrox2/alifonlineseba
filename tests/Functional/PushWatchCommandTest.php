@@ -447,8 +447,29 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
             ->queryScalar();
         assertSame(1, $inApp, 'The staff account should find the alert in their own inbox.');
 
-        assertSame(1, $this->queuedCount('webpush'), 'Staff work from a browser, so the alert has to reach one.');
-        assertSame(1, $this->queuedCount('telegram'), 'Telegram is the channel staff get on their phone.');
+        // Roster-aware: the alert goes to the dispatch target *and* every
+        // account the fan-out reads from `adminIds()` — a second admin means a
+        // second row, which is correct behaviour, not a regression. What must
+        // hold for any roster: one webpush row per recipient who has push on,
+        // and one telegram row per fan-out admin (the admin loop queues
+        // Telegram unconditionally, and the subject path never does here —
+        // the test manager is built without a bot repository, so
+        // `contactChannels('telegram')` is empty for everybody).
+        $recipients = array_values(array_unique([$this->staffId, ...$this->staffIds()]));
+        $expectedPush = count(
+            array_filter($recipients, fn (int $id): bool => $this->users->isPushEnabled($id)),
+        );
+        assertSame(
+            $expectedPush,
+            $this->queuedCount('webpush'),
+            'Staff work from a browser, so the alert has to reach every staff box with push on.',
+        );
+
+        assertSame(
+            count($this->staffIds()),
+            $this->queuedCount('telegram'),
+            'Telegram is the channel staff get on their phone — one row per fan-out admin.',
+        );
 
         $message = (string) $this->db
             ->createCommand('SELECT [[message]] FROM {{%notification}} WHERE [[id]] > :id')
@@ -464,19 +485,21 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
      * `firstStaffId()` on purpose. The admin fan-out then skipped the dispatch
      * target, and on a box with a single staff account the target *is* the
      * entire admin list — so the skip removed every recipient and the watcher
-     * announced new browsers to nobody at all, on any channel. The assertion
-     * that matters is the recipient list, so the premise is asserted too: add a
-     * second admin to the dev database and this test says so instead of quietly
-     * going back to testing a case that works.
+     * announced new browsers to nobody at all, on any channel.
+     *
+     * The original version of this test pinned the roster ("the dispatch
+     * target is the only staff account") and failed as soon as the live
+     * database grew a second admin — which is a roster fact, not a bug, and a
+     * test that goes red when operations do their job teaches people to ignore
+     * it. The invariant below is what the bug actually violated, and it holds
+     * for any roster: every fan-out admin *and* the dispatch target each get
+     * exactly one copy — the target never dropped, nobody counted twice — and
+     * the addressed target still gets their queued channel.
      */
-    public function testASystemAlertReachesTheDispatchTargetOnASingleStaffBox(): void
+    public function testTheDispatchTargetAndEveryStaffMemberGetExactlyOneCopy(): void
     {
-        assertSame(
-            [$this->staffId],
-            $this->staffIds(),
-            'This test is about what happens when the dispatch target is the only staff account.'
-                . ' With two, the target being skipped would still leave a recipient.',
-        );
+        $expectedRecipients = array_values(array_unique([$this->staffId, ...$this->staffIds()]));
+        sort($expectedRecipients);
 
         $this->seed();
         $this->subscribe();
@@ -485,21 +508,37 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
 
         assertStringNotContainsString('staff alert failed', $out);
 
-        $telegramForTarget = (int) $this->db
+        $rows = $this->db
+            ->createCommand(
+                'SELECT [[user_id]] FROM {{%notification}} WHERE [[id]] > :id AND [[event]] = :e'
+            )
+            ->bindValue(':id', $this->maxNotificationId)
+            ->bindValue(':e', NotificationEvent::SYSTEM_ALERT)
+            ->queryColumn();
+        $actual = array_map(static fn (mixed $id): int => (int) $id, $rows);
+        sort($actual);
+
+        assertSame(
+            $expectedRecipients,
+            $actual,
+            'Every staff account and the dispatch target must get exactly one inbox copy: '
+                . 'a missing id is the original bug (the target filtered out), a duplicate is a double alert.',
+        );
+
+        $webpushForTarget = (int) $this->db
             ->createCommand(
                 'SELECT COUNT(*) FROM {{%notification_queue}}'
                 . ' WHERE [[id]] > :id AND [[channel]] = :c AND [[user_id]] = :u',
             )
             ->bindValue(':id', $this->maxQueueId)
-            ->bindValue(':c', 'telegram')
+            ->bindValue(':c', 'webpush')
             ->bindValue(':u', $this->staffId)
             ->queryScalar();
 
         assertSame(
             1,
-            $telegramForTarget,
-            'The only person on staff is the one the alert was addressed to; skipping them'
-                . ' means the watcher tells nobody.',
+            $webpushForTarget,
+            'The person the watcher addressed must still get the queued alert on their own browser.',
         );
     }
 
@@ -541,15 +580,22 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
             ['amount' => 100, 'reference' => 'trx-' . bin2hex(random_bytes(4))],
         );
 
+        // The self-skip is about *the actor*: they get their own inbox row and
+        // no fan-out copy. Every other admin hears about it — that is the rule
+        // working — so the totals are computed from the live fan-out list
+        // instead of being pinned to the one-admin roster this test used to
+        // run against (a second admin legitimately makes both counts grow).
+        $otherAdmins = array_diff($this->staffIds(), [$this->staffId]);
+
         assertSame(
-            0,
+            count($otherAdmins),
             $this->queuedCount('telegram'),
-            'The self-skip is still the rule for events where the user is the subject.',
+            'Only the other admins get the Telegram copy — the actor is skipped as a recipient.',
         );
         assertSame(
-            1,
+            1 + count($otherAdmins),
             $this->notificationCount(NotificationEvent::TOPUP_REQUESTED),
-            'But the staff member does still get their own inbox row.',
+            'One own inbox row for the staff member, plus one fan-out copy per other admin.',
         );
     }
 
@@ -571,9 +617,23 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
         $this->subscribe(self::ENDPOINT_PREFIX . bin2hex(random_bytes(6)));
         $this->watch(['--notify' => 'admins']);
 
+        // Scoped to the dispatch target: two alert-producing runs, two
+        // alerts for the same person — the dedupe key must not swallow the
+        // second. A table-wide count would also grow with every staff account
+        // the live database holds, which is a roster fact, not a dedupe bug.
+        $forTarget = (int) $this->db
+            ->createCommand(
+                'SELECT COUNT(*) FROM {{%notification_queue}}'
+                . ' WHERE [[id]] > :id AND [[channel]] = :c AND [[user_id]] = :u',
+            )
+            ->bindValue(':id', $this->maxQueueId)
+            ->bindValue(':c', 'webpush')
+            ->bindValue(':u', $this->staffId)
+            ->queryScalar();
+
         assertSame(
             2,
-            $this->queuedCount('webpush'),
+            $forTarget,
             'The second browser must produce a second alert, not vanish into a unique index.',
         );
     }

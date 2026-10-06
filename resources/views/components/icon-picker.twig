@@ -16,12 +16,18 @@
 {% set pickerValue = (value|default(''))|trim %}
 
 {% if icon_index_url() is not empty %}
-    {# defer, NOT type="module". Alpine boots from a deferred classic script in
-       the layout footer and walks the DOM immediately, so a deferred *module*
-       here can still land after it — the x-data expression then throws
-       "iconPicker is not defined", leaves an empty data object, and the picker
-       never initialises. Deferred classic scripts share one ordered list, and
-       this tag is earlier in the document than Alpine's, so it always wins. #}
+    {# defer, NOT type="module", and this tag must stay earlier in the document
+       than Alpine's boot tag at the bottom of base.twig.
+
+       Alpine starts from a microtask and walks the DOM the moment it runs, so
+       the whole subtree above this point — the script included — has to have
+       executed first. `x-data` calls the global `iconPicker(...)` directly
+       rather than an `Alpine.data()` provider, so there is no fallback: if
+       Alpine gets there first the expression throws "iconPicker is not
+       defined", the component gets no data object, and every binding inside it
+       then resolves against window instead — which is how `x-show="open"` once
+       ended up reading window.open and `@click.outside="close()"` calling
+       window.close(). See the comment on Alpine's tag in base.twig. #}
     <script defer src="{{ asset('/assets/js/icon-picker.js') }}"></script>
 {% endif %}
 

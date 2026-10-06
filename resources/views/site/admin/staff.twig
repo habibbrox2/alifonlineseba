@@ -56,7 +56,7 @@
                     <tr class="{{ member.deleted_at ? 'opacity-50' : '' }}">
                         <td>
                             <p class="font-medium text-neutral-800">
-                                {{ member.username }}
+                                {{ member.full_name ?: member.username }}
                                 {# Your own row has no controls, so the reason is
                                    visible in the table rather than being a
                                    mystery on a form that refuses to submit. #}
@@ -64,7 +64,7 @@
                                     <span class="ml-1 text-[10px] text-neutral-400">(আপনি)</span>
                                 {% endif %}
                             </p>
-                            <p class="text-xs text-neutral-400">{{ member.phone }}</p>
+                            <p class="text-xs text-neutral-400">@{{ member.username }} · {{ member.phone }}</p>
                         </td>
                         <td>
                             {% if member.role == 'superadmin' %}

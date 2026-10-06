@@ -31,6 +31,18 @@ final class MockTinService implements ServiceProviderInterface
         return ['১২ ডিজিটের টিন নম্বর', 'ডেমো মোডে সব তথ্য কাল্পনিক'];
     }
 
+    /**
+     * Manual: an operator has to look at this one.
+     *
+     * A lookup returns whatever the upstream data says, and a human decides
+     * whether that is worth charging for — which is the whole reason the
+     * review queue exists.
+     */
+    public function autoGenerate(): bool
+    {
+        return false;
+    }
+
     public function execute(array $input): ServiceResult
     {
         $tin = preg_replace('/\D/', '', (string) ($input['tin_number'] ?? ''));

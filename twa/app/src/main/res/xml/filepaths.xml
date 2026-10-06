@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The FileProvider paths the TWA hands to Chrome. Nothing here grants the
+  browser anything new: FileProvider only ever serves a file the app itself
+  puts in one of these directories, so the list is an allow-list, not a
+  capability.
+
+  twa_splash/  Not decoration. android-browser-helper's
+               SplashImageTransferTask (library/java/.../splashscreens/) copies
+               the site's splash image into filesDir/twa_splash/ and serves it
+               to the browser over this provider. Without this entry the
+               transfer either fails or the launch splash goes blank, and the
+               library's own template ships exactly this line. Our site does
+               publish a web app manifest, so the PWA-wrapper splash strategy
+               is the one that runs.
+
+  shared/      WebView-fallback downloads and the file a page shares out. Kept
+               under cache/ so the OS can reclaim it; both the fallback path
+               and the TWA path write here, and nothing under this app's
+               files/ or databases/ is reachable.
+-->
+<paths>
+    <files-path
+        name="twa_splash"
+        path="twa_splash/" />
+    <cache-path
+        name="shared"
+        path="shared/" />
+</paths>

@@ -147,7 +147,10 @@
                 </div>
             {% endif %}
 
-            <form method="post" action="/services/view/{{ service.slug }}" @submit="submitting = true" class="space-y-4">
+            {# multipart because a form can carry image fields: the drop zone in
+               components/form-row.twig renders a real file input, and a form
+               posted as urlencoded silently discards it. #}
+            <form method="post" action="/services/view/{{ service.slug }}" enctype="multipart/form-data" @submit="submitting = true" class="space-y-4">
                 <input type="hidden" name="_csrf" value="{{ csrf }}">
 
                 {% if variants %}

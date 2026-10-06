@@ -528,15 +528,43 @@ final class AdminServicesBulkTest extends \Codeception\Test\Unit
     {
         assertSame(200, ServiceBulkAction::BULK_LIMIT);
 
-        $ids = range(1, ServiceBulkAction::BULK_LIMIT + 50);
+        // Throwaway rows, and that is the whole point of this rewrite.
+        //
+        // It used to submit `range(1, BULK_LIMIT + 50)` — which on a populated
+        // database *is* the live catalog — to a `deactivate` batch, and then
+        // asserted only on counts. So every run of this suite switched off every
+        // real service in the shop and stayed green: the test proved the cap by
+        // taking the shop down. Nothing in `_after()` swept it, because the rows
+        // were not the suite's.
+        //
+        // The cap is a property of `run()`, so it holds for any id; what the
+        // count has to be made of is a real row, and `makeManyServices` builds
+        // those for exactly this and is swept by slug prefix.
+        $prefix = $this->makeManyServices('cap' . $this->suffix, ServiceBulkAction::BULK_LIMIT + 50, 'active');
+
+        $ids = $this->db
+            ->createCommand('SELECT [[id]] FROM {{%service}} WHERE [[slug]] LIKE :p ORDER BY [[id]] ASC')
+            ->bindValue(':p', 'bulk-fill-' . $prefix . '-%')
+            ->queryColumn();
 
         $result = $this->bulk->run($ids, 'deactivate', $this->adminId);
 
-        // Every id in that range is either a real service or missing, and either
-        // way the run stops at the cap — a five-hundred-row fan-out is the thing
-        // this number exists to stop.
+        // A five-hundred-row fan-out is the thing this number exists to stop, so
+        // the run has to stop at the cap with real rows on both sides of it.
         $seen = $result['applied'] + $result['unchanged'] + $result['skipped'];
         assertSame(ServiceBulkAction::BULK_LIMIT, $seen);
+        assertSame(ServiceBulkAction::BULK_LIMIT, $result['applied'], 'The cap counts real rows it acted on.');
+
+        $leftActive = (int) $this->db
+            ->createCommand('SELECT COUNT(*) FROM {{%service}} WHERE [[slug]] LIKE :p AND [[status]] = :s')
+            ->bindValue(':p', 'bulk-fill-' . $prefix . '-%')
+            ->bindValue(':s', 'active')
+            ->queryScalar();
+        assertSame(
+            50,
+            $leftActive,
+            'The rows past the cap are left alone rather than quietly deactivated.',
+        );
     }
 
     // ---- The audit trail ---------------------------------------------------

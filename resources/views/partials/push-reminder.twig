@@ -1,26 +1,44 @@
 {#
-    The standing "your notifications are off" reminder.
+    The standing "your notifications are off" reminder — two flavours, one bar
+    slot, always at least one of them possible.
 
     `partials/push-prompt.twig` is a one-off *offer*: it is dismissible, it is
     quiet for a fortnight afterwards, and it disappears the moment permission
     is answered. That is the right shape for a first ask and the wrong shape
     for someone who has already decided — switched push off in /profile, or
-    answered the browser once and never heard anything. This bar is what
-    replaces it: it has no dismissal and no expiry, and it keeps rendering on
-    every authenticated page until `push_enabled` is 1.
+    told the browser "no" and then never heard anything again. This partial is
+    what replaces it: no dismissal, no expiry, rendering on every authenticated
+    page until notifications actually work here.
 
-    Three deliberate asymmetries:
+    The two cases are split by who can know about them:
 
-      - It is server-rendered, not revealed by JS. "Permanent" has to survive
-        a dismissal, a 14-day window and a second browser, and none of those are
-        things the client can be trusted to remember consistently.
-      - It is not dismissible. A reminder that can be dismissed is a prompt,
-        and the prompt already exists. What is missing is the *nagging*, which
-        is the whole point: push is off by default for a new account, and a
-        person who never learns that their order finished never finds out.
+      - `push_enabled = 0` is an *account* fact, so the server renders that bar
+        visible. It survives a dismissal, a 14-day window and a second
+        browser — none of which are things the client can be trusted to
+        remember consistently.
+      - `Notification.permission === 'denied'` is a *browser* fact the server
+        has no way to see, so that bar ships `hidden` and `push-prompt.js`
+        (`revealDeniedReminder()`) unhides it only when the browser has
+        actually refused. Rendered visible it would nag people whose
+        permission is fine; not rendered at all it would never reach the one
+        person it is for — the visitor we can never ask again.
+
+    They are mutually exclusive by construction: the account bar takes the
+    `push_enabled = 0` branch, the denied bar the `else`. Two bars about the
+    same broken pipe would be noise, and the account switch is the first thing
+    to fix anyway.
+
+    Two further asymmetries, shared by both bars:
+
+      - Not dismissible. A reminder that can be dismissed is a prompt, and the
+        prompt already exists. What is missing is the *nagging*, which is the
+        whole point: push is off by default for a new account, and a person
+        who never learns that their order finished never finds out.
       - It does not render on `/profile` or `/app`, the two pages that carry
         the switch itself. Telling someone to go and do the thing on the page
-        where they are already doing it is noise.
+        where they are already standing is noise. The denied bar has no link
+        at all, because a browser refusal is fixed in the browser's own site
+        settings — there is no page here that can undo it.
 
     It is also in-flow rather than a fixed overlay, so "permanent" costs a
     single line at the top of the page instead of the bottom of the screen.
@@ -29,15 +47,32 @@
     `vapidEnabled` comes from `PushViewInjection` — a deployment with no keys
     must not be told to turn on notifications it cannot deliver.
 #}
-{% if identity and vapidEnabled and not pushEnabled and currentPath not in ['/profile', '/app'] %}
-    <div class="alert alert-info" role="status" data-push-reminder>
-        {{ icon('bell-ring', 'w-5 h-5 shrink-0') }}
-        <div class="min-w-0 flex-1">
-            <p class="font-semibold">অ্যাকাউন্ট নোটিফিকেশন বন্ধ আছে</p>
-            <p class="text-xs">
-                অর্ডার ও রিচার্জের আপডেট এই ব্রাউজারে আসবে না — অ্যাকাউন্ট সুইচ চালু না করা পর্যন্ত কোনো ব্রাউজারেই পাঠানো হবে না।
-            </p>
+{% if identity and vapidEnabled and currentPath not in ['/profile', '/app'] %}
+    {% if not pushEnabled %}
+        <div class="alert alert-info" role="status" data-push-reminder>
+            {{ icon('bell-ring', 'w-5 h-5 shrink-0') }}
+            <div class="min-w-0 flex-1">
+                <p class="font-semibold">অ্যাকাউন্ট নোটিফিকেশন বন্ধ আছে</p>
+                <p class="text-xs">
+                    অর্ডার ও রিচার্জের আপডেট এই ব্রাউজারে আসবে না — অ্যাকাউন্ট সুইচ চালু না করা পর্যন্ত কোনো ব্রাউজারেই পাঠানো হবে না।
+                </p>
+            </div>
+            <a href="/profile" class="btn btn-primary btn-sm shrink-0">সেটিংসে যান</a>
         </div>
-        <a href="/profile" class="btn btn-primary btn-sm shrink-0">সেটিংসে যান</a>
-    </div>
+    {% else %}
+        {# Hidden until `revealDeniedReminder()` confirms the browser said no:
+           the server cannot know, and a bar shown to everyone is a bar people
+           stop reading. The `hidden` attribute is pinned by `.alert[hidden]`
+           in app.css — preflight's `[hidden]` loses to `.alert`'s
+           display:flex on equal specificity. #}
+        <div class="alert alert-warning" role="status" data-push-denied hidden>
+            {{ icon('bell-ring', 'w-5 h-5 shrink-0') }}
+            <div class="min-w-0 flex-1">
+                <p class="font-semibold">ব্রাউজারে নোটিফিকেশন বন্ধ আছে</p>
+                <p class="text-xs">
+                    এই ব্রাউজারে অর্ডার ও রিচার্জের আপডেট আসবে না — ব্রাউজারের সাইট সেটিংস থেকে নোটিফিকেশনের অনুমতি দিন।
+                </p>
+            </div>
+        </div>
+    {% endif %}
 {% endif %}

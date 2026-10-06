@@ -482,6 +482,124 @@ final class PushPromptCest
         );
     }
 
+    /**
+     * The half of "permission na dile ba notification bondho thakle" the
+     * account switch cannot cover.
+     *
+     * `push_enabled = 0` is what the first pair of tests covers, but a browser
+     * that was told "block" has a switch still on and a subscription it will
+     * never deliver to — and unlike the offer, it can never be re-asked, so if
+     * this bar does not exist that visitor hears nothing ever again. The
+     * server cannot see the browser's answer, so the bar ships `hidden` on
+     * every eligible page and the JS unhides it only when permission really is
+     * denied; asserting the rendered markup pins both halves of that handoff.
+     *
+     * The exclusions are re-checked here because each name a different bug:
+     * a second bar on top of the account one is noise about the same broken
+     * pipe, and `/profile` already carries the push card that owns the fix.
+     */
+    public function theDeniedPermissionBarShipsHiddenAndAlone(FunctionalTester $tester): void
+    {
+        $this->loadVapidKeys();
+        $offId = null;
+        $onId = null;
+        try {
+            [$on, $onUsername] = $this->makeUser('denied', true);
+            $onId = $on;
+            [$off, $offUsername] = $this->makeUser('deniedoff', false);
+            $offId = $off;
+
+            // Push on: the account bar must be silent, the denied bar present
+            // and hidden until the browser says no.
+            $onCookie = $this->signIn($tester, $onUsername);
+            $dashboard = $this->visit($tester, '/dashboard', $onCookie);
+            assertSame(200, $dashboard->getStatusCode());
+            $html = (string) $dashboard->getBody();
+
+            assertTrue(
+                (bool) preg_match('/<div[^>]*\bdata-push-denied\b[^>]*\bhidden\b/', $html),
+                'The denied bar must ship rendered but hidden: only the browser knows the answer.',
+            );
+            assertSame(
+                0,
+                preg_match('/' . self::REMINDER . '/', $html),
+                'Exactly one standing bar: with the switch on, the account reminder has nothing to say.',
+            );
+
+            // The two bars never coexist — the partial is an if/else.
+            $profile = $this->visit($tester, '/profile', $onCookie);
+            assertSame(200, $profile->getStatusCode());
+            assertSame(
+                0,
+                preg_match('/data-push-denied/', (string) $profile->getBody()),
+                '/profile owns the switch and the card; it does not need the browser warning either.',
+            );
+
+            // Control: switch off takes the account branch, so no denied bar.
+            $offCookie = $this->signIn($tester, $offUsername);
+            $offPage = $this->visit($tester, '/dashboard', $offCookie);
+            assertStringContainsString(self::REMINDER, (string) $offPage->getBody());
+            assertSame(
+                0,
+                preg_match('/data-push-denied/', (string) $offPage->getBody()),
+                'An account whose switch is off is told about the switch first — one bar, one fix.',
+            );
+        } finally {
+            $this->restoreEnv($this->previousEnv);
+            foreach ([$onId, $offId] as $id) {
+                if ($id !== null) {
+                    $this->dropUser($id);
+                }
+            }
+        }
+    }
+
+    /**
+     * The reveal rule itself, asserted at the source.
+     *
+     * Whether a browser is denied is unknowable to the server and unreachable
+     * by a request test — there is no way to make a headless Chromium answer
+     * "block" — so the condition lives in JS and is pinned here: the bar is
+     * looked up by its own marker, it is unhidden only for a real refusal, and
+     * the unhide is reachable from the entry point that already runs on every
+     * page. Getting this wrong in either direction fails a visitor:
+     * over-revealing nags people whose push works, under-revealing abandons
+     * the one case that can never be re-asked.
+     */
+    public function theDeniedBarIsRevealedOnlyWhenTheBrowserSaidNo(): void
+    {
+        $source = $this->withoutComments($this->source('resources/js/push-prompt.js'));
+
+        assertTrue(
+            (bool) preg_match('/export function revealDeniedReminder\s*\(/', $source),
+            'The reveal must be exported so it is part of the module contract, not an inline handler.',
+        );
+
+        $body = $this->functionBody($source, 'export function revealDeniedReminder');
+        assertStringContainsString(
+            "'[data-push-denied]'",
+            $body,
+            'The reveal must address the partial by its marker, or a rename silently disables it.',
+        );
+        assertStringContainsString(
+            "Notification.permission !== 'denied'",
+            $body,
+            'Only a refusal may show the bar: "default" is still an open offer, "granted" is a working pipe.',
+        );
+        assertStringContainsString(
+            'bar.hidden = false;',
+            $body,
+            'The bar ships hidden and must be revealed, not injected — the markup is the server\'s job.',
+        );
+
+        $entry = $this->functionBody($source, 'export async function initPushPrompt');
+        assertStringContainsString(
+            'revealDeniedReminder();',
+            $entry,
+            'Nothing else calls it, so an entry point that skips it leaves the bar hidden forever.',
+        );
+    }
+
     // ---- helpers ------------------------------------------------------------
 
     /**

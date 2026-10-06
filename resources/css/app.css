@@ -203,6 +203,37 @@
     @apply mt-1.5 text-xs text-neutral-500;
   }
 
+  /* Date field — the DD-MM-YYYY row, driven by resources/js/date-field.js.
+
+     The wrapper is the positioning context for two overlays: the calendar
+     glyph, and the real `<input type="date">` sitting transparently on top of
+     it. That overlay is why the picker works with no library and no
+     `showPicker()` feature test — it is an ordinary input receiving an
+     ordinary tap, and the OS does the rest (wheel on iOS, calendar on Android
+     and desktop).
+
+     Only the icon area is covered: the rest of the field stays a text input,
+     so tapping it on a phone raises the number pad instead of a date wheel —
+     typing six digits is the faster way to enter a date anyway. */
+  .date-field {
+    position: relative;
+  }
+  .date-field-input {
+    padding-right: 2.75rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+  }
+  .date-field-picker {
+    @apply pointer-events-none absolute inset-y-0 right-0 flex w-11 items-center justify-center text-neutral-400;
+  }
+  .date-field-picker svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+  .date-field-native {
+    @apply pointer-events-auto absolute inset-0 h-full w-full cursor-pointer border-0 bg-transparent p-0 opacity-0;
+  }
+
   /* Badges / tags */
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
@@ -221,6 +252,35 @@
   }
   .badge-neutral {
     @apply bg-neutral-100 text-neutral-600;
+  }
+
+  /* In-flight statuses — pending / processing / review.
+
+     A rotating ring drawn in the space to the left of the label, so "somebody
+     is working on this" reads as motion instead of as a word you have to know.
+     The class is appended by StatusPresenter::badge(), which is the single
+     source both the Twig badge and the polled `status_badge` value come from —
+     a row that flips to `processing` from an AJAX update animates exactly like
+     one the server rendered.
+
+     padding-left reserves the room the absolutely-positioned ring sits in,
+     rather than letting it overlap the label it was meant to introduce. */
+  .badge-loading {
+    position: relative;
+    padding-left: 1.5rem;
+  }
+  .badge-loading::before {
+    content: '';
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    width: 0.65rem;
+    height: 0.65rem;
+    margin-top: -0.325rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 9999px;
+    animation: badge-spin 0.7s linear infinite;
   }
 
   /* Sidebar links */
@@ -270,6 +330,33 @@
   }
   .alert-warning {
     @apply border-warning-200 bg-warning-50 text-warning-700;
+  }
+  /* The browser-permission-denied standing bar (push-reminder.twig) ships
+     with the `hidden` attribute and is revealed by push-prompt.js. Preflight's
+     `[hidden]` lives in @layer base, so components' `.alert` display:flex wins
+     and the attribute alone would not hide it — pin it here, the same way
+     `.push-prompt[hidden]` is pinned below. */
+  .alert[hidden] {
+    display: none;
+  }
+}
+
+/* In-flight status spinner (`.badge-loading`, above).
+   Declared outside @layer so it is never purged: keyframes are referenced by
+   name from the rule above, and Tailwind only scans for class names. */
+@keyframes badge-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Outside the layer as well, so it outranks the layered rule it overrides.
+   A spinner that keeps rotating for somebody who asked the OS for less motion
+   is exactly the kind of animation that prompt exists to stop. */
+@media (prefers-reduced-motion: reduce) {
+  .badge-loading::before {
+    animation: none;
+    border-right-color: transparent;
   }
 }
 
@@ -701,6 +788,180 @@
 }
 .icon-picker-more:hover {
   background-color: var(--ip-hover);
+}
+
+/* ============================================================
+ * Image drop zone
+ * ------------------------------------------------------------
+ * Unlayered for the icon-picker's reason: `is-drop-target` is
+ * added and removed by Alpine while a file is being dragged, and
+ * a layered rule would lose the race to a utility on the same
+ * element — the zone would stop lighting up the moment a
+ * `border-*` class was added next to it.
+ *
+ * The input is visually hidden rather than `display:none`, so it
+ * stays in the tab order and the zone is reachable by keyboard;
+ * the ring is painted on `.image-drop:focus-within` instead.
+ * Colour runs through custom properties again, so dark mode is
+ * one override block rather than a second copy of every rule.
+ * ============================================================ */
+
+.image-field {
+  --im-line: #e5e7eb;
+  --im-surface: #ffffff;
+  --im-soft: #f9fafb;
+  --im-ink: #111827;
+  --im-muted: #6b7280;
+  --im-hover: #f3f4f6;
+  --im-accent: #0d8f68;
+  --im-accent-soft: #ecfdf5;
+  --im-ring: rgb(16 185 129 / 0.25);
+  --im-danger: #dc2626;
+  position: relative;
+}
+.dark .image-field {
+  --im-line: #374151;
+  --im-surface: #111827;
+  --im-soft: #1f2937;
+  --im-ink: #f3f4f6;
+  --im-muted: #9ca3af;
+  --im-hover: #1f2937;
+  --im-accent: #34d399;
+  --im-accent-soft: #062a20;
+  --im-ring: rgb(52 211 153 / 0.25);
+  --im-danger: #f87171;
+}
+
+.image-drop {
+  position: relative;
+  border: 2px dashed var(--im-line);
+  border-radius: 0.75rem;
+  background-color: var(--im-soft);
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+/* A file is over the zone right now. */
+.image-drop.is-drop-target {
+  border-color: var(--im-accent);
+  background-color: var(--im-accent-soft);
+}
+/* The hidden input is focused, so the ring has to be drawn here. */
+.image-drop:focus-within {
+  border-color: var(--im-accent);
+  box-shadow: 0 0 0 3px var(--im-ring);
+}
+
+.image-drop-label {
+  display: flex;
+  cursor: pointer;
+}
+.image-drop-label > span {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 1.25rem 0.75rem;
+  text-align: center;
+}
+
+.image-drop-glyph {
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 0.25rem;
+  color: var(--im-muted);
+}
+.image-drop-title {
+  color: var(--im-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.image-drop-hint {
+  max-width: 28rem;
+  color: var(--im-muted);
+  font-size: 0.75rem;
+}
+
+/* The preview. Fixed height and `object-fit: contain` so a panorama and a
+   passport photo both sit in a box that does not resize as the user tries
+   different files — a zone that grows on every swap makes the form jump. */
+.image-drop-preview {
+  flex-direction: row !important;
+  gap: 0.75rem !important;
+  padding: 0.75rem !important;
+  text-align: left !important;
+}
+.image-drop-img {
+  flex: none;
+  width: 5rem;
+  height: 5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--im-line);
+  background-color: var(--im-surface);
+  object-fit: contain;
+}
+.image-drop-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.125rem;
+}
+.image-drop-name {
+  overflow: hidden;
+  color: var(--im-ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-drop-size {
+  color: var(--im-muted);
+  font-size: 0.75rem;
+}
+
+/* Visually hidden, focusable, and *not* `display:none` — a display:none input
+   is dropped from the tab order, which would leave the zone reachable by mouse
+   alone. 1px, clipped, and still announced by a screen reader. */
+.image-drop-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.image-drop-clear {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--im-line);
+  border-radius: 0.375rem;
+  background-color: var(--im-surface);
+  color: var(--im-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.image-drop-clear:hover {
+  background-color: var(--im-hover);
+  color: var(--im-danger);
+}
+.image-drop-clear svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.image-drop-clear:focus-visible {
+  outline: 2px solid var(--im-accent);
+  outline-offset: 1px;
 }
 
 /* ————— Mobile friendliness ————— */

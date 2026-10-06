@@ -35,8 +35,14 @@
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0">
                             <p class="truncate text-sm font-bold text-neutral-800">{{ s.service_name }}</p>
-                            <p class="mt-0.5 truncate font-mono text-sm text-neutral-600" title="{{ s.field }}: {{ s.value }}">
-                                {{ s.value }}
+                            {# The re-run link keeps the stored value, which is the right thing to send
+                               back to the form (the action converts it). What is *shown*,
+                               though, is a person's answer: a date typed as `06-10-2026`
+                               must not come back as `1990-05-04` the moment it is
+                               stored. `displaydate` is a no-op for a phone number or a
+                               username, so it can sit on any value in this column. #}
+                            <p class="mt-0.5 truncate font-mono text-sm text-neutral-600" title="{{ s.field }}: {{ s.value|displaydate }}">
+                                {{ s.value|displaydate }}
                             </p>
                         </div>
                         {{ s.status|statusbadge }}

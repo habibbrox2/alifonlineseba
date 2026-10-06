@@ -194,11 +194,54 @@ async function syncExistingSubscription() {
 }
 
 /**
+ * Unhide the standing reminder for a browser that has already refused push
+ * permission (`partials/push-reminder.twig`, which ships it `hidden`).
+ *
+ * The server renders the bar on every eligible dashboard page with no way to
+ * know the browser's answer, so the decision is made here:
+ *
+ *   - `permission === 'denied'` is the case the dismissible offer can never
+ *     reach again — the browser will not show its dialog twice, and
+ *     `shouldAsk()` bails out for anything but `'default'`. Without this bar
+ *     that visitor is never told why their order updates stopped.
+ *   - `push_enabled = 1` is what makes it the browser's fault rather than the
+ *     account switch's: the account bar owns the other branch in the partial,
+ *     and the server only renders this one when the switch is on.
+ *   - Anything else (fine, or not yet asked) keeps it hidden: a warning about
+ *     broken notifications on a page where they work is how warnings become
+ *     invisible.
+ *
+ * The TWA user agent is excluded because the Android app's WebView is not a
+ * browser site with permission toggles — there is nothing to point at.
+ *
+ * @returns {boolean} whether the bar is now showing
+ */
+export function revealDeniedReminder() {
+  const bar = document.querySelector('[data-push-denied]');
+  if (!bar || !bar.hidden) {
+    return false;
+  }
+  if (!isPushSupported() || /aliftools/i.test(navigator.userAgent || '')) {
+    return false;
+  }
+  if (Notification.permission !== 'denied') {
+    return false;
+  }
+  bar.hidden = false;
+  return true;
+}
+
+/**
  * Wire the prompt. Safe to call on a page that has none — it returns
  * without touching the DOM, which is what lets `base.twig` ship it
  * unconditionally.
  */
 export async function initPushPrompt() {
+  // The standing denied-permission bar has its own marker and its own rules,
+  // and runs before the prompt-root guard: dashboard pages ship it whether or
+  // not the dismissible offer is on screen.
+  revealDeniedReminder();
+
   const root = document.querySelector('[data-push-prompt]');
   if (!root) {
     return;

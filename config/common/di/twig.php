@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Twig\BarcodeExtension;
 use App\Twig\TwigExtension;
 use Yiisoft\Aliases\Aliases;
 use Twig\Environment as TwigEnvironment;
@@ -26,6 +27,7 @@ return [
             'strict_variables' => false,
         ]);
         $environment->addExtension(new TwigExtension());
+        $environment->addExtension(new BarcodeExtension());
 
         return $environment;
     },

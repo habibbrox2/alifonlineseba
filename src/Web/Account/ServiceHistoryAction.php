@@ -8,6 +8,7 @@ use App\Auth\Identity;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
 use App\Service\RequestRowPresenter;
+use App\Service\ServiceManager;
 use App\Service\StatusPresenter;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -27,6 +28,7 @@ final readonly class ServiceHistoryAction
         private ServiceOrderRepository $orders,
         private ServiceRepository $services,
         private RequestRowPresenter $presenter,
+        private ServiceManager $manager,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
@@ -50,6 +52,13 @@ final readonly class ServiceHistoryAction
         } else {
             $data = $this->orders->forUser($identity->id, $page, self::PER_PAGE, $status);
         }
+
+        // An auto-generating order is finished by the act of looking at it, once its
+        // delay has passed: this page is where the customer is already waiting,
+        // and it is the same read the poller performs. Orders are re-read
+        // afterwards so the very load that builds the card also shows it.
+        $this->manager->settleAutoOrders($data['rows']);
+        $data = $this->reRead($category, $page, $status, $identity->id);
 
         $rows = $this->present($data['rows']);
 
@@ -86,6 +95,23 @@ final readonly class ServiceHistoryAction
         }
 
         return $presented;
+    }
+
+    /**
+     * Run the same query again, with the same filters.
+     *
+     * Written out rather than reusing `$data` because settling may have changed
+     * rows this page is about to render, and a history page that loaded for the
+     * one moment *before* its own download button existed is exactly what a
+     * customer would describe as "it says done but there is no file".
+     *
+     * @return array{rows: array<int, array<string, mixed>>, total: int}
+     */
+    private function reRead(string $category, int $page, string $status, int $userId): array
+    {
+        return $category !== ''
+            ? $this->orders->forUserByCategory($userId, $page, self::PER_PAGE, $category)
+            : $this->orders->forUser($userId, $page, self::PER_PAGE, $status);
     }
 
     /**

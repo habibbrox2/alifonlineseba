@@ -85,7 +85,7 @@
                             <td>
                                 <p class="font-medium text-neutral-800">{{ request.service_name }}</p>
                                 <p class="text-[11px] text-neutral-400" x-show="updatedAt !== initialUpdatedAt"
-                                   x-text="updatedAt ? 'হালনাগাদ: ' + updatedAt : ''"></p>
+                                   x-text="updatedAtLabel ? 'হালনাগাদ: ' + updatedAtLabel : ''"></p>
                             </td>
                             <td class="whitespace-nowrap font-semibold text-primary-700">{{ request.amount|money }}</td>
                             <td>

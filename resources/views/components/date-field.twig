@@ -1,0 +1,58 @@
+{# ——— The one date field in the product ———
+   Included by every form that asks for a date: a service form row
+   (`components/form-row.twig`), the account profile and the admin user
+   editor. It is its own file rather than a branch inside form-row.twig
+   because the profile and admin forms are hand-written layouts — leaving
+   the markup in form-row.twig would have meant copying it, and a copied
+   date input is how two "identical" date fields quietly diverge.
+
+   The contract it renders:
+
+     what a person sees and types → 06-10-2026   (DD-MM-YYYY)
+     what the row stores          → 2026-10-06   (Y-m-d)
+
+   `App\Service\ServiceDate` is the only thing allowed to convert between
+   them, so `value` must already be in display form (the action hands it
+   over via ServiceDate::display()). A plain `<input type="date">` is
+   deliberately not used: it renders in whatever order the OS thinks is
+   natural, so the same page would ask one user for 06-10-2026 and the next
+   for 10-06-2026 — and six of October and ten of June are both legal
+   answers to it. `type="text"` + `inputmode="numeric"` gives a phone a
+   number pad, and `resources/js/date-field.js` supplies the dashes, the
+   OS calendar and the client-side check against the very same message
+   the server sends.
+
+   With JavaScript off this is still a labelled, pattern-checked text field
+   the server accepts — the calendar is an enhancement, not the mechanism.
+
+   @var name string      form field name
+   @var id string        input id (the label's `for`)
+   @var label string     visible label text
+   @var value string     current value, display form
+   @var required bool
+   @var error string     validation message, shown instead of the format hint #}
+<div>
+    <label for="{{ id }}" class="form-label">
+        {{ label }}
+        {% if required|default(false) %}<span class="text-danger-600">*</span>{% endif %}
+    </label>
+
+    <div class="date-field" data-date-field>
+        <input id="{{ id }}" type="text" name="{{ name }}" value="{{ value|default('') }}"
+               class="form-input date-field-input" data-date-input
+               inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false"
+               placeholder="06-10-2026" maxlength="10" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}"
+               aria-describedby="{{ id }}-hint"
+               {% if required|default(false) %}required{% endif %}>
+    </div>
+
+    {# The hint is the format itself, read from ServiceDate rather than typed
+       into each template — a form that hard-coded the words could drift away
+       from the parser and quietly start asking for something it will then
+       reject. #}
+    {% if error|default('') %}
+        <p class="form-error" role="alert">{{ error }}</p>
+    {% else %}
+        <p class="form-help" id="{{ id }}-hint">ফরম্যাট: {{ date_format() }} — যেমন 06-10-2026</p>
+    {% endif %}
+</div>

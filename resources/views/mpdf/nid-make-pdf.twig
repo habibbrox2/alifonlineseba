@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="bn" font-family="solaimanlipi, nikosh, dejavusans">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>এনআইডি মেইক — NID Form</title>
+    <style>
+        @page {
+            margin: 15mm;
+            size: A4;
+        }
+        body {
+            font-family: dejavusans;
+            font-size: 12pt;
+            color: #222;
+            line-height: 1.5;
+        }
+        .content-wrapper {
+            width: 100%;
+        }
+        .page-header {
+            text-align: center;
+            margin-bottom: 5mm;
+            padding-bottom: 5mm;
+            border-bottom: 2px solid #05C3FB;
+        }
+        .page-header h1 {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin: 0;
+        }
+        .page-header p {
+            font-size: 10pt;
+            color: #666;
+            margin: 2px 0 0 0;
+        }
+        .page-header p.meta {
+            font-family: dejavusans;
+            font-size: 8.5pt;
+            color: #888;
+            margin-top: 1.5mm;
+        }
+
+        .demo-notice {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 4mm;
+            margin-bottom: 5mm;
+            font-size: 9pt;
+            color: #856404;
+        }
+
+        /* A table, not two inline-blocks.
+
+           mPDF 8.x walks its inline-block height table with an index that can
+           go negative when a block holds nothing but whitespace and a
+           placeholder, and PHP reports that as a warning on every render. The
+           document still comes out right, but a library that emits notices
+           mid-render is a library whose failures get swallowed somewhere. A
+           table cell is also the construct mPDF lays out most reliably, so
+           this is the version that both looks the same and stays quiet. */
+        table.photo-signature-row {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 5mm;
+        }
+        table.photo-signature-row td.photo-box {
+            width: 32mm;
+            height: 40mm;
+            border: 1px dashed #999;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 8pt;
+            color: #999;
+        }
+        table.photo-signature-row td.signature-box {
+            height: 20mm;
+            border: 1px dashed #999;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 8pt;
+            color: #999;
+        }
+        table.photo-signature-row img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .section-title {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin: 5mm 0 3mm 0;
+            padding-bottom: 2px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table.form-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 3mm;
+        }
+        table.form-table td {
+            padding: 2mm 3mm;
+            vertical-align: top;
+        }
+        table.form-table td.label {
+            font-weight: bold;
+            width: 35%;
+            color: #444;
+            border: 1px solid #ccc;
+            background: #f0f4ff;
+        }
+        table.form-table td.value {
+            width: 65%;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-size: 11pt;
+        }
+
+        .full-width-value {
+            width: 100%;
+        }
+        table.full-width td.label {
+            width: 20%;
+        }
+        table.full-width td.value {
+            width: 80%;
+        }
+
+        textarea.value-text {
+            width: 100%;
+            min-height: 16mm;
+            border: none;
+            background: transparent;
+            font-family: dejavusans;
+            font-size: 11pt;
+            color: #333;
+            resize: none;
+            outline: none;
+            overflow: hidden;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 8mm;
+            padding-top: 5mm;
+            border-top: 1px solid #ddd;
+            font-size: 8pt;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+<div class="content-wrapper pt-0">
+    <div class="page-header">
+        <h1>এনআইডি মেইক (NID Make Form)</h1>
+        <p>বাংলাদেশ জাতীয় পরিচয় পত্র</p>
+        {# The reference is what makes a printed card traceable back to the
+           order it came from — it is the one thing on the page that survives
+           being photographed and passed around. #}
+        {% if reference is defined and reference %}
+        <p class="meta">রেফারেন্স / Reference: {{ reference }}{% if generated_at is defined and generated_at %} &middot; {{ generated_at }}{% endif %}</p>
+        {% endif %}
+    </div>
+
+    {% if _demo is defined and _demo %}
+    <div class="demo-notice">
+        ⚠️ {{ _notice|default('এটি ডেমো ডাটা — সম্পূর্ণ কাল্পনিক') }}
+    </div>
+    {% endif %}
+
+    <table class="photo-signature-row">
+        <tr>
+            <td class="photo-box">
+                {% if photo_url is defined and photo_url %}
+                    <img src="{{ photo_url }}" alt="আইডি ফটো" />
+                {% else %}
+                    ফটো নেই
+                {% endif %}
+            </td>
+            <td class="signature-box">
+                {% if signature_url is defined and signature_url %}
+                    <img src="{{ signature_url }}" alt="স্বাক্ষর" />
+                {% else %}
+                    স্বাক্ষর নেই
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+
+    <div class="section-title">ব্যক্তিগত তথ্য / Personal Information</div>
+
+    <table class="form-table">
+        <tr>
+            <td class="label">আইডি নম্বর / NID Number</td>
+            <td class="value">{{ nid_number|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">পিন নম্বর / PIN</td>
+            <td class="value">{{ pin|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">নাম (বাংলা) / Name (Bengali)</td>
+            <td class="value">{{ name_bangla|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">নাম (ইংরেজি) / Name (English)</td>
+            <td class="value">{{ name_english|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">জন্ম তারিখ / Date of Birth</td>
+            <td class="value">{{ date_of_birth|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">জন্মস্থান / Birth Place</td>
+            <td class="value">{{ birth_place|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">বাবার নাম / Father's Name</td>
+            <td class="value">{{ father_name|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">মায়ের নাম / Mother's Name</td>
+            <td class="value">{{ mother_name|default('—') }}</td>
+        </tr>
+    </table>
+
+    <table class="form-table">
+        <tr>
+            <td class="label">লিঙ্গ / Gender</td>
+            <td class="value">{{ gender|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">রক্তের গ্রুপ / Blood Group</td>
+            <td class="value">{{ blood_group|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">ইস্যু তারিখ / Issue Date</td>
+            <td class="value">{{ issue_date|default('—') }}</td>
+        </tr>
+    </table>
+
+    <div class="section-title">ঠিকানা / Address</div>
+
+    <table class="form-table full-width">
+        <tr>
+            <td class="label">পূর্ণ ঠিকানা / Full Address</td>
+            <td class="value">
+                <textarea class="value-text" readonly>{{ full_address|default('—') }}</textarea>
+            </td>
+        </tr>
+    </table>
+
+    {% if photo_provided is defined %}
+    <table class="form-table">
+        <tr>
+            <td class="label">আইডি ফটো প্রদান করা হয়েছে / Photo Provided</td>
+            <td class="value">{{ photo_provided|default('—') }}</td>
+        </tr>
+        <tr>
+            <td class="label">আইডি স্বাক্ষর প্রদান করা হয়েছে / Signature Provided</td>
+            <td class="value">{{ signature_provided|default('—') }}</td>
+        </tr>
+    </table>
+    {% endif %}
+
+    <div class="footer">
+        <p>এই ফর্মটি All Seba প্ল্যাটফর্ম থেকে স্বয়ংক্রিয়ভাবে তৈরি করা হয়েছে |
+           Generated automatically by All Seba digital services platform.</p>
+        {% if _demo is defined and _demo %}
+        <p>দ্রষ্টব্য: এটি শুধুমাত্র ডেমো আউটপুট — কোনো সরকারি প্রতিষ্ঠানের সাথে যুক্ত নয়।</p>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

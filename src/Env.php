@@ -85,6 +85,20 @@ final class Env
         return $value === null ? null : (string) $value;
     }
 
+    /**
+     * Whether the deployment actually set this name, as opposed to it merely
+     * having a built-in default.
+     *
+     * Needed by anything that must distinguish "configured to X" from "nobody
+     * said": a domain pointed at the app before anyone edited .env reads as
+     * the localhost default through get(), which is a fine internal fallback
+     * and a terrible public URL.
+     */
+    public static function has(string $name): bool
+    {
+        return isset($_ENV[$name]) || isset($_SERVER[$name]);
+    }
+
     public static function bool(string $name, bool $default = false): bool
     {
         $value = self::get($name);

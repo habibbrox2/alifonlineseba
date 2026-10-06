@@ -34,6 +34,28 @@ final class AppReleaseTest extends \Codeception\Test\Unit
     private AppReleaseService $service;
     private string $releaseDir;
 
+    /**
+     * The operator's own rows, captured before the first wipe and put back
+     * after every test.
+     *
+     * The suite needs an empty table per test — that is the regression it
+     * exists for — but `_after()` used to satisfy that with an unconditional
+     * `DELETE FROM app_release`, which on a live dev database destroyed the
+     * published APK row the site was serving: `/app/apk` answered 404 until
+     * someone re-published, with nothing in the test output to say why. The
+     * throwaway release directory already existed for exactly this reason
+     * ("never delete the real APK an operator has uploaded"); the row is the
+     * same asset in need of the same protection.
+     *
+     * Capture-then-restore per test keeps both invariants: every test still
+     * starts from empty, and whatever the table held beforehand is back when
+     * the suite ends — including when a test fails, because `_after()` runs
+     * regardless and the restore sits before the connection close.
+     *
+     * @var array<int, array<string, mixed>>|null
+     */
+    private ?array $preserved = null;
+
     protected function _before(): void
     {
         $container = new Container(ContainerConfig::create()->withDefinitions(
@@ -49,12 +71,25 @@ final class AppReleaseTest extends \Codeception\Test\Unit
             mkdir($this->releaseDir, 0o750, true);
         }
         $this->service = new AppReleaseService($this->releases, $this->releaseDir);
+
+        // Capture the live rows first, then empty the table: _after() puts
+        // them back, so the operator's published release survives the suite.
+        $rows = $this->db->createCommand('SELECT * FROM {{%app_release}}')->queryAll();
+        if ($rows !== []) {
+            $this->preserved = $rows;
+        }
+        $this->db->createCommand()->delete('{{%app_release}}')->execute();
     }
 
     protected function _after(): void
     {
         try {
             $this->db->createCommand()->delete('{{%app_release}}')->execute();
+            foreach ($this->preserved ?? [] as $row) {
+                // Full row, id included: it is the same release the site was
+                // serving, not a re-created lookalike.
+                $this->db->createCommand()->insert('{{%app_release}}', $row)->execute();
+            }
             foreach (glob($this->releaseDir . '/*') ?: [] as $file) {
                 @unlink($file);
             }

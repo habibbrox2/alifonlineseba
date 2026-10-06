@@ -26,7 +26,24 @@ final class Identity
         public readonly ?string $avatar,
         public readonly ?string $apiKey = null,
         public readonly int $freeSearches = 0,
+        /** The person's name as they wrote it. '' when never given. */
+        public readonly string $fullName = '',
     ) {}
+
+    /**
+     * What to show a human: their name, falling back to the login handle.
+     *
+     * The fallback is the whole reason this is a method and not a column read:
+     * accounts created before `full_name` existed (and anybody who left it
+     * blank) would otherwise render as an empty string on the dashboard, the
+     * user menu and every order they own.
+     */
+    public function displayName(): string
+    {
+        $name = trim($this->fullName);
+
+        return $name !== '' ? $name : $this->username;
+    }
 
     public static function fromRow(array $row): self
     {
@@ -41,6 +58,9 @@ final class Identity
             $row['avatar'] ?? null,
             isset($row['api_key']) ? (string) $row['api_key'] : null,
             (int) ($row['free_searches'] ?? 0),
+            // Absent before the migration runs (and on rows built by hand),
+            // so the ?? rather than a cast of null.
+            (string) ($row['full_name'] ?? ''),
         );
     }
 

@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Source of truth for the app identity, in the shape Bubblewrap's",
+    "`npx @bubblewrap/cli` reads and writes. Everything in here is mirrored by",
+    "hand into the Gradle/manifest/resource files next to it, because this",
+    "repository builds the TWA without running the CLI (no Node, and the CLI",
+    "would overwrite the hand-written comments). If you change a value here,",
+    "change the Gradle/manifest copy too -- nothing reads this file at build",
+    "time. See ../../twa/README.md for the two-field checklist."
+  ],
+  "packageId": "online.broxlab.aliftools.twa",
+  "host": "allseba.online",
+  "startUrl": "https://allseba.online/",
+  "launcherName": "Alif Tools",
+  "displayStandalone": true,
+  "enableNotifications": true,
+  "themeColor": "#083F31",
+  "navigationColor": "#083F31",
+  "backgroundColor": "#083F31",
+  "splashScreenFadeOutDuration": 300,
+  "appVersionCode": "1",
+  "appVersionName": "1.0.0",
+  "preferDarkTheme": false,
+  "launchTrichromeMode": false,
+  "narrowWebInstallation": false,
+  "includeBrowserCode": false,
+  "lockTaskDefault": false,
+  "permissions": [
+    "android.permission.POST_NOTIFICATIONS"
+  ]
+}

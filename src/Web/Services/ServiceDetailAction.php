@@ -8,6 +8,7 @@ use App\Auth\Identity;
 use App\Repository\ServiceRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Service\OrderWindowService;
+use App\Service\ServiceDate;
 use App\Service\ServiceManager;
 use App\ServiceProvider\ServiceResult;
 use Psr\Http\Message\ResponseInterface;
@@ -68,9 +69,18 @@ final readonly class ServiceDetailAction
             unset($input['csrf']);
             $ip = $_SERVER['REMOTE_ADDR'] ?? '-';
             $ua = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512);
-            $result = $this->manager->submit($service, $identity, $input, $ip, $ua);
+            // `enctype="multipart/form-data"` on the service form carries the
+            // drop zone's files here; without it this is an empty array and an
+            // image field is simply reported as unfilled.
+            $files = $request->getUploadedFiles();
+            $result = $this->manager->submit($service, $identity, $input, $ip, $ua, $files);
             if (!$result->success) {
                 $errors = $result->errors;
+                // The answers go back into the form — a rejected date that
+                // silently empties the field is how a person ends up typing
+                // the same impossible day three times. Dates come back in the
+                // format they were typed in, never the stored one.
+                $prefill = self::redisplay($input, $fields);
             } else {
                 // The request is queued, not executed — the history page owns the
                 // lifecycle, so send the user straight there.
@@ -124,9 +134,46 @@ final readonly class ServiceDetailAction
             if ($value === '' || mb_strlen($value) > 128) {
                 continue;
             }
-            $prefill[$field->name] = $value;
+            // A link the dashboard shares (`?date_of_birth=1990-05-04`) carries
+            // the stored form; the field it lands in shows the typed one.
+            $prefill[$field->name] = $field->type === 'date'
+                ? ServiceDate::display($value)
+                : $value;
         }
 
         return $prefill;
+    }
+
+    /**
+     * What the person typed, in the shape they typed it, for a re-render.
+     *
+     * Scalars only: a file can never be put back into an `<input type="file">`
+     * (browsers refuse value assignment for security), and the stored value is
+     * a server-side path the browser must not be handed anyway — the drop zone
+     * simply renders empty, exactly as it does on a first load.
+     *
+     * @param array<string, mixed> $input the posted body
+     * @param \App\ServiceProvider\ServiceField[] $fields
+     * @return array<string, string>
+     */
+    private static function redisplay(array $input, array $fields): array
+    {
+        $values = [];
+
+        foreach ($fields as $field) {
+            if ($field->type === 'image' || $field->type === 'file') {
+                continue;
+            }
+            $raw = $input[$field->name] ?? null;
+            if (!is_scalar($raw)) {
+                continue;
+            }
+            $value = (string) $raw;
+            $values[$field->name] = $field->type === 'date'
+                ? ServiceDate::display($value)
+                : $value;
+        }
+
+        return $values;
     }
 }

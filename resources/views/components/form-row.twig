@@ -1,8 +1,22 @@
-{# Reusable form field: input/select/textarea with label + error + help #}
+{# Reusable form field: input/select/textarea/image with label + error + help #}
 {# @var field {name, label, type, required, placeholder, help, value, options?, error?} #}
 {% set type = field.type|default('text') %}
 {% set id = 'fld-' ~ field.name %}
 
+{# A date is not rendered here at all: `components/date-field.twig` owns that
+   markup so the service forms, the profile and the admin user editor cannot
+   drift apart. It also carries the label and the help/error paragraph the rest
+   of this component prints, so a date row is the same row, not a variant. #}
+{% if type == 'date' %}
+    {% include 'components/date-field.twig' with {
+        id: id,
+        name: field.name,
+        label: field.label,
+        value: field.value|default(''),
+        required: field.required|default(false),
+        error: field.error|default(''),
+    } %}
+{% else %}
 <div>
     <label for="{{ id }}" class="form-label">
         {{ field.label }}
@@ -19,6 +33,145 @@
         <textarea id="{{ id }}" name="{{ field.name }}" rows="{{ field.rows|default(3) }}" class="form-input"
                   {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}
                   {% if field.required|default(false) %}required{% endif %}>{{ field.value|default('') }}</textarea>
+    {% elseif type == 'image' %}
+        {# ——— Image drop zone ———
+           A real `<input type="file">` sits inside the zone from the start, so the
+           form still submits an image with JavaScript disabled: the `<label for>`
+           opens the native picker and the field carries its name. Everything
+           Alpine adds — the live preview, the drag target, the size label — is an
+           enhancement over that, never the mechanism.
+
+           The accept list and the ceiling are injected from ImageUploadStorage,
+           the same class that enforces them server-side, so the widget cannot
+           advertise rules the server does not apply. The checks below only save a
+           round trip and a confusing error; `ImageUploadStorage::store()` sniffs
+           the bytes and is the one that decides. #}
+        <div class="image-field"
+             x-data="{
+                 file: null,
+                 url: '',
+                 dragging: false,
+                 error: '',
+                 {# The injection is the source of truth; these fallbacks only
+                    exist so a missing injection cannot produce NaN, and they
+                    mirror ImageUploadStorage::MAX_BYTES. #}
+                 max: {{ imageUploadMaxBytes|default(12582912) }},
+                 maxLabel: '{{ imageUploadMaxLabel|default('12 MB') }}',
+                 types: ['image/jpeg', 'image/pjpeg', 'image/png', 'image/webp', 'image/gif'],
+                 exts: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+                 humanSize(b) {
+                     return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB'
+                                         : Math.max(1, Math.round(b / 1024)) + ' KB';
+                 },
+                 // Either signal is enough client-side: some browsers report an
+                 // empty type for a perfectly ordinary photo, and refusing on
+                 // that basis would be a false negative. The server re-checks.
+                 usable(f) {
+                     return this.exts.some(e => f.name.toLowerCase().endsWith('.' + e))
+                         || this.types.includes(f.type);
+                 },
+                 revoke() {
+                     if (this.url) { URL.revokeObjectURL(this.url); this.url = ''; }
+                 },
+                 clear() {
+                     this.revoke();
+                     this.file = null;
+                     this.error = '';
+                     if (this.$refs.input) { this.$refs.input.value = ''; }
+                 },
+                 take(f) {
+                     this.error = '';
+                     if (!this.usable(f)) {
+                         this.clear();
+                         this.error = 'শুধু JPG, PNG, WEBP বা GIF ছবি গ্রহণযোগ্য।';
+                         return;
+                     }
+                     if (f.size > this.max) {
+                         this.clear();
+                         this.error = 'ছবিটি বড়। সর্বোচ্চ ' + this.maxLabel + ' পর্যন্ত করা যাবে।';
+                         return;
+                     }
+                     this.revoke();
+                     this.file = f;
+                     this.url = URL.createObjectURL(f);
+                 },
+                 picked(e) {
+                     const f = e.target.files && e.target.files[0];
+                     if (f) { this.take(f); }
+                 },
+                 dropped(e) {
+                     this.dragging = false;
+                     const list = e.dataTransfer && e.dataTransfer.files;
+                     if (!list || !list.length) { return; }
+                     // A dropped file never reaches the input on its own, so the
+                     // form would submit nothing — copy it across. Browsers that
+                     // refuse the assignment still get the preview; the server
+                     // then reports the field as empty rather than storing junk.
+                     try {
+                         const dt = new DataTransfer();
+                         dt.items.add(list[0]);
+                         this.$refs.input.files = dt.files;
+                     } catch (err) { /* not supported — preview only */ }
+                     this.take(list[0]);
+                 },
+                 // Object URLs outlive the page unless released, and a form can
+                 // hold a dozen of them across a long session on one page.
+                 destroy() { this.revoke(); }
+             }">
+
+            <div class="image-drop"
+                 :class="dragging && 'is-drop-target'"
+                 @dragover.prevent="dragging = true"
+                 @dragenter.prevent="dragging = true"
+                 @dragleave.prevent="dragging = false"
+                 @drop.prevent="dropped($event)">
+
+                <label for="{{ id }}" class="image-drop-label">
+                    <span class="image-drop-empty" x-show="!file">
+                        <svg class="image-drop-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span class="image-drop-title">ছবি টেনে এখানে ছেড়ে দিন</span>
+                        <span class="image-drop-hint">অথবা ক্লিক করে ছবি বেছে নিন — JPG, PNG, WEBP বা GIF, সর্বোচ্চ {{ imageUploadMaxLabel|default('12 MB') }}</span>
+                    </span>
+
+                    <span x-cloak x-show="file" class="image-drop-preview">
+                        <img class="image-drop-img" :src="url" alt="নির্বাচিত ছবির প্রিভিউ">
+                        <span class="image-drop-meta">
+                            <span class="image-drop-name" x-text="file ? file.name : ''"></span>
+                            <span class="image-drop-size" x-text="file ? humanSize(file.size) : ''"></span>
+                        </span>
+                    </span>
+                </label>
+
+                {# Visually hidden, never `display:none`: a hidden input is removed
+                   from the tab order, so the zone would be unreachable by keyboard.
+                   The focus ring is painted by `.image-drop:focus-within`. #}
+                <input x-ref="input"
+                       id="{{ id }}"
+                       type="file"
+                       name="{{ field.name }}"
+                       accept="{{ imageUploadAccept|default('image/jpeg,image/png,image/webp,image/gif') }}"
+                       class="image-drop-input"
+                       {% if field.help %}aria-describedby="{{ id }}-help"{% endif %}
+                       {% if field.required|default(false) %}required{% endif %}
+                       @change="picked($event)">
+
+                <button x-cloak x-show="file" type="button" class="image-drop-clear"
+                        @click.stop="clear()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    <span>মুছুন</span>
+                </button>
+            </div>
+
+            <p x-cloak x-show="error" class="form-error" role="alert" x-text="error"></p>
+        </div>
+    {% elseif type == 'date' %}{# handled above #}
     {% else %}
         <input id="{{ id }}" type="{{ type }}" name="{{ field.name }}" value="{{ field.value|default('') }}"
                class="form-input" {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}
@@ -32,3 +185,4 @@
         <p class="form-help" id="{{ id }}-help">{{ field.help }}</p>
     {% endif %}
 </div>
+{% endif %}

@@ -15,6 +15,14 @@
         <input type="hidden" name="_csrf" value="{{ csrf }}">
 
         <div>
+            <label for="full_name" class="form-label">পুরো নাম <span class="text-danger-600">*</span></label>
+            <input id="full_name" type="text" name="full_name" value="{{ old.full_name ?? '' }}" class="form-input"
+                   placeholder="যেমন: রহিম উদ্দিন" autocomplete="name" required>
+            <p class="mt-1 text-xs text-neutral-400">অর্ডার ও প্রোফাইলে এই নামটিই দেখা হবে।</p>
+            {% if errors.full_name is defined %}<p class="form-error" role="alert">{{ errors.full_name }}</p>{% endif %}
+        </div>
+
+        <div>
             <label for="username" class="form-label">ইউজারনেম <span class="text-danger-600">*</span></label>
             <input id="username" type="text" name="username" value="{{ old.username ?? '' }}" class="form-input"
                    placeholder="আপনার ইউজারনেম" autocomplete="username" required>

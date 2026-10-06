@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\ServiceProvider;
 
+use App\Service\ServiceDate;
+
 /**
  * Demo NID lookup. Returns clearly-marked fake data — no real identity data.
  */
@@ -23,7 +25,10 @@ final class MockNidService implements ServiceProviderInterface
     {
         return [
             new ServiceField('nid_number', 'এনআইডি নম্বর', 'text', true, '১০ বা ১৩ ডিজিট', 'ডেমো মোড: যেকোনো ১০/১৩ ডিজিটের নম্বর চলবে'),
-            new ServiceField('date_of_birth', 'জন্ম তারিখ', 'date', true, '', 'ফরম্যাট: YYYY-MM-DD'),
+            // No help text: `components/date-field.twig` prints the format for
+            // every date row from ServiceDate itself. Repeating it here would be
+            // a second copy of the same promise, free to drift.
+            new ServiceField('date_of_birth', 'জন্ম তারিখ', 'date', true),
         ];
     }
 
@@ -34,6 +39,18 @@ final class MockNidService implements ServiceProviderInterface
             'জন্ম তারিখ (জন্মনিবন্ধন অনুযায়ী)',
             'ডেমো মোডে সব তথ্য কাল্পনিক — কোনো সরকারি ডাটাবেজ ব্যবহার হয় না',
         ];
+    }
+
+    /**
+     * Manual: an operator has to look at this one.
+     *
+     * A lookup returns whatever the upstream data says, and a human decides
+     * whether that is worth charging for — which is the whole reason the
+     * review queue exists.
+     */
+    public function autoGenerate(): bool
+    {
+        return false;
     }
 
     public function execute(array $input): ServiceResult
@@ -47,8 +64,13 @@ final class MockNidService implements ServiceProviderInterface
         if ($nid !== '' && !in_array(strlen((string) $nid), [10, 13, 17], true)) {
             $errors['nid_number'] = 'NID must be 10, 13 or 17 digits.';
         }
-        if ($dob !== '' && strtotime($dob) === false) {
-            $errors['date_of_birth'] = 'Enter a valid date of birth.';
+        if ($dob !== '' && !ServiceDate::isValid($dob)) {
+            // Unreachable from the form — ServiceManager normalises and rejects
+            // date fields before a provider ever sees them. Kept because this
+            // provider can also be called directly (a retry replays stored
+            // input), and a retry must not run on a date the system cannot
+            // represent.
+            $errors['date_of_birth'] = ServiceDate::errorMessage();
         }
         if ($errors !== []) {
             return ServiceResult::fail('Validation failed.', $errors);

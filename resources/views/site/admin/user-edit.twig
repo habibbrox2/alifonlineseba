@@ -1,0 +1,102 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}ইউজার এডিট — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% include 'components/page-header.twig' with {
+    title: (row.full_name ?: row.username) ~ ' — তথ্য এডিট',
+    description: '@' ~ row.username ~ ' · ' ~ row.phone,
+} %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+    <div class="lg:col-span-2">
+        <section class="card p-6">
+            <h2 class="mb-5 flex items-center gap-2 text-lg font-bold text-neutral-900">
+                {{ icon('user-cog', 'w-5 h-5 text-primary-600') }} অ্যাকাউন্ট তথ্য
+            </h2>
+
+            <form method="post" action="/admin/users/{{ row.id }}" class="space-y-4">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+                <div>
+                    <label for="full_name" class="form-label">পুরো নাম <span class="text-danger-600">*</span></label>
+                    <input id="full_name" type="text" name="full_name" value="{{ row.full_name ?? '' }}"
+                           class="form-input" placeholder="যেমন: রহিম উদ্দিন" maxlength="120" required>
+                    {% if errors.full_name is defined %}<p class="form-error" role="alert">{{ errors.full_name }}</p>{% endif %}
+                </div>
+
+                {# The same widget the account profile and every service form
+                   use — `components/date-field.twig`. It is not a second date
+                   input written to look like the first one; it is the same
+                   file, so `06-10-2026` here means exactly what it means
+                   there and an impossible date is refused in the same words. #}
+                {% include 'components/date-field.twig' with {
+                    id: 'date_of_birth',
+                    name: 'date_of_birth',
+                    label: 'জন্ম তারিখ (ঐচ্ছিক)',
+                    value: birthDateDisplay|default(''),
+                    required: false,
+                    error: errors.date_of_birth|default(''),
+                } %}
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="username" class="form-label">ইউজারনেম <span class="text-danger-600">*</span></label>
+                        <input id="username" type="text" name="username" value="{{ row.username }}"
+                               class="form-input" autocomplete="off" required>
+                        {% if errors.username is defined %}<p class="form-error" role="alert">{{ errors.username }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="phone" class="form-label">মোবাইল <span class="text-danger-600">*</span></label>
+                        <input id="phone" type="tel" name="phone" value="{{ row.phone }}"
+                               class="form-input" inputmode="tel" placeholder="01712345678" required>
+                        {% if errors.phone is defined %}<p class="form-error" role="alert">{{ errors.phone }}</p>{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="email" class="form-label">ইমেইল (ঐচ্ছিক)</label>
+                    <input id="email" type="email" name="email" value="{{ row.email ?? '' }}"
+                           class="form-input" placeholder="optional">
+                    {% if errors.email is defined %}<p class="form-error" role="alert">{{ errors.email }}</p>{% endif %}
+                </div>
+
+                <div class="flex flex-wrap gap-3 pt-2">
+                    <button type="submit" class="btn btn-primary">{{ icon('save', 'w-4 h-4') }} সেভ করুন</button>
+                    <a href="/admin/users" class="btn btn-ghost">বাতিল</a>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <aside class="space-y-6">
+        {# Read-only facts. Role, status and balance are deliberately absent:
+           the list changes all three in one click, and a second control here
+           would be a second place for them to disagree. #}
+        <section class="card p-6">
+            <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-900">
+                {{ icon('info', 'w-5 h-5 text-primary-600') }} তথ্য
+            </h2>
+            <dl class="space-y-2.5 text-sm">
+                <div class="flex justify-between gap-3"><dt class="text-neutral-500">আইডি</dt><dd class="font-mono font-semibold">{{ row.id }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-neutral-500">রোল</dt><dd class="font-semibold uppercase">{{ row.role }}</dd></div>
+                <div class="flex justify-between gap-3">
+                    <dt class="text-neutral-500">স্ট্যাটাস</dt>
+                    <dd>{% include 'components/status-badge.twig' with { status: row.deleted_at ? 'deleted' : row.status } %}</dd>
+                </div>
+                <div class="flex justify-between gap-3"><dt class="text-neutral-500">ব্যালেন্স</dt><dd class="font-semibold text-primary-700">{{ row.balance|money }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-neutral-500">নিবন্ধন</dt><dd>{{ row.created_at|bndate }}</dd></div>
+                <div class="flex justify-between gap-3">
+                    <dt class="text-neutral-500">শেষ লগইন</dt>
+                    <dd>{{ row.last_login_at ? row.last_login_at|bndate : '—' }}</dd>
+                </div>
+            </dl>
+            {% if row.deleted_at %}
+                <p class="mt-4 rounded-lg border border-danger-200 bg-danger-50 p-3 text-xs text-danger-700">
+                    মুছে ফেলা হয়েছে: {{ row.deleted_at|bndate }} — লগইন করতে পারবে না।
+                </p>
+            {% endif %}
+        </section>
+    </aside>
+</div>
+{% endblock %}

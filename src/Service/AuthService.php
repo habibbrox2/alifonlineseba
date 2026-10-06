@@ -25,12 +25,23 @@ final class AuthService
     public function register(array $input, string $ip, string $userAgent): array
     {
         $errors = [];
+        $fullName = trim((string) ($input['full_name'] ?? ''));
         $username = trim((string) ($input['username'] ?? ''));
         $phone = trim((string) ($input['phone'] ?? ''));
         $email = trim((string) ($input['email'] ?? ''));
         $password = (string) ($input['password'] ?? '');
         $confirm = (string) ($input['password_confirm'] ?? '');
 
+        // Required, unlike every other optional field on the form: this is the
+        // name that appears on the account's orders and in the admin list, and
+        // an account created without one can only ever be identified by its
+        // handle. 120 matches the column width — a value the schema would
+        // truncate is a value the user typed under a false promise.
+        if ($fullName === '' || mb_strlen($fullName) < 2) {
+            $errors['full_name'] = 'Enter your full name (at least 2 characters).';
+        } elseif (mb_strlen($fullName) > 120) {
+            $errors['full_name'] = 'Full name may not exceed 120 characters.';
+        }
         if ($username === '' || strlen($username) < 3) {
             $errors['username'] = 'Username must be at least 3 characters.';
         } elseif (!preg_match('/^[a-zA-Z0-9_.]+$/', $username)) {
@@ -58,6 +69,7 @@ final class AuthService
         $referrer = $this->referrals->resolveCode((string) ($input['referral_code'] ?? ''));
 
         $userId = $this->identities->register([
+            'full_name' => $fullName,
             'username' => $username,
             'phone' => $phone,
             'email' => $email ?: null,

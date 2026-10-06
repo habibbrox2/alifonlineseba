@@ -107,7 +107,7 @@
                 <!-- User menu -->
                 <div x-data="{ open: false }" class="relative">
                     <button @click="open = !open" class="flex items-center gap-2 rounded-full p-1 pr-2 transition hover:bg-white/10" aria-label="ইউজার মেনু" aria-expanded="false">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent-500 text-sm font-bold text-primary-900">{{ identity.username|first|upper }}</span>
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent-500 text-sm font-bold text-primary-900">{{ identity.displayName()|first|upper }}</span>
                         {# The chevron is the first thing to go on narrow phones —
                            the balance chip in the topbar is more useful. #}
                         {{ icon('chevron-down', 'hidden w-4 h-4 text-white/70 sm:block') }}
@@ -115,8 +115,8 @@
                     <div x-show="open" x-cloak @click.outside="open = false" x-transition
                          class="absolute right-0 mt-2 w-52 rounded-xl border border-neutral-200 bg-white py-1.5 shadow-lg">
                         <div class="border-b border-neutral-100 px-4 py-2.5">
-                            <p class="truncate text-sm font-semibold text-neutral-800">{{ identity.username }}</p>
-                            <p class="text-xs text-neutral-500">{{ identity.phone }}</p>
+                            <p class="truncate text-sm font-semibold text-neutral-800">{{ identity.displayName() }}</p>
+                            <p class="truncate text-xs text-neutral-500">@{{ identity.username }} · {{ identity.phone }}</p>
                         </div>
                         <a href="/profile" class="nav-link">{{ icon('user', 'w-4 h-4') }} প্রোফাইল</a>
                         <a href="/service-history" class="nav-link">{{ icon('history', 'w-4 h-4') }} সার্ভিস হিস্ট্রি</a>

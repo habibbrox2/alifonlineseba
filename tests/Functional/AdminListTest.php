@@ -45,12 +45,25 @@ final class AdminListTest extends \Codeception\Test\Unit
         assertGreaterThan(0, $invalid['total']);
 
         // A valid column must still be honoured, otherwise the assertion above
-        // would also pass if the whitelist were ignored entirely.
-        $byUsername = $repo->paginate(1, 10, '', 'username', 'asc');
-        $usernames = array_column($byUsername['rows'], 'username');
-        $sorted = $usernames;
-        sort($sorted, SORT_STRING);
-        assertSame($sorted, $usernames, 'A whitelisted sort column must actually order the rows.');
+        // would also pass if the whitelist were ignored entirely — and it must
+        // be checked in both directions rather than against PHP's sort():
+        // PHP compares bytes (`'Boss'` before `'admin'`, uppercase B = 0x42)
+        // while MySQL's utf8mb4 collation is case-insensitive (`'admin'` first),
+        // so any mixed-case username in the dev database makes the two orders
+        // disagree and the assertion fail on data rather than on behaviour.
+        // Ascending being the exact reverse of descending proves the column was
+        // applied whatever the collation — usernames are unique, so there are no
+        // ties to break differently between the two windows.
+        $asc = $repo->paginate(1, 1000, '', 'username', 'asc');
+        $desc = $repo->paginate(1, 1000, '', 'username', 'desc');
+
+        $ascUsernames = array_column($asc['rows'], 'username');
+        assertGreaterThan(0, count($ascUsernames));
+        assertSame(
+            array_reverse(array_column($desc['rows'], 'username')),
+            $ascUsernames,
+            'A whitelisted sort column must actually order the rows.',
+        );
     }
 
     public function testUserBalanceSortOrdersNumerically(): void

@@ -36,6 +36,18 @@ final class MockVoterService implements ServiceProviderInterface
         ];
     }
 
+    /**
+     * Manual: an operator has to look at this one.
+     *
+     * A lookup returns whatever the upstream data says, and a human decides
+     * whether that is worth charging for — which is the whole reason the
+     * review queue exists.
+     */
+    public function autoGenerate(): bool
+    {
+        return false;
+    }
+
     public function execute(array $input): ServiceResult
     {
         $district = trim((string) ($input['district'] ?? ''));

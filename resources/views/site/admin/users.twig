@@ -38,6 +38,10 @@
         <input type="hidden" name="_csrf" value="{{ csrf }}">
         <input type="hidden" name="do" value="create">
         <div>
+            <label for="nu-full-name" class="form-label">পুরো নাম <span class="text-danger-600">*</span></label>
+            <input id="nu-full-name" type="text" name="full_name" class="form-input" placeholder="যেমন: রহিম উদ্দিন" required>
+        </div>
+        <div>
             <label for="nu-username" class="form-label">ইউজারনেম <span class="text-danger-600">*</span></label>
             <input id="nu-username" type="text" name="username" class="form-input" placeholder="newuser" required>
         </div>
@@ -49,6 +53,15 @@
             <label for="nu-email" class="form-label">ইমেইল</label>
             <input id="nu-email" type="email" name="email" class="form-input" placeholder="optional">
         </div>
+        {# The shared date widget — see components/date-field.twig. Same format,
+           same check, same message as the profile and the service forms. #}
+        {% include 'components/date-field.twig' with {
+            id: 'nu-date-of-birth',
+            name: 'date_of_birth',
+            label: 'জন্ম তারিখ (ঐচ্ছিক)',
+            value: '',
+            required: false,
+        } %}
         <div>
             <label for="nu-password" class="form-label">পাসওয়ার্ড <span class="text-danger-600">*</span></label>
             <input id="nu-password" type="password" name="password" class="form-input" minlength="8" required>
@@ -72,7 +85,7 @@
 </details>
 
 <form method="get" action="/admin/users" class="mb-5 flex gap-2 sm:max-w-md">
-    <input type="search" name="q" value="{{ q }}" class="form-input" placeholder="নাম, মোবাইল বা ইমেইল দিয়ে খুঁজুন…">
+    <input type="search" name="q" value="{{ q }}" class="form-input" placeholder="পুরো নাম, ইউজারনেম, মোবাইল বা ইমেইল দিয়ে খুঁজুন…">
     <button type="submit" class="btn btn-primary btn-sm">{{ icon('search', 'w-4 h-4') }} খুঁজুন</button>
 </form>
 
@@ -110,8 +123,17 @@
                         {% set isTrashed = user.deleted_at is not empty %}
                         <tr class="{{ isTrashed ? 'bg-neutral-50' }}">
                             <td>
-                                <p class="font-semibold {{ isTrashed ? 'text-neutral-400 line-through' : 'text-neutral-800' }}">{{ user.username }}</p>
-                                <p class="text-xs text-neutral-400">{{ user.phone }}{% if user.email %} · {{ user.email }}{% endif %}</p>
+                                {# Name first, handle beneath: an admin scans for
+                                   a person, and @username is the login detail
+                                   they need only once they have found them. #}
+                                <p class="font-semibold {{ isTrashed ? 'text-neutral-400 line-through' : 'text-neutral-800' }}">{{ user.full_name ?: user.username }}</p>
+                                <p class="text-xs text-neutral-400">@{{ user.username }} · {{ user.phone }}{% if user.email %} · {{ user.email }}{% endif %}</p>
+                                {# Stored as `2026-10-06`, shown as `06-10-2026` — the
+                                   `displaydate` filter is a no-op for anything that is
+                                   not a date, so it can sit on an unset column. #}
+                                {% if user.date_of_birth %}
+                                    <p class="text-xs text-neutral-400">জন্ম তারিখ: {{ user.date_of_birth|displaydate }}</p>
+                                {% endif %}
                                 {% if isTrashed %}
                                     <p class="text-xs text-danger-600">মুছে ফেলা: {{ user.deleted_at|bndate }}</p>
                                 {% endif %}
@@ -153,6 +175,7 @@
                                             </button>
                                         </form>
                                     {% else %}
+                                        <a href="/admin/users/{{ user.id }}" class="btn btn-ghost btn-sm">এডিট</a>
                                         <form method="post" action="/admin/users">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="toggle">

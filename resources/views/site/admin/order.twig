@@ -122,7 +122,10 @@
                         {% for key, value in metadata.input %}
                             <div class="flex items-baseline justify-between gap-4 text-sm">
                                 <dt class="text-neutral-500">{{ key }}</dt>
-                                <dd class="select-all break-all text-right font-medium text-neutral-800">{{ value }}</dd>
+                                {# A date field was typed as 06-10-2026 and stored as
+                                   2026-10-06; the operator compares it against the
+                                   result card, which shows the typed form too. #}
+                                <dd class="select-all break-all text-right font-medium text-neutral-800">{{ value|displaydate }}</dd>
                             </div>
                         {% endfor %}
                     </dl>

@@ -8,6 +8,7 @@ use App\Env;
 use App\Service\CategoryAccent;
 use App\Service\IconLibrary;
 use App\Service\PaymentBrand;
+use App\Service\ServiceDate;
 use App\Service\StatusPresenter;
 use App\Repository\TransactionRepository;
 use Twig\Extension\AbstractExtension;
@@ -24,6 +25,10 @@ final class TwigExtension extends AbstractExtension
         return [
             new TwigFunction('icon', [$this, 'icon'], ['is_safe' => ['html']]),
             new TwigFunction('app_env', static fn (): string => (string) Env::get('APP_ENV')),
+            // The format a date is typed and shown in. A template that needs to
+            // *say* the format must ask the class that decides it, so the hint
+            // under a date field cannot drift away from the parser behind it.
+            new TwigFunction('date_format', static fn (): string => ServiceDate::DISPLAY_FORMAT),
             new TwigFunction('asset', [$this, 'asset']),
             new TwigFunction('accent', [$this, 'accent']),
             new TwigFunction('accent_key', [$this, 'accentKey']),
@@ -241,6 +246,12 @@ final class TwigExtension extends AbstractExtension
             new TwigFilter('bndate', [$this, 'bngDate']),
             new TwigFilter('statusbadge', [$this, 'statusBadge'], ['is_safe' => ['html']]),
             new TwigFilter('statuslabel', [$this, 'statusLabel']),
+            // A stored date shown the way it was typed: the row keeps
+            // `2026-10-06`, the page shows `06-10-2026`. A no-op for anything
+            // that is not a date, so it is safe to put on a value whose type
+            // the template cannot know (order metadata mixes text, numbers and
+            // dates in one loop).
+            new TwigFilter('displaydate', [$this, 'displayDate']),
             // Ledger entry type, as a word and as a badge. Two filters rather
             // than one returning HTML, so a type can be used as text (in an
             // <option>, an aria-label) without escaping surprises.
@@ -325,6 +336,15 @@ final class TwigExtension extends AbstractExtension
     public function statusLabel(string $status): string
     {
         return StatusPresenter::label($status);
+    }
+
+    /**
+     * The display form of a date (`06-10-2026`) for a value the database holds
+     * as `2026-10-06`. Anything that is not a date comes back untouched.
+     */
+    public function displayDate(mixed $value): string
+    {
+        return ServiceDate::display($value);
     }
 
     public function bngDate(?string $date): string

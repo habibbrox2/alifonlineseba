@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Delegated web push. Set to false (and publish an assetlinks.json with an
+      empty relation set, or none at all) only if the site stops using Web Push;
+      leaving this on costs nothing, because the site decides what to send.
+    -->
+    <bool name="enableNotification">true</bool>
+
+    <!-- Milliseconds the launch splash takes to fade once the page is ready. -->
+    <integer name="splash_screen_fade_out_duration">300</integer>
+
+    <!-- Adaptive-icon backdrop; the foreground is drawable/ic_launcher_foreground.xml. -->
+    <color name="ic_launcher_background">#083F31</color>
+</resources>

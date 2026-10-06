@@ -17,6 +17,9 @@
         display: none;
     }
 </style>
+{# Deferred, and ahead of Alpine at the end of <body> — the same ordering
+   icon-picker relies on. See the comment on Alpine's tag in base.twig. #}
+<script defer src="{{ asset('/assets/js/field-sorter.js') }}"></script>
 {% endblock %}
 
 {% block dashboard_content %}
@@ -227,8 +230,49 @@
                         </p>
                     {% endif %}
 
-                    {# ---- বর্তমান ফিল্ডগুলো ---- #}
-                    {% for option in fieldOptions|default([]) %}
+                    {# ---- বর্তমান ফিল্ডগুলো ----
+                       Each row carries its own `field_order[]` hidden input, so
+                       the order the rows are in when the form is submitted IS
+                       the order the fields are saved in. Nothing has to read the
+                       arrangement off a script or a data attribute: moving a row
+                       moves its name with it.
+
+                       The handle is `draggable` and the row is not, because a
+                       row is full of text inputs — a draggable row makes it
+                       impossible to select a label or click into a field. The
+                       two arrow buttons are not a nicety: a drag handle is
+                       unusable with a keyboard and invisible to a screen
+                       reader, and the position of a form field is exactly the
+                       thing somebody configuring a form needs to set. #}
+                    <div x-data="fieldSorter()"
+                         @dragstart="start($event)"
+                         @dragover.prevent="over($event)"
+                         @drop="drop($event)"
+                         @dragend="end()"
+                         class="space-y-3">
+                        {% for option in fieldOptions|default([]) %}
+                            <div data-sortable-row="{{ option.name }}" class="flex items-start gap-2">
+                                <div class="flex shrink-0 flex-col items-center gap-1 pt-3">
+                                    <button type="button" draggable="true"
+                                            class="cursor-grab touch-none rounded p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600 active:cursor-grabbing"
+                                            aria-label="{{ option.label }} ফিল্ডটি টেনে সরান">
+                                        {{ icon('grip-vertical', 'w-4 h-4') }}
+                                    </button>
+                                    <button type="button" data-sortable-up
+                                            @click="step($el.closest('[data-sortable-row]'), -1)"
+                                            class="rounded p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
+                                            aria-label="{{ option.label }} ফিল্ডটি এক ধাপ উপরে সরান">
+                                        {{ icon('chevron-up', 'w-3 h-3') }}
+                                    </button>
+                                    <button type="button" data-sortable-down
+                                            @click="step($el.closest('[data-sortable-row]'), 1)"
+                                            class="rounded p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
+                                            aria-label="{{ option.label }} ফিল্ডটি এক ধাপ নিচে সরান">
+                                        {{ icon('chevron-down', 'w-3 h-3') }}
+                                    </button>
+                                </div>
+                                <input type="hidden" name="field_order[]" value="{{ option.name }}">
+                                <div class="min-w-0 flex-1">
                         {% if option.custom %}
                             <div x-data="{ drop: false }" class="rounded-lg border p-4"
                                  :class="drop ? 'border-danger-300 bg-danger-50/40' : 'border-primary-200 bg-primary-50/30'">
@@ -287,7 +331,10 @@
                                 </label>
                             </div>
                         {% endif %}
-                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
 
                     {# ---- নতুন ফিল্ড যোগ করা ---- #}
                     <div class="rounded-lg border border-dashed border-neutral-300 bg-neutral-50/60 p-4">
@@ -409,7 +456,7 @@
                        filtered: {{ filterSet|default(false) ? 'true' : 'false' }},
                        all: false, target: '', scope: 'selected',
                        boxes() { return document.getElementById('services-rows').querySelectorAll('input[type=checkbox]'); },
-                       up() { return count > 0 || filtered; },
+                       up() { return this.count > 0 || this.filtered; },
                        confirm(action, n) {
                            if (action === 'deactivate') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস নিষ্ক্রিয় করবেন? ইজারতে ওগুলো আর দেখা যাবে না।');
                            if (action === 'trash') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস ট্র্যাশে পাঠাবেন? পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে এবং চাইলে রিস্টোর করা যাবে।');
@@ -466,7 +513,7 @@
                             {# Drives the row boxes and is never itself submitted: it carries
                                no `name`, so it cannot end up in the `ids[]` payload. #}
                             <th class="w-10">
-                                <input type="checkbox" x-bind:checked="all"
+                                <input type="checkbox" x-model="all"
                                        @change="boxes().forEach(row => row.checked = $el.checked)"
                                        class="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
                                        aria-label="এই পাতার সব সার্ভিস নির্বাচন করুন">
@@ -475,10 +522,13 @@
                         </tr>
                     </thead>
                     <tbody id="services-rows">
-                        {% set catNames = {} %}
-                        {% for category in categories %}
-                            {% set catNames = catNames|merge({(category.id): category.name}) %}
-                        {% endfor %}
+                        {# The category name is looked up with `filter`, not with a
+                           prebuilt id => name map: `{(category.id): category.name}`
+                           is not a keyed hash in Twig — the parenthesised key is
+                           dropped and the literal becomes a 0-indexed list, so
+                           `catNames[service.category_id]` answered with the
+                           *next* category's name and the last category fell
+                           through to a raw id. Every row read one chip too far. #}
                         {% for service in services %}
                             {% set isTrashed = service.deleted_at is not empty %}
                             <tr class="{{ isTrashed ? 'bg-neutral-50 text-neutral-400' : (isEdit and editService.id == service.id ? 'bg-primary-50/60' : '') }}">
@@ -498,7 +548,8 @@
                                         <p class="text-xs text-danger-600">মুছে ফেলা: {{ service.deleted_at|bndate }}</p>
                                     {% endif %}
                                 </td>
-                                <td class="text-sm text-neutral-500">{{ catNames[service.category_id] ?? service.category_id }}</td>
+                                {% set rowCategory = categories|filter(c => c.id == service.category_id)|first %}
+                                <td class="text-sm text-neutral-500">{{ rowCategory.name ?? service.category_id }}</td>
                                 <td class="font-semibold {{ isTrashed ? 'text-neutral-400' : 'text-primary-700' }}">{{ service.price|money }}</td>
                                 <td>
                                     {% if isTrashed %}

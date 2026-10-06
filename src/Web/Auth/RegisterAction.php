@@ -72,6 +72,7 @@ final readonly class RegisterAction
 
             $errors = $result['errors'];
             $old = [
+                'full_name' => (string) ($input['full_name'] ?? ''),
                 'username' => (string) ($input['username'] ?? ''),
                 'phone' => (string) ($input['phone'] ?? ''),
                 'email' => (string) ($input['email'] ?? ''),

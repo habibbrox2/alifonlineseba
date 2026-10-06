@@ -55,6 +55,21 @@ final class StatusPresenter
         'danger' => ['অ্যালার্ট', 'badge-danger'],
     ];
 
+    /**
+     * Statuses that mean "still moving" — a spinner belongs in the pill.
+     *
+     * These three are the states a user *waits* in: the queue nobody has
+     * touched, the one an operator is working on, and the one a verifier has
+     * picked up. They get an animated ring inside the badge (see
+     * `.badge-loading` in resources/css/app.css) so "work is happening" reads
+     * as motion instead of as a word you have to know the meaning of.
+     *
+     * Deliberately not extended to `completed`/`failed`: a settled row that
+     * still spins is a lie, and it steals attention from the rows that are
+     * actually live.
+     */
+    private const IN_FLIGHT = [self::PENDING, self::PROCESSING, 'review'];
+
     /** Action key => [label, icon, button variant]. */
     private const ACTIONS = [
         'start' => ['শুরু করুন', 'play', 'btn-primary'],
@@ -164,7 +179,11 @@ final class StatusPresenter
             $entries[] = [
                 'key' => $key,
                 'label' => self::RESULT_LABELS[$key] ?? self::label($key),
-                'value' => is_scalar($value) ? (string) $value : self::flatten($value),
+                // A date is shown the way it was typed (`06-10-2026`), never
+                // as the `2026-10-06` the row stores — and ServiceDate is a
+                // no-op for every value that is not a date, so a phone number
+                // or an address passes through untouched.
+                'value' => is_scalar($value) ? ServiceDate::display($value) : self::flatten($value),
             ];
         }
 
@@ -198,7 +217,13 @@ final class StatusPresenter
 
     public static function badge(string $status): string
     {
-        return self::MAP[$status][1] ?? 'badge-neutral';
+        $class = self::MAP[$status][1] ?? 'badge-neutral';
+
+        // Returned from here rather than from html() on purpose: this string
+        // is what the JSON API hands the poller (`status_badge`), so a row that
+        // changes to `processing` from an AJAX update animates exactly like the
+        // one the server rendered — one place decides, both agree.
+        return in_array($status, self::IN_FLIGHT, true) ? $class . ' badge-loading' : $class;
     }
 
     public static function html(string $status): string

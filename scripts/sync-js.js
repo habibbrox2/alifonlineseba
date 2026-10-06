@@ -15,6 +15,8 @@ fs.copyFileSync(root + '/resources/js/app.js', dest + '/js/app.js');
 fs.copyFileSync(root + '/resources/js/dashboard.js', dest + '/js/dashboard.js');
 fs.copyFileSync(root + '/resources/js/service-history.js', dest + '/js/service-history.js');
 fs.copyFileSync(root + '/resources/js/icon-picker.js', dest + '/js/icon-picker.js');
+fs.copyFileSync(root + '/resources/js/field-sorter.js', dest + '/js/field-sorter.js');
+fs.copyFileSync(root + '/resources/js/date-field.js', dest + '/js/date-field.js');
 fs.copyFileSync(root + '/resources/js/app-install.js', dest + '/js/app-install.js');
 fs.copyFileSync(root + '/resources/js/push-subscribe.js', dest + '/js/push-subscribe.js');
 fs.copyFileSync(root + '/resources/js/push-prompt.js', dest + '/js/push-prompt.js');

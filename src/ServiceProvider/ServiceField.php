@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\ServiceProvider;
 
+use App\Service\ImageUploadStorage;
+
 /**
  * A single field of a service form.
  */
@@ -13,8 +15,14 @@ final class ServiceField
      * Input types a field may use. Deliberately a whitelist: the type ends up
      * verbatim in an HTML `type="…"` attribute on the public form, so an
      * arbitrary string from the database must never reach it.
+     *
+     * `image` is not an HTML input type — it is rendered as the drop zone in
+     * `components/form-row.twig` and stored by `ImageUploadStorage`, which
+     * refuses anything whose *sniffed* type is not an image. `file` stays on the
+     * list because a stored configuration may still name it; it renders as a
+     * plain file input.
      */
-    public const TYPES = ['text', 'textarea', 'number', 'date', 'email', 'tel'];
+    public const TYPES = ['file','image', 'text', 'textarea', 'number', 'date', 'email', 'tel'];
 
     /**
      * Field names become HTML attribute names and POST keys, so they are
@@ -30,6 +38,17 @@ final class ServiceField
      */
     public const RESERVED_NAMES = ['do', 'id', 'csrf'];
 
+    /**
+     * Bounds on a stored image's size, in bytes.
+     *
+     * Anything outside is clamped rather than rejected, because this value
+     * reaches here from a stored JSON configuration an admin can edit by hand.
+     * The floor is below any usable image; the ceiling is the upload ceiling
+     * itself, so a field can never ask for more than
+     * {@see ImageUploadStorage::MAX_BYTES} and then be surprised.
+     */
+    private const MIN_MAX_BYTES = 8 * 1024;
+
     public function __construct(
         public readonly string $name,
         public readonly string $label,
@@ -37,6 +56,16 @@ final class ServiceField
         public readonly bool $required = true,
         public readonly string $placeholder = '',
         public readonly string $help = '',
+        /**
+         * Byte budget for an `image` field, or null to mean "no target, just
+         * the shared ceiling".
+         *
+         * It lives on the field rather than on the service because a photo and
+         * a signature answer different questions: the photo has to hold a face,
+         * the signature only a pen stroke, and there is no reason for the
+         * second to be allowed the first one's disk bill.
+         */
+        public readonly ?int $maxBytes = null,
     ) {}
 
     public static function fromArray(array $data): self
@@ -48,7 +77,30 @@ final class ServiceField
             (bool) ($data['required'] ?? true),
             (string) ($data['placeholder'] ?? ''),
             (string) ($data['help'] ?? ''),
+            self::normaliseMaxBytes($data['max_bytes'] ?? null),
         );
+    }
+
+    /**
+     * A byte budget from a stored configuration, or null for "no target".
+     *
+     * A JSON configuration can hold anything at all, so this is defensive by
+     * necessity rather than by taste: a string, a float, a negative number and
+     * a list all have to mean either a sane target or no target at all, and
+     * none of them may reach `store()`.
+     */
+    public static function normaliseMaxBytes(mixed $value): ?int
+    {
+        if (!is_int($value) && !(is_string($value) && ctype_digit(trim($value)))) {
+            return null;
+        }
+
+        $bytes = (int) $value;
+        if ($bytes < self::MIN_MAX_BYTES) {
+            return null;
+        }
+
+        return min($bytes, ImageUploadStorage::MAX_BYTES);
     }
 
     /**
@@ -77,6 +129,7 @@ final class ServiceField
             (bool) ($item['required'] ?? true),
             mb_substr(trim((string) ($item['placeholder'] ?? '')), 0, 120),
             mb_substr(trim((string) ($item['help'] ?? '')), 0, 190),
+            self::normaliseMaxBytes($item['max_bytes'] ?? null),
         );
     }
 
@@ -111,6 +164,7 @@ final class ServiceField
             'required' => $this->required,
             'placeholder' => $this->placeholder,
             'help' => $this->help,
+            'max_bytes' => $this->maxBytes,
         ];
     }
 }

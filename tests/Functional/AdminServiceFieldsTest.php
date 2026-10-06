@@ -278,20 +278,27 @@ final class AdminServiceFieldsTest extends \Codeception\Test\Unit
         assertFalse($options[0]['custom']);
     }
 
-    public function testFieldOptionsListCustomFieldsLastAndAfterProviderFields(): void
+    public function testFieldOptionsFollowTheStoredOrderAndAppendWhateverItDoesNotPlace(): void
     {
+        // This used to promise that provider fields always come first and custom
+        // ones last. It cannot still: an admin who drags a custom field above a
+        // provider one has to see it stay there next time, or the page undoes
+        // their work on every visit. The stored order now wins, and a provider
+        // field the configuration never mentions — `nid_number` below — lands at
+        // the end, because it has no position of its own to keep.
         $options = AdminServicesAction::buildFieldOptions($this->providerFields(), [
             ['name' => 'mobile_number', 'label' => 'মোবাইল', 'type' => 'tel', 'required' => true, 'enabled' => true],
             ['name' => 'date_of_birth', 'required' => false],
         ]);
 
-        assertSame(['nid_number', 'date_of_birth', 'mobile_number'], $this->names($options));
-        assertFalse($options[0]['enabled']);
-        assertFalse($options[0]['required']);
+        assertSame(['mobile_number', 'date_of_birth', 'nid_number'], $this->names($options));
+        assertTrue($options[1]['enabled'], 'Being in the configuration is what switches a provider field on.');
+        assertFalse($options[1]['required']);
         assertFalse($options[1]['custom']);
-        assertTrue($options[2]['custom']);
-        assertTrue($options[2]['enabled']);
-        assertSame('', $options[2]['placeholder']);
+        assertTrue($options[0]['custom']);
+        assertTrue($options[0]['enabled']);
+        assertSame('', $options[0]['placeholder']);
+        assertFalse($options[2]['enabled'], 'A provider field absent from the config is off, as before.');
     }
 
     public function testDisabledFieldOptionIsNeverRequired(): void
@@ -314,5 +321,102 @@ final class AdminServiceFieldsTest extends \Codeception\Test\Unit
 
         assertTrue($options[0]['enabled']);
         assertTrue($options[0]['required']);
+    }
+
+    // ---- Dragging rows into an order ---------------------------------------
+
+    public function testTheOrderTheRowsAreDraggedIntoIsTheOrderThatIsStored(): void
+    {
+        $result = AdminServicesAction::buildFormFieldConfig([
+            'fields' => ['nid_number', 'date_of_birth'],
+            'field_order' => ['date_of_birth', 'nid_number', 'mobile_number'],
+            'custom_label' => ['mobile_number' => 'মোবাইল নম্বর'],
+        ], $this->providerFields(), $this->customFields());
+
+        assertSame([], $result['errors']);
+        assertSame(
+            ['date_of_birth', 'nid_number', 'mobile_number'],
+            $this->names($result['config']),
+            'A custom field dragged above a provider one keeps its place — otherwise the ordering the '
+            . 'admin just did would be thrown away for half the fields.',
+        );
+    }
+
+    public function testAFieldMissingFromThePostedOrderKeepsItsPlaceRatherThanVanishing(): void
+    {
+        // A provider that gains a field after this page was rendered, a browser
+        // that reloaded the form from a stale copy, a script that half-ran.
+        $result = AdminServicesAction::buildFormFieldConfig([
+            'fields' => ['nid_number', 'date_of_birth'],
+            'field_order' => ['date_of_birth'],
+        ], $this->providerFields(), $this->customFields());
+
+        assertSame([], $result['errors']);
+        assertSame(
+            ['date_of_birth', 'nid_number', 'mobile_number'],
+            $this->names($result['config']),
+            'Named rows first in the order given, then everything else in the order it would have had.',
+        );
+    }
+
+    public function testAnUnknownNameInTheOrderIsIgnoredRatherThanLosingTheEdits(): void
+    {
+        // The deliberate difference from `fields[]`, where an unknown name is
+        // refused: an ordering hint cannot change what the form contains, so a
+        // stale one should cost the admin nothing.
+        $result = AdminServicesAction::buildFormFieldConfig([
+            'fields' => ['nid_number', 'date_of_birth'],
+            'field_order' => ['ghost', 'date_of_birth', 'nid_number', 'ghost'],
+            'custom_label' => ['mobile_number' => 'মোবাইল (নতুন)'],
+        ], $this->providerFields(), $this->customFields());
+
+        assertSame([], $result['errors']);
+        assertSame(['date_of_birth', 'nid_number', 'mobile_number'], $this->names($result['config']));
+        assertSame('মোবাইল (নতুন)', $result['config'][2]['label']);
+    }
+
+    public function testAFormWithNoOrderListStillSavesInTheOrderItWasPostedIn(): void
+    {
+        // JavaScript off, or an old tab: the rows are still in the server's order,
+        // and that is the order that must be kept.
+        $result = AdminServicesAction::buildFormFieldConfig([
+            'fields' => ['date_of_birth', 'nid_number'],
+        ], $this->providerFields(), []);
+
+        assertSame(['date_of_birth', 'nid_number'], $this->names($result['config']));
+    }
+
+    public function testReorderingDoesNotChangeWhatTheFormContains(): void
+    {
+        $fields = ['fields' => ['nid_number', 'date_of_birth'], 'required_fields' => ['date_of_birth']];
+
+        $before = AdminServicesAction::buildFormFieldConfig($fields, $this->providerFields(), []);
+        $after = AdminServicesAction::buildFormFieldConfig(
+            $fields + ['field_order' => ['date_of_birth', 'nid_number']],
+            $this->providerFields(),
+            [],
+        );
+
+        $sorted = static function (array $config): array {
+            usort($config, static fn (array $a, array $b): int => $a['name'] <=> $b['name']);
+
+            return $config;
+        };
+
+        assertSame(
+            ['nid_number', 'date_of_birth'],
+            $this->names($before['config']),
+        );
+        assertSame(
+            ['date_of_birth', 'nid_number'],
+            $this->names($after['config']),
+            'The drag is what moved them, and nothing else.',
+        );
+        assertSame(
+            $sorted($before['config']),
+            $sorted($after['config']),
+            'Same fields with the same flags — a drag is not allowed to quietly change a required '
+            . 'checkbox on its way past.',
+        );
     }
 }

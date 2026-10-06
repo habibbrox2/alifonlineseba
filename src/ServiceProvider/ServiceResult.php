@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\ServiceProvider;
 
 /**
- * Result of a service execution — always demo data.
+ * Result of a service execution.
  */
 final class ServiceResult
 {

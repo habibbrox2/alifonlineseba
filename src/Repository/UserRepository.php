@@ -138,8 +138,17 @@ final class UserRepository
         $now = date('Y-m-d H:i:s');
         $this->db->createCommand()->insert('{{%user}}', [
             'username' => $row['username'],
+            // The name a human is shown on orders, rosters and the profile
+            // card. Falls back to '' (the column's default) rather than null:
+            // `displayName()` answers an empty name with the username, and a
+            // NULL here would make every read path check two shapes.
+            'full_name' => trim((string) ($row['full_name'] ?? '')),
             'phone' => $row['phone'],
             'email' => $row['email'] ?? null,
+            // Optional, and already canonical: the action runs the typed value
+            // through ServiceDate first, so this table can never end up with
+            // `06-10-2026` sitting next to somebody else's `1990-05-04`.
+            'date_of_birth' => $row['date_of_birth'] ?? null,
             'password_hash' => $row['password_hash'],
             'status' => $row['status'] ?? 'active',
             'role' => $row['role'] ?? 'user',
@@ -358,7 +367,7 @@ final class UserRepository
     }
 
     /** Whitelisted sortable columns => SQL column expression. */
-    public const SORTABLE = ['id', 'username', 'balance', 'role', 'status', 'last_login_at', 'created_at'];
+    public const SORTABLE = ['id', 'full_name', 'username', 'balance', 'role', 'status', 'last_login_at', 'created_at'];
 
     /** Role => Bengali label, for the roster and the user list. */
     public const ROLE_LABELS = [
@@ -391,7 +400,10 @@ final class UserRepository
         }
 
         if ($q !== '') {
-            $conditions[] = '([[username]] LIKE :q OR [[phone]] LIKE :q OR [[email]] LIKE :q)';
+            // full_name first: it is what an admin types. An account whose
+            // name has never been filled in is still reachable by its handle,
+            // phone or email in the same clause.
+            $conditions[] = '([[full_name]] LIKE :q OR [[username]] LIKE :q OR [[phone]] LIKE :q OR [[email]] LIKE :q)';
             $params[':q'] = "%{$q}%";
         }
 
@@ -514,6 +526,49 @@ final class UserRepository
             ->queryScalar();
 
         return $id === false || $id === null ? null : (int) $id;
+    }
+
+    /**
+     * @param string $deleted One of self::DELETED_EXCLUDE (default), DELETED_ONLY, DELETED_ALL.
+     * @return array{rows: array, total: int}
+     */
+    public function paginateStaff(
+        int $page,
+        int $perPage,
+        string $q = '',
+        string $deleted = self::DELETED_EXCLUDE,
+    ): array {
+        $offset = max(0, ($page - 1) * $perPage);
+        $conditions = [
+            "[[role]] IN ('admin','staff','superadmin')",
+        ];
+        $params = [];
+
+        if ($deleted === self::DELETED_ONLY) {
+            $conditions[] = '[[deleted_at]] IS NOT NULL';
+        } elseif ($deleted === self::DELETED_ALL) {
+            $conditions[] = '1=1';
+        } else {
+            $conditions[] = '[[deleted_at]] IS NULL';
+        }
+
+        if ($q !== '') {
+            $conditions[] = '([[full_name]] LIKE :q OR [[username]] LIKE :q OR [[phone]] LIKE :q OR [[email]] LIKE :q)';
+            $params[':q'] = "%{$q}%";
+        }
+
+        $where = 'WHERE ' . implode(' AND ', $conditions);
+        $total = (int) $this->db
+            ->createCommand("SELECT COUNT(*) FROM {{%user}} {$where}")
+            ->bindValues($params)
+            ->queryScalar();
+        $rows = $this->db
+            ->createCommand(
+                "SELECT * FROM {{%user}} {$where} ORDER BY ([[role]] = 'superadmin') DESC, [[id]] ASC LIMIT {$perPage} OFFSET {$offset}"
+            )
+            ->bindValues($params)
+            ->queryAll();
+        return ['rows' => $rows, 'total' => $total];
     }
 
     /**

@@ -26,6 +26,17 @@ use function PHPUnit\Framework\assertStringNotContainsString;
  * `.user.ini` sitting in the web root as plain text.
  *
  * The assertions below are about that ordering, which is the whole design.
+ *
+ * The rule *names* follow the hardening in a52be83 rather than the original
+ * wording, because asserting the old strings would only prove the file had not
+ * been improved: the exemption narrowed from the whole `/.well-known/` tree to
+ * the two paths that genuinely need the front controller (TWA's
+ * `assetlinks.json`, ACME's `acme-challenge/`), the flag was renamed to
+ * `ALLOW_WELL_KNOWN` to match, the deny gained `[L]` and a `(^|/)\.` pattern
+ * that also catches a dot mid-path, and the front controller moved from `[L]`
+ * to `[END]` (which the post-deploy check already accepts — see 604e890).
+ * What did not change, and what is still asserted, is the ordering: exemption,
+ * then guarded deny, then passthrough, then catch-all, nothing after it.
  */
 final class HtaccessTest extends Unit
 {
@@ -47,17 +58,24 @@ final class HtaccessTest extends Unit
 
     public function testWellKnownReachesTheFrontControllerBeforeTheDotfileDeny(): void
     {
-        $exempt = strpos($this->rules, 'RewriteRule ^\.well-known(/|$) - [E=DOTFILE_ALLOWED:1]');
-        $deny = strpos($this->rules, 'RewriteRule (^\.|/\.) - [F]');
-        assertNotFalse($exempt, 'The /.well-known/ exemption must exist.');
+        $exempt = strpos(
+            $this->rules,
+            'RewriteRule ^\.well-known/(?:assetlinks\.json|acme-challenge/) - [E=ALLOW_WELL_KNOWN:1]',
+        );
+        $deny = strpos($this->rules, 'RewriteRule (^|/)\. - [F,L]');
+
+        assertNotFalse(
+            $exempt,
+            'The assetlinks/acme exemption must exist — without it /.well-known/assetlinks.json is a 403 under Apache.',
+        );
         assertNotFalse($deny, 'The dotfile deny must exist.');
         assertLessThan($deny, $exempt, 'The exemption must run before the deny, or assetlinks.json is a 403.');
     }
 
     public function testTheDenyAppliesEvenWhenTheDotfileExistsOnDisk(): void
     {
-        $cond = strpos($this->rules, 'RewriteCond %{ENV:DOTFILE_ALLOWED} !1');
-        $deny = strpos($this->rules, 'RewriteRule (^\.|/\.) - [F]');
+        $cond = strpos($this->rules, 'RewriteCond %{ENV:ALLOW_WELL_KNOWN} !=1');
+        $deny = strpos($this->rules, 'RewriteRule (^|/)\. - [F,L]');
         $passthrough = strpos($this->rules, 'RewriteCond %{REQUEST_FILENAME} -f [OR]');
 
         assertNotFalse($cond, 'The deny must be guarded by the exemption.');
@@ -78,7 +96,9 @@ final class HtaccessTest extends Unit
 
     public function testFrontControllerIsTheLastRewriteRule(): void
     {
-        $catchAll = 'RewriteRule ^ index.php [L]';
+        // Matched without the flag: [L] and [END] are both valid endings, and
+        // this test is about position, not which of the two the file uses.
+        $catchAll = 'RewriteRule ^ index.php';
         $last = strrpos($this->rules, $catchAll);
         assertNotFalse($last, 'Every other request must fall through to index.php.');
         assertStringContainsString('RewriteEngine On', $this->rules);

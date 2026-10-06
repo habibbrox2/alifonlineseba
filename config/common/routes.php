@@ -31,6 +31,7 @@ use App\Web\Admin\AdminStaffAction;
 use App\Web\Admin\AdminTopupsAction;
 use App\Web\Admin\AdminTransactionAction;
 use App\Web\Admin\AdminTransactionsAction;
+use App\Web\Admin\AdminUserEditAction;
 use App\Web\Admin\AdminUsersAction;
 use App\Web\Admin\AdminWithdrawsAction;
 use App\Web\Api\AppVersionApiAction;
@@ -44,6 +45,16 @@ use App\Web\Api\ServiceRequestApiAction;
 use App\Web\Api\ServiceRequestDetailApiAction;
 use App\Web\Api\ServiceRequestsWatchApiAction;
 use App\Web\Api\ServicesApiAction;
+use App\Web\Api\Admin\AdminDashboardApiAction;
+use App\Web\Api\Admin\AdminLogsApiAction;
+use App\Web\Api\Admin\AdminNotificationsApiAction;
+use App\Web\Api\Admin\AdminOrdersApiAction;
+use App\Web\Api\Admin\AdminRechargesApiAction;
+use App\Web\Api\Admin\AdminSettingsApiAction;
+use App\Web\Api\Admin\AdminStaffApiAction;
+use App\Web\Api\Admin\AdminTopupsApiAction;
+use App\Web\Api\Admin\AdminUsersApiAction;
+use App\Web\Api\Admin\AdminWithdrawsApiAction;
 use App\Web\Api\TransactionsApiAction;
 use App\Web\Auth\ForgotPasswordAction;
 use App\Web\Auth\LoginAction;
@@ -173,6 +184,22 @@ return [
         Route::get('/profile')->action(ProfileApiAction::class)->name('api-profile'),
     ),
 
+    // Admin JSON API (auth required — bearer token OR session)
+    Group::create('/api/admin')->middleware(AdminMiddleware::class)->routes(
+        Route::get('/dashboard')->action(AdminDashboardApiAction::class)->name('api-admin-dashboard'),
+        Route::methods(['GET', 'POST'], '/users')->action(AdminUsersApiAction::class)->name('api-admin-users'),
+        Route::methods(['GET', 'POST'], '/orders')->action(AdminOrdersApiAction::class)->name('api-admin-orders'),
+        Route::post('/orders/bulk')->action(AdminOrdersApiAction::class)->name('api-admin-orders-bulk'),
+        Route::get('/topups')->action(AdminTopupsApiAction::class)->name('api-admin-topups'),
+        Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargesApiAction::class)->name('api-admin-recharges'),
+        Route::get('/withdraws')->action(AdminWithdrawsApiAction::class)->name('api-admin-withdraws'),
+        Route::get('/staff')->action(AdminStaffApiAction::class)->name('api-admin-staff'),
+        Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsApiAction::class)->name('api-admin-settings'),
+        Route::get('/logs')->action(AdminLogsApiAction::class)->name('api-admin-logs'),
+        Route::get('/notifications')->action(AdminNotificationsApiAction::class)->name('api-admin-notifications'),
+        Route::post('/notifications/{id}/retry')->action(AdminNotificationsApiAction::class)->name('api-admin-notification-retry'),
+    ),
+
     // Admin (admin/staff/superadmin)
     Group::create('/admin')
         ->middleware(AdminMiddleware::class)
@@ -183,6 +210,10 @@ return [
             Route::get('/')->action(AdminDashboardAction::class)->name('admin-slash'),
             Route::get('/users')->action(AdminUsersAction::class)->name('admin-users'),
             Route::post('/users')->action(AdminUsersAction::class)->name('admin-users-post'),
+            // The per-user editor. Everything a row cannot hold — the name,
+            // the handles, the birth date — which is why role and status stay
+            // on the list as one-click controls instead of being repeated here.
+            Route::methods(['GET', 'POST'], '/users/{id}')->action(AdminUserEditAction::class)->name('admin-user-edit'),
             Route::get('/categories')->action(AdminCategoriesAction::class)->name('admin-categories'),
             Route::post('/categories')->action(AdminCategoriesAction::class)->name('admin-categories-post'),
             Route::get('/services')->action(AdminServicesAction::class)->name('admin-services'),

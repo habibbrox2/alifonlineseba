@@ -11,6 +11,7 @@ use App\Repository\PushSubscriptionRepository;
 use App\Repository\TopupRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\UserRepository;
+use App\Service\ServiceDate;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\UrlGeneratorInterface;
@@ -65,10 +66,24 @@ final readonly class ProfileAction
             } elseif ($action === 'push') {
                 $this->togglePush($identity, (string) ($input['enabled'] ?? '0'));
             } else {
+                $fullName = trim((string) ($input['full_name'] ?? ''));
                 $email = trim((string) ($input['email'] ?? ''));
                 $whatsapp = self::normalizePhone((string) ($input['whatsapp_no'] ?? ''));
                 $telegram = trim((string) ($input['telegram_no'] ?? ''));
+                // Typed as `06-10-2026`, stored as `2026-10-06`, judged by the
+                // same class every service form is judged by — an optional
+                // answer, so a blank is legal and clears the column.
+                $birthTyped = trim((string) ($input['date_of_birth'] ?? ''));
+                $birthDate = ServiceDate::canonical($birthTyped);
 
+                // Same contract as signup: the name is required, and the 120
+                // cap mirrors the column so MySQL never truncates what the
+                // person just typed.
+                if ($fullName === '' || mb_strlen($fullName) < 2) {
+                    $errors['full_name'] = 'পুরো নাম লিখুন (কমপক্ষে ২ অক্ষর)।';
+                } elseif (mb_strlen($fullName) > 120) {
+                    $errors['full_name'] = 'পুরো নাম ১২০ অক্ষরের বেশি হতে পারবে না।';
+                }
                 if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     $errors['email'] = 'সঠিক ইমেইল দিন।';
                 }
@@ -77,6 +92,9 @@ final readonly class ProfileAction
                 }
                 if ($telegram !== '' && !self::isTelegramHandle($telegram)) {
                     $errors['telegram_no'] = 'সঠিক টেলিগ্রাম ইউজারনেম বা নম্বর দিন।';
+                }
+                if ($birthTyped !== '' && $birthDate === null) {
+                    $errors['date_of_birth'] = ServiceDate::errorMessage();
                 }
                 // Two people can legitimately share a WhatsApp line, so this is
                 // a *duplicate* check rather than a unique constraint: it stops
@@ -97,9 +115,11 @@ final readonly class ProfileAction
 
                 if ($errors === []) {
                     $this->users->update($identity->id, [
+                        'full_name' => $fullName,
                         'email' => $email ?: null,
                         'whatsapp_no' => $whatsapp ?: null,
                         'telegram_no' => $telegram ?: null,
+                        'date_of_birth' => $birthDate,
                     ]);
                     $this->session->set('flash_success', 'প্রোফাইল আপডেট হয়েছে।');
                 }
@@ -113,9 +133,14 @@ final readonly class ProfileAction
             // error that silently reverts the form to the old values is how a
             // person ends up retyping the same field three times.
             $row = array_merge($row ?? [], [
+                'full_name' => $fullName ?? ($row['full_name'] ?? null),
                 'email' => $email ?? ($row['email'] ?? null),
                 'whatsapp_no' => $whatsapp ?? ($row['whatsapp_no'] ?? null),
                 'telegram_no' => $telegram ?? ($row['telegram_no'] ?? null),
+                // Back in the form the way it was typed, not as the ISO the
+                // row holds — otherwise a rejected date would come back
+                // reformatted and the person would not recognise their answer.
+                'date_of_birth' => $birthTyped ?? ($row['date_of_birth'] ?? null),
             ]);
         }
 
@@ -126,6 +151,10 @@ final readonly class ProfileAction
 
         return $this->view->render('site/account/profile.twig', [
             'user' => $row ?? [],
+            // What the date field shows. On a fresh GET that is the stored
+            // `2026-10-06`; after a rejected POST it is the typed text the
+            // redisplay above put back into the row.
+            'dateOfBirthDisplay' => ServiceDate::display($row['date_of_birth'] ?? ''),
             'apiKey' => $row !== null ? $this->users->ensureApiKey($identity->id) : null,
             'activity' => $activity['rows'],
             'stats' => $stats,

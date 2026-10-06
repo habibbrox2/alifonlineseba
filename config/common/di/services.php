@@ -14,6 +14,7 @@ use App\Repository\BotConnectionRepository;
 use App\Repository\DeviceRepository;
 use App\Service\AppReleaseService;
 use App\Service\EmailSender;
+use App\Service\ImageUploadStorage;
 use App\Service\PasswordResetService;
 use App\Repository\SettingsRepository;
 use App\Service\DeliverableStorage;
@@ -29,6 +30,10 @@ return [
     // Same reason: the deliverable directory lives outside the web root, so the
     // container cannot infer the path.
     DeliverableStorage::class => static fn (): DeliverableStorage => DeliverableStorage::fromProjectRoot(),
+
+    // Same reason for ordinary user-supplied images: `web/image-uploads/` sits
+    // outside the document root, so the container cannot infer the path.
+    ImageUploadStorage::class => static fn (): ImageUploadStorage => ImageUploadStorage::fromProjectRoot(),
 
     // And the same again for self-hosted APKs: `web/releases/` sits outside
     // the document root, so the container cannot infer the path. The

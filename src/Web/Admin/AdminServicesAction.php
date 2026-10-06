@@ -735,7 +735,64 @@ final readonly class AdminServicesAction
             ];
         }
 
-        return ['config' => $config, 'errors' => [], 'added' => $added, 'removed' => $removed];
+        return [
+            'config' => self::applyFieldOrder($config, $input['field_order'] ?? []),
+            'errors' => [],
+            'added' => $added,
+            'removed' => $removed,
+        ];
+    }
+
+    /**
+     * Reorders the stored configuration the way the admin arranged the rows.
+     *
+     * `field_order` is a list of field names in the order they were dragged into.
+     * Anything the list does not name keeps its position, after the named ones, so
+     * a name that is missing — a field the provider gained since this page was
+     * rendered, say — cannot silently drop out of the form.
+     *
+     * An unknown name is ignored rather than rejected, which is deliberately
+     * different from how `fields[]` is treated. A name in `fields[]` asks to
+     * *change* what the form contains, so an unrecognised one has to stop the
+     * write rather than quietly do something else. An ordering hint cannot
+     * change anything by itself: at worst it reorders entries that are already
+     * being rewritten, so refusing the whole submission over a stale name would
+     * lose the admin's edits for no gain.
+     *
+     * A form posted without the list at all — JavaScript off, or an old tab —
+     * keeps today's behaviour, which is the order the checkboxes arrived in.
+     *
+     * @param array<int, array<string, mixed>> $config
+     * @return array<int, array<string, mixed>>
+     */
+    private static function applyFieldOrder(array $config, mixed $order): array
+    {
+        $names = self::toNameList($order);
+        if ($names === []) {
+            return $config;
+        }
+
+        $byName = [];
+        foreach ($config as $item) {
+            $byName[(string) $item['name']] = $item;
+        }
+
+        $ordered = [];
+        $placed = [];
+        foreach ($names as $name) {
+            if (isset($byName[$name]) && !isset($placed[$name])) {
+                $ordered[] = $byName[$name];
+                $placed[$name] = true;
+            }
+        }
+        foreach ($config as $item) {
+            $name = (string) $item['name'];
+            if (!isset($placed[$name])) {
+                $ordered[] = $item;
+            }
+        }
+
+        return $ordered;
     }
 
     /**
@@ -775,9 +832,17 @@ final readonly class AdminServicesAction
     }
 
     /**
-     * Provider fields come first, then the admin-defined ones in the order they
-     * were added. A null config means the provider defaults still apply, so
-     * every one of them is on.
+     * Rows in the order the end-user's form will show them.
+     *
+     * The stored order wins over the provider's own order, because that is the
+     * whole point of letting an admin drag the rows: an arrangement they saved
+     * has to be the arrangement they are shown again, or the page would quietly
+     * undo their work every time they came back to it. A provider field the
+     * configuration never mentions is appended at the end, since there is no
+     * position for it to have had.
+     *
+     * A null config means the provider defaults still apply, so every one of
+     * them is on and the provider's own order is the order.
      *
      * @param ServiceField[] $defaults
      * @param array<int, array<string, mixed>>|null $config
@@ -795,10 +860,10 @@ final readonly class AdminServicesAction
             ];
         }
 
-        $options = [];
+        $rows = [];
         foreach ($defaults as $field) {
             $enabled = $usingDefaults || array_key_exists($field->name, $state);
-            $options[] = self::optionRow(
+            $rows[$field->name] = self::optionRow(
                 $field,
                 $enabled,
                 $state[$field->name]['required'] ?? $field->required,
@@ -806,7 +871,7 @@ final readonly class AdminServicesAction
             );
         }
         foreach (self::customFieldsOf($config ?? []) as $field) {
-            $options[] = self::optionRow(
+            $rows[$field->name] = self::optionRow(
                 $field,
                 $state[$field->name]['enabled'] ?? false,
                 $state[$field->name]['required'] ?? $field->required,
@@ -814,7 +879,22 @@ final readonly class AdminServicesAction
             );
         }
 
-        return $options;
+        if ($usingDefaults) {
+            return array_values($rows);
+        }
+
+        $ordered = [];
+        foreach ($config as $item) {
+            $name = (string) $item['name'];
+            if (isset($rows[$name])) {
+                $ordered[] = $rows[$name];
+                unset($rows[$name]);
+            }
+        }
+
+        // Whatever the stored configuration does not place: provider fields the
+        // admin never touched, in the provider's order.
+        return [...$ordered, ...array_values($rows)];
     }
 
     /**

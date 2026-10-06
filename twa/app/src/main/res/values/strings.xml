@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  launchUrl and hostName are the two values that must move together with
+  TWA_ORIGIN in the site's .env. hostName is what android-browser-helper puts
+  in the verified origin check; launchUrl is the page the app opens.
+-->
+<resources>
+    <string name="appName">Alif Tools</string>
+    <string name="launcherName">Alif Tools</string>
+
+    <string name="hostName" translatable="false">allseba.online</string>
+    <string name="launchUrl" translatable="false">https://allseba.online/</string>
+
+    <!-- Must match the FileProvider authority declared in the manifest. -->
+    <string name="providerAuthority" translatable="false">online.broxlab.aliftools.twa.fileprovider</string>
+
+    <!-- "customtabs" keeps a browser address bar when no TWA-capable browser exists. -->
+    <string name="fallbackType" translatable="false">customtabs</string>
+
+    <string name="orientation" translatable="false">portrait</string>
+
+    <string name="generatorApp" translatable="false">twa/ (hand-written, Bubblewrap-compatible)</string>
+</resources>

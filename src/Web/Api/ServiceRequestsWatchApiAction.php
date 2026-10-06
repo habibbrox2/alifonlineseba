@@ -8,6 +8,7 @@ use App\Auth\Identity;
 use App\Repository\ServiceOrderRepository;
 use App\Service\Api;
 use App\Service\RequestRowPresenter;
+use App\Service\ServiceManager;
 use stdClass;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -45,6 +46,7 @@ final readonly class ServiceRequestsWatchApiAction
     public function __construct(
         private ServiceOrderRepository $orders,
         private RequestRowPresenter $presenter,
+        private ServiceManager $manager,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -67,9 +69,22 @@ final readonly class ServiceRequestsWatchApiAction
             return Api::ok(['rows' => new stdClass()]);
         }
 
-        $rows = $this->presenter->presentMany(
-            $this->orders->watchForUser($ids, $identity->id)
-        );
+        $rows = $this->orders->watchForUser($ids, $identity->id);
+
+        // An auto-generating order finishes on the tick that first sees it past
+        // its delay, and this is that tick: the page is already asking about
+        // the row, so the card is built here and the very next answer carries
+        // `completed` with a downloadable file. Without this the poller would
+        // report `processing` for ever and no worker exists to move it on.
+        $this->manager->settleAutoOrders(array_values($rows));
+
+        // Re-read: settling wrote to the database, and answering from the rows
+        // read a moment ago would report the order as still processing on the
+        // one tick that actually completed it — the poller would then keep
+        // asking, and it would look stuck for a further cycle.
+        $rows = $this->orders->watchForUser($ids, $identity->id);
+
+        $rows = $this->presenter->presentMany($rows);
 
         // Forced to an object: `presentMany()` returns a PHP array, and an empty
         // one would encode as `[]` while a populated one encodes as `{"3": …}`.

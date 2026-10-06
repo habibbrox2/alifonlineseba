@@ -6,6 +6,7 @@ namespace App\Web\Admin;
 
 use App\Repository\ActivityLogRepository;
 use App\Repository\UserRepository;
+use App\Service\UserFields;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\CurrentRoute;
@@ -135,21 +136,20 @@ final readonly class AdminUsersAction
 
     private function createUser(array $input, ?int $adminId): void
     {
-        $username = trim((string) ($input['username'] ?? ''));
-        $phone = trim((string) ($input['phone'] ?? ''));
+        // The same validator the edit form uses, so an account cannot be
+        // created under rules it would then be refused by.
+        $checked = UserFields::validate($input);
+        $values = $checked['values'];
         $password = (string) ($input['password'] ?? '');
 
         $errors = [];
-        if (!preg_match('/^[a-zA-Z0-9._-]{3,32}$/', $username)) {
-            $errors[] = 'ইউজারনেম ৩–৩২ অক্ষরের হতে হবে (a-z, 0-9, . _ -)।';
+        foreach ($checked['errors'] as $message) {
+            $errors[] = $message;
         }
-        if ($this->users->usernameExists($username)) {
+        if ($this->users->usernameExists($values['username'])) {
             $errors[] = 'এই ইউজারনেম আগে থেকেই আছে।';
         }
-        if (!preg_match('/^01[3-9][0-9]{8}$/', $phone)) {
-            $errors[] = 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন 01712345678)।';
-        }
-        if ($this->users->phoneExists($phone)) {
+        if ($this->users->phoneExists($values['phone'])) {
             $errors[] = 'এই নম্বরে অ্যাকাউন্ট আছে।';
         }
         if (strlen($password) < 8) {
@@ -163,9 +163,13 @@ final readonly class AdminUsersAction
 
         $role = in_array($input['role'] ?? '', ['user', 'staff', 'admin'], true) ? $input['role'] : 'user';
         $id = $this->users->create([
-            'username' => $username,
-            'phone' => $phone,
-            'email' => trim((string) ($input['email'] ?? '')) ?: null,
+            'full_name' => $values['full_name'],
+            'username' => $values['username'],
+            'phone' => $values['phone'],
+            'email' => $values['email'],
+            // Optional, and already `Y-m-d`: UserFields is the only thing that
+            // decided what this column holds.
+            'date_of_birth' => $values['date_of_birth'],
             'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             'role' => $role,
             'balance' => max(0, (float) ($input['balance'] ?? 0)),
@@ -174,10 +178,10 @@ final readonly class AdminUsersAction
         $this->logs->create([
             'user_id' => $adminId,
             'action' => 'admin.user.created',
-            'description' => "User '{$username}' created (role: {$role})",
+            'description' => "User '{$values['username']}' ({$values['full_name']}) created (role: {$role})",
             'metadata' => ['new_user_id' => $id],
         ]);
-        $this->session->set('flash_success', "ইউজার '{$username}' তৈরি হয়েছে।");
+        $this->session->set('flash_success', "ইউজার '{$values['full_name']}' ({$values['username']}) তৈরি হয়েছে।");
     }
 
     /**

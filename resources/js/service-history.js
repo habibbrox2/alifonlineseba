@@ -17,7 +17,8 @@
  * so a status can never render one way after a click and another way after a
  * poll.
  * ============================================================ */
-import { api } from './app.js';
+import { api, notificationTime } from './app.js';
+import { displayDate } from './date-field.js';
 
 /** How often the visible rows are re-read. */
 const WATCH_INTERVAL_MS = 12000;
@@ -32,12 +33,18 @@ const WATCH_INTERVAL_MS = 12000;
  */
 const WATCH_JITTER = 0.2;
 
-/** Human-friendly text for a raw provider value. */
+/**
+ * Human-friendly text for a raw provider value.
+ *
+ * A date goes through `displayDate()` — the same conversion the field that
+ * produced it used — so a result row can never show `1990-05-04` to the person
+ * who typed `05-06-1990`. Everything else is printed as it arrived.
+ */
 function displayValue(value) {
   if (value === null || value === undefined) return '—';
   if (Array.isArray(value)) return value.join(', ');
   if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
+  return displayDate(value);
 }
 
 /**
@@ -87,6 +94,19 @@ window.thServiceRequest = function thServiceRequest(raw) {
     /** The streaming endpoint for this row's deliverable. */
     get fileUrl() {
       return `/service-requests/${this.id}/file`;
+    }
+
+    /**
+     * When this row last changed, as a sentence rather than a database stamp.
+     *
+     * `updated_at` is a raw `2026-10-06 14:23:01` because the API is the
+     * backend and the backend speaks ISO; printing it straight into the page
+     * is how a machine timestamp ends up on a screen next to a Bengali one.
+     * `notificationTime()` renders the same wording the `bndate` filter does,
+     * so this line and the server-rendered column beside it agree.
+     */
+    get updatedAtLabel() {
+      return this.updatedAt ? notificationTime(this.updatedAt) : '';
     },
 
     /** Re-derive the panel from an API row payload. */

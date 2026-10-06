@@ -324,6 +324,39 @@ final class ServiceOrderRepository
     }
 
     /**
+     * Move an order to a new status only if it is still in the expected one.
+     *
+     * The same single-statement guard as {@see claimOrder()}, for the same
+     * reason. Auto-generating orders are settled from a read — two browser tabs
+     * polling the same order at the same moment would otherwise both see
+     * `processing`, both render the card, and the second write would win,
+     * leaving a deliverable on disk that belongs to a card nobody can reach.
+     *
+     * With the expected status in the WHERE clause, exactly one caller matches
+     * a row; the other gets false and discards what it built. `markApproved()`
+     * is the same idea guarding the one case where being wrong costs money.
+     *
+     * @return bool false when the order was not in `$expectedStatus`
+     */
+    public function setStatusIf(
+        int $id,
+        string $status,
+        string $expectedStatus,
+        array $metadata = [],
+    ): bool {
+        $values = ['status' => $status, 'updated_at' => date('Y-m-d H:i:s')];
+        if ($metadata !== []) {
+            $existing = self::metadata($this->findById($id) ?? []);
+            $values['metadata'] = json_encode($metadata + $existing, JSON_UNESCAPED_UNICODE);
+        }
+
+        return $this->db
+            ->createCommand()
+            ->update('{{%service_order}}', $values, ['id' => $id, 'status' => $expectedStatus])
+            ->execute() > 0;
+    }
+
+    /**
      * Take an order for review, naming the admin who took it.
      *
      * The whole point of this method is the WHERE clause. The claim is a single

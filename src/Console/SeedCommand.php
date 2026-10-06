@@ -83,6 +83,10 @@ final class SeedCommand extends Command
         if (!$usersExist) {
             $this->users->create([
                 'username' => 'admin',
+                // Seeded with a real name so the roster, the dashboard greeting
+                // and every order this demo account touches show a name rather
+                // than the login handle.
+                'full_name' => 'অ্যাডমিন অ্যাকাউন্ট',
                 'phone' => '01700000000',
                 'email' => 'admin@demo.local',
                 'password_hash' => password_hash('Admin1234!', PASSWORD_DEFAULT),
@@ -91,6 +95,7 @@ final class SeedCommand extends Command
             ]);
             $this->users->create([
                 'username' => 'rahim.demo',
+                'full_name' => 'রহিম উদ্দিন',
                 'phone' => '01712345678',
                 'email' => 'rahim@demo.local',
                 'password_hash' => password_hash('Demo1234!', PASSWORD_DEFAULT),
@@ -146,6 +151,7 @@ final class SeedCommand extends Command
         $created = 0;
         $services = [
             // NID ও ভোটার
+            ['nid-voter', 'এনআইডি মেইক', 'nid-make', 40, 'file-badge', 'ইনস্ট্যান্ট ডেলিভারি', 'নাম, ঠিকানা, রক্তের গ্রুপ ও ছবিসহ সম্পূর্ণ এনআইডি কার্ড ফর্ম তৈরি করুন।'],
             ['nid-voter', 'ইনস্ট্যান্ট NID সার্ভার কপি', 'instant-nid-server-copy', 25, 'zap', 'ইনস্ট্যান্ট ডেলিভারি', 'NID ও জন্মতারিখ দিয়ে অফিসিয়াল QR কোড ও সাধারণ সার্ভার কপি ডাউনলোড।'],
             ['nid-voter', 'NID কপি', 'nid-copy', 280, 'file-text', 'PDF কপি', 'ভোটার নম্বর, ফর্ম নম্বর, স্লিপ বা এনআইডি নম্বর দিয়ে সরাসরি সার্ভার থেকে ফুল NID কপি অর্ডার করুন।'],
             ['nid-voter', 'সিগনেচার কপি ও স্মার্ট কার্ড PDF', 'signature-smartcard-pdf', 280, 'file-image', 'স্মার্ট PDF', 'অফিসিয়াল সাইন কপি ও স্মার্ট কার্ডের ফ্রন্ট-ব্যাক হাই রেজুলেশন কালার কপি।'],

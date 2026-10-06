@@ -52,6 +52,10 @@ return [
             Reference::to(IdentityViewInjection::class),
             Reference::to(\App\Web\View\SettingsViewInjection::class),
             Reference::to(\App\Web\View\PushViewInjection::class),
+            // The drop zone's accept list and size ceiling, read from the class
+            // that enforces them, so the widget cannot advertise different rules
+            // than the server applies.
+            Reference::to(\App\Web\View\ImageUploadViewInjection::class),
         ],
     ],
 ];

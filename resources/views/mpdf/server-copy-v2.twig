@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>{{ name_english|default('NID Server Copy') }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            font-family: solaimanlipi, dejavasans;
+        }
+        .background {
+            position: relative;
+            width: 100%;
+            height: 297mm;
+        }
+        .crane {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .demo-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 12mm;
+            background: #fff3cd;
+            border-bottom: 1px solid #ffc107;
+            text-align: center;
+            font-size: 8pt;
+            color: #856404;
+            line-height: 12mm;
+            z-index: 10;
+        }
+
+        .label { font-size: 13px; color: #077; font-family: solaimanlipi, dejavasans; }
+        .label-en, .label-mixed { font-size: 12px; color: #033; font-family: dejavasans, solaimanlipi; }
+        .value  { font-size: 14px; color: #077; }
+        .value-bold { font-size: 14px; color: #077; font-weight: bold; }
+        .value-s { font-size: 12px; color: #077; }
+        .small-note { font-size: 10px; color: #077; font-family: solaimanlipi, dejavasans; }
+        .footer-small { font-size: 9px; color: #000; }
+        .footer-red { font-size: 9px; color: #f00; font-family: solaimanlipi, dejavasans; }
+
+        .no-photo { font-size: 9px; color: #999; }
+    </style>
+</head>
+<body>
+<div class="background">
+    {% if _demo is defined and _demo %}
+    <div class="demo-overlay">
+        ⚠️ {{ _notice|default('এটি ডেমো ডাটা — সম্পূর্ণ কাল্পনিক') }}
+    </div>
+    {% endif %}
+
+    {% if background_image is defined and background_image %}
+    <img class="crane" src="{{ background_image }}" alt="" />
+    {% else %}
+    <img class="crane" src="{{ photo_url|default('') }}" alt="" />
+    {% endif %}
+
+    <div style="position: absolute; left: 30%; top: 8%; width: auto; font-size: 16px; color: #ff00ff; font-weight: bold;">
+        National Identity Registration Wing (NIDW)
+    </div>
+
+    <div style="position: absolute; left: 37%; top: 11%; width: auto; font-size: 14px; color: #ff2f55;">
+        Select Your Search Category
+    </div>
+
+    <div style="position: absolute; left: 45%; top: 12.8%; width: auto; font-size: 12px; color: #087804;">
+        Search By NID / Voter No.
+    </div>
+
+    <div style="position: absolute; left: 45%; top: 14.3%; width: auto; font-size: 12px; color: #077;">
+        Search By Form No.
+    </div>
+
+    <div style="position: absolute; left: 30%; top: 16.9%; width: auto; font-size: 12px; color: #fc0000; font-weight: bold;">
+        NID or Voter No*
+    </div>
+
+    <div style="position: absolute; left: 45%; top: 16.9%; width: auto; font-size: 12px; color: #8f8f8f;">
+        NID
+    </div>
+
+    <div style="position: absolute; left: 62.9%; top: 17.1%; width: auto; font-size: 11px; color: #fff;">
+        Submit
+    </div>
+
+    <div style="position: absolute; left: 89%; top: 11.55%; width: auto; font-size: 11px; color: #fff;">
+        Home
+    </div>
+
+    <div style="position: absolute; left: 37.5%; top: 27.2%; width: auto; font-size: 16px; color: #077; font-family: solaimanlipi, dejavasans;">
+        <b>জাতীয় পরিচয় তথ্য</b>
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 30%; width: auto; font-size: 13px; color: #077; font-family: solaimanlipi, dejavasans;">
+        জাতীয় পরিচয় পত্র নম্বর
+    </div>
+
+    <div id="nid_no" style="position: absolute; left: 55%; top: 30%; width: auto; font-size: 14px; color: #077;">
+        {{ nid_number|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 32.8%; width: auto; font-size: 13px; color: #077; font-family: solaimanlipi, dejavasans;">
+        পিন নম্বর
+    </div>
+
+    <div id="nid_father" style="position: absolute; left: 55%; top: 32.8%; width: auto; font-size: 14px; color: #077;">
+        {{ pin|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 35.3%; width: auto; font-size: 13px; color: #077; font-family: solaimanlipi, dejavasans;">
+        জেলা কোড
+    </div>
+
+    <div id="nid_mother" style="position: absolute; left: 55%; top: 35.3%; width: auto; font-size: 14px; color: #077;">
+        {{ district_code|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 37.8%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        জন্মদিন
+    </div>
+
+    <div id="spouse" style="position: absolute; left: 55%; top: 37.8%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ day_of_week|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 40.5%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        ভোটার এলাকা
+    </div>
+
+    <div id="voter_area" style="position: absolute; left: 55%; top: 40.5%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ voter_area|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.5%; top: 43.3%; width: auto; font-size: 16px; color: #077; font-family: solaimanlipi, dejavasans;">
+        <b>ব্যক্তিগত তথ্য</b>
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 46%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        নাম (বাংলা)
+    </div>
+
+    <div id="name_bn" style="position: absolute; font-weight: bold; left: 55%; top: 46%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        <b>{{ name_bangla|default(name_bn|default('—')) }}</b>
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 48.8%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        নাম (ইংরেজি)
+    </div>
+
+    <div id="name_en" style="position: absolute; left: 55%; top: 48.8%; width: auto; font-size: 14px; color: #077;">
+        {{ name_english|default(name|default('—')) }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 51.5%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        জন্ম তারিখ
+    </div>
+
+    <div id="dob" style="position: absolute; left: 55%; top: 51.5%; width: auto; font-size: 14px; color: #077;">
+        {{ date_of_birth|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 54.1%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        পিতার নাম
+    </div>
+
+    <div id="fathers_name" style="position: absolute; left: 55%; top: 54.1%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ father_name|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 56.7%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        মাতার নাম
+    </div>
+
+    <div id="mothers_name" style="position: absolute; left: 55%; top: 56.7%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ mother_name|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 59.2%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        স্বামী/স্ত্রীর নাম
+    </div>
+
+    <div id="mothers_name" style="position: absolute; left: 55%; top: 59.2%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ spouse_name|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.5%; top: 62%; width: auto; font-size: 16px; color: #077; font-family: solaimanlipi, dejavasans;">
+        <b>অন্যান্য তথ্য</b>
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 65.2%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        লিঙ্গ
+    </div>
+
+    <div id="gender" style="position: absolute; left: 55%; top: 65.2%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ gender|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 68%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        রক্তের গ্রুপ
+    </div>
+
+    <div id="mobile_no" style="position: absolute; left: 55%; top: 68%; width: auto; font-size: 14px; color: #077;">
+        {{ blood_group|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 70.7%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        বয়স
+    </div>
+
+    <div id="blood_grp" style="position: absolute; left: 55%; top: 70.7%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ age|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.3%; top: 73.2%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        জন্মস্থান
+    </div>
+
+    <div id="birth_place" style="position: absolute; left: 55%; top: 73.2%; width: auto; font-size: 14px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ birth_place|default('—') }}
+    </div>
+
+    <div style="position: absolute; left: 37.5%; top: 75.8%; width: auto; font-size: 16px; color: #077; font-family: solaimanlipi, dejavasans;">
+        <b>বর্তমান ঠিকানা</b>
+    </div>
+
+    <div id="present_addr" style="position: absolute; left: 37%; top: 78.2%; width: 48%; font-size: 12.5px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ present_address|default(full_address|default('—')) }}
+    </div>
+
+    <div style="position: absolute; left: 37.5%; top: 86.5%; width: auto; font-size: 16px; color: #077; font-family: solaimanlipi, dejavasans;">
+        <b>স্থায়ী ঠিকানা</b>
+    </div>
+
+    <div id="permanent_addr" style="position: absolute; left: 37%; top: 88.7%; width: 48%; font-size: 12.5px; color: #077; font-family: solaimanlipi, dejavasans;">
+        {{ permanent_address|default(full_address|default('—')) }}
+    </div>
+
+    <div style="position: absolute; left: 16%; top: 25.7%; width: auto; font-size: 12px; color: #033;">
+        {% if photo_url is defined and photo_url %}
+            <img id="photo" src="{{ photo_url }}" height="140" width="121" style="border-radius: 10px;" />
+        {% else %}
+            <div class="no-photo">ফটো নেই</div>
+        {% endif %}
+    </div>
+
+    <div style="position: absolute; left: 18.5%; top: 43%; width: auto; font-size: 12px; color: #033;">
+        {% if qr_data is defined %}
+        {{ qr_code(qr_data, 4, 3, '#000000', '#ffffff') }}
+        {% endif %}
+        <div id="name_en2" style="position: absolute; display: block; font-weight: bold; left: 15.5%; top: 39.6%; height: 32px; width: 130px; font-size: 13px; color: #077; line-height: 32px; text-align: center;">
+            {{ name_english|default(name|default('—')) }}
+        </div>
+    </div>
+
+    <div style="position: absolute; top: 95%; width: 100%; font-size: 10px; text-align: center; color: #f00; font-family: solaimanlipi, dejavasans;">
+        উপরে প্রদর্শিত তথ্যসমূহ জাতীয় পরিচয়পত্র সংশ্লিষ্ট, ভোটার তালিকার সাথে সরাসরি সম্পর্কযুক্ত নয়।
+    </div>
+
+    <div style="position: absolute; top: 96.5%; width: 100%; text-align: center; font-size: 10px; color: #033;">
+        This is Software Generated Report From Bangladesh Election Commission, Signature &amp; Seal Aren't Required.
+    </div>
+</div>
+</body>
+</html>

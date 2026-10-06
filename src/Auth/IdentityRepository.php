@@ -104,6 +104,9 @@ final class IdentityRepository
     {
         $id = $this->users->create([
             'username' => $data['username'],
+            // Passed through untouched by the caller's validation: the name is
+            // the human half of the account, the username the login half.
+            'full_name' => $data['full_name'] ?? '',
             'phone' => $data['phone'],
             'email' => $data['email'] ?? null,
             'password_hash' => $data['password_hash'],
