@@ -38,7 +38,10 @@ final readonly class AdminApiMiddleware implements MiddlewareInterface
 
     public function __construct(
         SessionInterface $session,
-        UserRepository $users,
+        // Promoted: process() re-reads the live row through it, and the
+        // parameters of this constructor are not promoted as a block — only
+        // the ones the class body actually reaches for are.
+        private UserRepository $users,
         ActivityLogRepository $logs,
         UrlGeneratorInterface $url,
         ApiTokenRepository $tokens,

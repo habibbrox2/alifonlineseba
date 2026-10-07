@@ -137,8 +137,12 @@ final class ImageUploadStorage
     /**
      * Sniffed MIME type => extension we are willing to store it under.
      * Deliberately not the browser's Content-Type.
+     *
+     * Public so serving actions (avatar, future image endpoints) can map a
+     * stored extension back to the MIME type without reaching into the private
+     * storage internals.
      */
-    private const MIME_EXTENSIONS = [
+    public const MIME_EXTENSIONS = [
         'image/jpeg' => 'jpg',
         'image/pjpeg' => 'jpg',
         'image/png' => 'png',

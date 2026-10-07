@@ -113,6 +113,12 @@ final readonly class AdminSettingsApiAction
             $errors['topup_max_amount'] = 'সর্বোচ্চ পরিমাণ সর্বনিম্নের চেয়ে বড় হতে হবে।';
         }
 
+        // Same bound the settings page applies: the maintenance note goes to
+        // every visitor, so it is refused rather than silently cut.
+        if (mb_strlen((string) ($body['maintenance_message'] ?? '')) > 300) {
+            $errors['maintenance_message'] = '৩০০ অক্ষরের মধ্যে বার্তা লিখুন।';
+        }
+
         if ($errors !== []) {
             return Api::fail('সেটিংস ভুল আছে।', $errors);
         }

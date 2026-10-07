@@ -308,6 +308,47 @@
         </div>
     </div>
 
+    <div class="card p-5">
+        <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-neutral-800">
+            {{ icon('settings', 'w-4 h-4 text-primary-600') }} মেইনটেন্যান্স মোড
+        </h2>
+        <p class="mb-4 text-xs text-neutral-500">
+            চালু করলে সাধারণ ভিজিটর ও ইউজাররা সাইটের বদলে 503 মেইনটেন্যান্স পেজ দেখবেন।
+            অ্যাডমিন প্যানেল ও অ্যান্ড্রয়েড অ্যাডমিন অ্যাপ বন্ধ থাকবে না — তাই আপনি যেকোনো সময়
+            আবার এখান থেকেই খুলে দিতে পারবেন। ডিপ্লয়ের সময় লক ফাইল আলাদাভাবে কাজ করে (docs/deployment.md §১২)।
+        </p>
+
+        {% if settings.maintenance_enabled|default('0') == '1' %}
+            <p class="mb-4 flex items-start gap-2 rounded-lg bg-info-50 px-3 py-2 text-xs text-info-800">
+                {{ icon('alert-triangle', 'w-4 h-4 shrink-0') }}
+                <span>
+                    সাইট এখন মেইনটেন্যান্স মোডে আছে — ভিজিটররা ঠিক সেই পেজটিই দেখছেন।
+                    <a href="/" class="font-semibold underline">লাইভ দেখুন →</a>
+                </span>
+            </p>
+        {% endif %}
+
+        <div class="space-y-4">
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-200 px-4 py-3">
+                <input type="checkbox" name="maintenance_enabled" value="1"
+                       {{ settings.maintenance_enabled|default('0') == '1' ? 'checked' }}
+                       class="mt-0.5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500">
+                <span>
+                    <span class="block text-sm font-semibold text-neutral-800">মেইনটেন্যান্স মোড চালু</span>
+                    <span class="block text-xs text-neutral-500">আনচেক করে সংরক্ষণ করলেই সাইট আবার খুলে যাবে।</span>
+                </span>
+            </label>
+
+            <div>
+                <label for="f-maintenance-message" class="form-label">ভিজিটরদের জন্য বার্তা</label>
+                <textarea id="f-maintenance-message" name="maintenance_message" rows="2" class="form-input" maxlength="300"
+                          placeholder="যেমন: সার্ভার আপগ্রেড চলছে — বিকেল ৫টা পর্যন্ত বন্ধ।">{{ settings.maintenance_message|default('') }}</textarea>
+                <p class="mt-1 text-xs text-neutral-400">মেইনটেন্যান্স পেজে ও অ্যাপের এরর বার্তা হিসেবে দেখানো হবে।</p>
+                {% if errors.maintenance_message is defined %}<p class="form-error">{{ errors.maintenance_message }}</p>{% endif %}
+            </div>
+        </div>
+    </div>
+
     <button type="submit" class="btn btn-primary">
         {{ icon('save', 'w-4 h-4') }} সংরক্ষণ করুন
     </button>

@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Web\CsrfMiddleware;
 use App\Web\FlashMiddleware;
 use App\Web\ForwardedProtoMiddleware;
 use App\Web\JsonBodyMiddleware;
+use App\Web\MaintenanceMiddleware;
 use App\Web\NoIndexMiddleware;
 use App\Web\NotFound\NotFoundHandler;
 use App\Web\SecurityHeadersMiddleware;
-use Yiisoft\Csrf\CsrfTokenMiddleware;
 use Yiisoft\Definitions\DynamicReference;
 use Yiisoft\Definitions\Reference;
 use Yiisoft\ErrorHandler\Middleware\ErrorCatcher;
@@ -44,10 +45,22 @@ return [
                         RequestCatcherMiddleware::class,
                         SessionMiddleware::class,
                         FlashMiddleware::class,
-                        CsrfTokenMiddleware::class,
+                        // Wraps the stock CsrfTokenMiddleware: same token
+                        // check everywhere except /__/auth/*, which Firebase's
+                        // own sign-in popup posts to and cannot be handed a
+                        // token of ours. See App\Web\CsrfMiddleware.
+                        CsrfMiddleware::class,
                         // After CSRF so a request with no valid token is turned
                         // away before we spend anything reading its body.
                         JsonBodyMiddleware::class,
+                        // Last before routing: everything the view injections
+                        // reach for (session, flash, CSRF, the captured
+                        // request) is already in place, so the maintenance page
+                        // renders like any other page — while nothing behind
+                        // the router is ever built for a request the owner has
+                        // closed. See App\Web\MaintenanceMiddleware for why the
+                        // admin paths stay open.
+                        MaintenanceMiddleware::class,
                         Router::class,
                     ],
                 ],

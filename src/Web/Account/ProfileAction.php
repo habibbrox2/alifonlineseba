@@ -11,9 +11,11 @@ use App\Repository\PushSubscriptionRepository;
 use App\Repository\TopupRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\UserRepository;
+use App\Service\ImageUploadStorage;
 use App\Service\ServiceDate;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UploadedFileInterface;
 use Yiisoft\Router\UrlGeneratorInterface;
 use Yiisoft\Session\SessionInterface;
 use Yiisoft\Yii\View\Renderer\WebViewRenderer;
@@ -29,6 +31,7 @@ final readonly class ProfileAction
         private SessionInterface $session,
         private TopupRepository $topupRepo,
         private PushSubscriptionRepository $subscriptions,
+        private ImageUploadStorage $imageStorage,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -38,6 +41,12 @@ final readonly class ProfileAction
         $errors = [];
 
         $row = $this->users->findById($identity->id);
+
+        // Track uploads that were accepted during this request so we can roll
+        // back any that were stored before a later field rejected, instead of
+        // leaving orphans in the hashed bucket.
+        /** @var array<string> $acceptedPaths */
+        $acceptedPaths = [];
 
         if ($request->getMethod() === 'POST') {
             $input = (array) $request->getParsedBody();
@@ -65,6 +74,8 @@ final readonly class ProfileAction
                 }
             } elseif ($action === 'push') {
                 $this->togglePush($identity, (string) ($input['enabled'] ?? '0'));
+            } elseif ($action === 'avatar') {
+                $this->handleAvatar($identity, $request->getUploadedFiles(), $acceptedPaths, $errors);
             } else {
                 $fullName = trim((string) ($input['full_name'] ?? ''));
                 $email = trim((string) ($input['email'] ?? ''));
@@ -125,6 +136,16 @@ final readonly class ProfileAction
                 }
             }
 
+            // Roll back any avatar upload that was accepted before a later
+            // validation error — the hashed bucket is only reachable through the
+            // owning row, so an orphan there is a silent leak.
+            if ($errors !== []) {
+                foreach ($acceptedPaths as $path) {
+                    $this->imageStorage->delete($path);
+                }
+                $acceptedPaths = [];
+            }
+
             if ($errors === []) {
                 return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('profile')]);
             }
@@ -169,7 +190,82 @@ final readonly class ProfileAction
             'pushDevices' => $this->subscriptions->forUser($identity->id),
             'pushConfigured' => $vapid !== null,
             'vapidPublicKey' => $vapid?->publicKey(),
+            // — Avatar —
+            // The storage path on the row, or null when the user has no avatar.
+            // Used by the template to render the current avatar (or the fallback
+            // initials chip) and to decide whether the delete button should show.
+            'avatarPath' => $row['avatar'] ?? null,
+            'avatarUrl' => $row['avatar'] !== null
+                ? $this->url->generate('profile-avatar', ['id' => (string) $identity->id])
+                : null,
         ]);
+    }
+
+    /**
+     * Handle the avatar upload POST.
+     *
+     * One file field (`avatar`), optional — a POST with no file attached is a
+     * "remove my current avatar" request rather than an error. The existing
+     * storage entry is deleted when no new file is supplied, so the user can
+     * clear their avatar without leaving a stale path on the row.
+     *
+     * @param array<string, \Psr\Http\Message\UploadedFileInterface|null> $files
+     * @param array<string> $acceptedPaths  storage paths accepted in this request,
+     *                                      rolled back on error
+     * @param array<string, string> $errors  collected validation errors; the
+     *                                        caller refuses the redirect when non-empty
+     */
+    private function handleAvatar(
+        Identity $identity,
+        array $files,
+        array &$acceptedPaths,
+        array &$errors,
+    ): void {
+        $upload = $files['avatar'] ?? null;
+
+        // No file at all — the user wants to remove their current avatar.
+        if ($upload === null || $upload->getError() === UPLOAD_ERR_NO_FILE) {
+            $row = $this->users->findById($identity->id);
+            if ($row !== null && ($row['avatar'] ?? null) !== null) {
+                $this->imageStorage->delete($row['avatar']);
+                $this->users->update($identity->id, ['avatar' => null]);
+                $this->logs->create([
+                    'user_id' => $identity->id,
+                    'action' => 'profile.avatar_removed',
+                    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '-',
+                ]);
+                $this->session->set('flash_success', 'প্রোফাইল ছবি অপসারণ করা হয়েছে।');
+            }
+            return;
+        }
+
+        // A file was supplied — validate and store it.
+        try {
+            $result = $this->imageStorage->store($upload, 'avatars', 200 * 1024);
+        } catch (\RuntimeException $e) {
+            $errors['avatar'] = $e->getMessage();
+            return;
+        }
+
+        // Replace the existing avatar — the old bytes must be removed so the
+        // hashed bucket does not keep growing. If the storage delete fails the
+        // new file still stands; the orphan is harmless (the bucket keeps it,
+        // and the next upload by anyone reuses the same hashed directory).
+        $row = $this->users->findById($identity->id);
+        if ($row !== null && ($row['avatar'] ?? null) !== null) {
+            $this->imageStorage->delete($row['avatar']);
+        }
+
+        $this->users->update($identity->id, ['avatar' => $result['path']]);
+        $acceptedPaths[] = $result['path'];
+
+        $this->logs->create([
+            'user_id' => $identity->id,
+            'action' => 'profile.avatar_changed',
+            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '-',
+        ]);
+
+        $this->session->set('flash_success', 'প্রোফাইল ছবি আপডেট করা হয়েছে।');
     }
 
     /**

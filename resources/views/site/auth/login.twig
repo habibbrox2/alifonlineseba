@@ -5,7 +5,7 @@
 {% block title %}লগইন — All Seba{% endblock %}
 
 {% block auth_content %}
-<div class="rounded-2xl bg-white p-6 shadow-lg sm:p-8" x-data="{ showPw: false }">
+<div class="rounded-2xl bg-white p-6 shadow-lg sm:p-8">
     <div class="mb-6 text-center">
         <h1 class="text-2xl font-extrabold text-neutral-900">লগইন করুন</h1>
         <p class="mt-1.5 text-sm text-neutral-500">All Seba প্ল্যাটফর্মে প্রবেশ করুন</p>
@@ -18,7 +18,8 @@
         </div>
     {% endif %}
 
-    <form method="post" action="/login" class="space-y-4" novalidate>
+    {# — Traditional username/password login — #}
+    <form method="post" action="/login" class="space-y-4" novalidate x-data="{ showPw: false }">
         <input type="hidden" name="_csrf" value="{{ csrf }}">
 
         <div>
@@ -60,15 +61,9 @@
         <a href="/register" class="tap-target font-semibold text-primary-600 hover:underline">নিবন্ধন করুন</a>
     </p>
 
-    {# Seeded credentials, rendered only when APP_ENV=dev so a public
-       deployment never exposes them. #}
-    {% if app_env() == 'dev' %}
-    <div class="mt-6 rounded-xl bg-primary-50 p-3.5 text-center text-xs leading-relaxed text-primary-800">
-        <p class="font-semibold">ডেভেলপমেন্ট অ্যাকাউন্ট</p>
-        <p class="mt-1">ইউজার: <code class="rounded bg-white px-1.5 py-0.5 font-mono">rahim.demo</code> / <code class="rounded bg-white px-1.5 py-0.5 font-mono">Demo1234!</code></p>
-        <p class="mt-1">অ্যাডমিন: <code class="rounded bg-white px-1.5 py-0.5 font-mono">admin</code> / <code class="rounded bg-white px-1.5 py-0.5 font-mono">Admin1234!</code></p>
-    </div>
-    {% endif %}
+    {# — Social login via FirebaseUI — #}
+    <div id="firebaseui-auth-container"></div>
+
 </div>
 
 <div class="mt-5 text-center">

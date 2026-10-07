@@ -1,0 +1,13 @@
+# This file is intentionally gitignored.
+# Copy to local.properties and fill in your values.
+
+sdk.dir=C:\\Users\\Alif\\tools\\android-sdk
+
+# Admin API base URL (include https:// and trailing slash is OK).
+ADMIN_BASE_URL=https://your-domain.com/
+
+# Release signing (optional — without these assembleRelease produces unsigned APK).
+ADMIN_STORE_FILE=release.jks
+ADMIN_STORE_PASSWORD=change-me
+ADMIN_KEY_ALIAS=change-me
+ADMIN_KEY_PASSWORD=change-me

@@ -13,6 +13,92 @@
                 {{ icon('user-circle', 'w-5 h-5 text-primary-600') }} অ্যাকাউন্ট তথ্য
             </h2>
 
+            {# — Profile picture —
+               The user can upload a JPG/PNG/WEBP/GIF from this page. The stored
+               image lives outside the web root (in `web/image-uploads/`, the same
+               bucket the ordinary image upload storage uses) and is served through
+               `AvatarAction` (`/profile/avatar/{id}`), which checks ownership — so
+               a guessed URL cannot leak somebody else's picture.
+               
+               The 200 KB ceiling mirrors what a phone photo gets shrunk to, which
+               is more than enough for a profile picture and keeps the storage small.
+               #}
+            <div class="mb-6" x-data="{ copied: false }">
+                <div class="mb-4 flex items-center gap-4">
+                    {# The current avatar, or the fallback initials chip when there is none. #}
+                    <div class="relative">
+                        {% if avatarUrl %}
+                            <img
+                                src="{{ avatarUrl }}"
+                                alt="প্রোফাইল ছবি"
+                                class="flex h-16 w-16 items-center justify-center rounded-full border-2 border-neutral-200 object-cover"
+                                width="64" height="64">
+                        {% else %}
+                            <span class="flex h-16 w-16 items-center justify-center rounded-full border-2 border-neutral-200 bg-neutral-100 text-xl font-extrabold text-primary-700">
+                                {{ (user.full_name ?: user.username)|first|upper }}
+                            </span>
+                        {% endif %}
+                        {% if avatarPath %}
+                            <button
+                                type="button"
+                                data-avatar-remove
+                                class="absolute right-0 top-0 h-5 w-5 rounded-full bg-danger-500 p-0.5 text-white shadow opacity-0 transition-opacity hover:opacity-100 focus:opacity-100"
+                                aria-label="প্রোফাইল ছবি অপসারণ করুন">
+                                {{ icon('trash-2', 'w-3 h-3') }}
+                            </button>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-neutral-800">প্রোফাইল ছবি</p>
+                        <p class="text-xs text-neutral-400">
+                            {% if avatarPath %}
+                                বর্তমান ছবিটি উপরে দেখা যাচ্ছে। নতুন আপলোড করলে এটি প্রতিস্থাপিত হবে — অথবা উপরের আইকনে ক্লিক করে মুছে ফেলুন।
+                            {% else %}
+                                এখনো কোনো ছবি নেই। JPG, PNG, WEBP বা GIF আপলোড করুন (সর্বোচ্চ ২০০ KB)।
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                {# The avatar upload lives inside the main profile form so the CSRF token
+                   and the `do=profile` action carry over — but the avatar itself is posted
+                   as a separate multipart field. The `do=avatar` hidden input tells the
+                   action to handle the upload instead of the profile text fields. #}
+                <form method="post" action="/profile" enctype="multipart/form-data" class="space-y-3">
+                    <input type="hidden" name="_csrf" value="{{ csrf }}">
+                    <input type="hidden" name="do" value="avatar">
+
+                    <div class="rounded-xl border-2 border-dashed border-neutral-200 bg-neutral-50 p-4">
+                        <label for="avatar" class="cursor-pointer block rounded-lg border border-neutral-300 bg-white p-3 text-center hover:bg-neutral-100">
+                            <span class="inline-flex items-center gap-2 text-sm font-medium text-primary-700">
+                                {{ icon('image-plus', 'w-4 h-4') }}
+                                নতুন ছবি আপলোড করুন
+                            </span>
+                            <input
+                                id="avatar"
+                                type="file"
+                                name="avatar"
+                                accept="{{ imageUploadAccept }}"
+                                class="sr-only"
+                                data-avatar-input>
+                        </label>
+                        <p class="mt-2 text-xs text-neutral-400">
+                            সর্বোচ্চ {{ imageUploadMaxLabel }}। JPG, PNG, WEBP বা GIF গ্রহণযোগ্য।
+                        </p>
+                        {% if errors.avatar is defined %}
+                            <p class="mt-2 text-sm text-danger-700" role="alert">{{ errors.avatar }}</p>
+                        {% endif %}
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary btn-block"
+                        data-avatar-submit>
+                        {{ icon('save', 'w-4 h-4') }}ছবি সেভ করুন
+                    </button>
+                </form>
+            </div>
+
             {# API user key — the reference shows this prominently with a copy button. #}
             <div class="mb-6" x-data="{ copied: false }">
                 <div class="mb-2 flex items-center justify-between">
@@ -352,5 +438,45 @@
 <script type="module">
     import { initPushSettings } from '{{ asset('/assets/js/push-subscribe.js') }}';
     initPushSettings();
+
+    // — Avatar upload UI —
+    // The file input and the remove button are wired here so the profile form's
+    // `do=avatar` branch gets a clean multipart POST. The server-side action
+    // already handles: storing the new image, deleting the old one, removing the
+    // avatar when no file is supplied, and rolling back an accepted upload when a
+    // later field rejects.
+    (function () {
+        const form = document.querySelector('form[action="/profile"]');
+        const fileInput = form?.querySelector('[data-avatar-input]');
+        const removeBtn = form?.querySelector('[data-avatar-remove]');
+        const submitBtn = form?.querySelector('[data-avatar-submit]');
+
+        if (!form || !fileInput || !removeBtn || !submitBtn) {
+            return;
+        }
+
+        // When a file is chosen, restrict the submit to the avatar form only —
+        // otherwise a user who changes their name and uploads a picture at the
+        // same time would submit the profile form twice (once as `do=profile`,
+        // once as `do=avatar`), and the second would fail because the avatar is
+        // already on the row.
+        fileInput.addEventListener('change', function () {
+            submitBtn.dataset.avatarSubmit = '1';
+        });
+
+        // The remove button is a separate small form inside the card: it submits
+        // `do=avatar` with no file, which the action reads as "delete my avatar".
+        removeBtn.addEventListener('click', function () {
+            // Confirm before destroying — the user may have clicked the X by
+            // accident on a touch screen.
+            if (!confirm('প্রোফাইল ছবি অপসারণ করবেন?')) {
+                return;
+            }
+
+            // Submit the avatar form without a file — the action sees no file and
+            // removes the current avatar.
+            form.submit();
+        });
+    })();
 </script>
 {% endblock %}

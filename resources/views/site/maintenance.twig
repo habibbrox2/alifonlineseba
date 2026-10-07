@@ -1,0 +1,57 @@
+{#
+    The page a visitor sees while the owner has /admin/settings → maintenance
+    mode switched on. Rendered by App\Web\MaintenanceMiddleware as a 503.
+
+    Not to be confused with public/maintenance.php: that one is the *deploy*
+    gate, self-contained and dependency-free because it has to render while
+    vendor/ is half-written. This one is rendered by a healthy application,
+    so it is a normal themed page — same layout as the error pages, same
+    header, same footer.
+#}
+{% extends 'layouts/public.twig' %}
+
+{% block title %}সাইটটি সাময়িকভাবে বন্ধ — All Seba{% endblock %}
+{% block description %}{{ maintenanceMessage }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<section class="container-app flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
+    <p class="text-7xl font-extrabold text-primary-600 sm:text-8xl">503</p>
+
+    <h1 class="mt-4 text-2xl font-extrabold text-neutral-900 sm:text-3xl">
+        সাইটটি সাময়িকভাবে বন্ধ
+    </h1>
+    <p class="mt-3 max-w-md text-neutral-500">
+        আমরা সাইটটি আপডেট করছি অথবা রক্ষণাবেকারি চলছে। কিছুক্ষণ পর আবার চেষ্টা করুন।
+        <span class="block text-sm text-neutral-400">We are doing some maintenance — please check back shortly.</span>
+    </p>
+
+    {# What the owner typed in the settings box, not what this template thinks.
+       Escaped by Twig, so it stays a message rather than becoming markup. #}
+    {% if maintenanceMessage %}
+        <p class="mt-5 max-w-md rounded-full bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700">
+            {{ maintenanceMessage }}
+        </p>
+    {% endif %}
+
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <a href="{{ currentPath }}" class="btn btn-primary px-6 py-2.5">
+            {{ icon('history', 'w-4 h-4') }} আবার চেষ্টা করুন
+        </a>
+        <a href="/login" class="btn btn-ghost px-6 py-2.5">
+            {{ icon('log-in', 'w-4 h-4') }} লগইন করুন
+        </a>
+    </div>
+
+    <p class="mt-10 text-xs text-neutral-400">HTTP 503 · Service Unavailable</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{# Auto-retry, so the visitor does not have to press anything. Every 60s to
+   match the Retry-After the middleware sends — reloading harder than the
+   server asked for helps nobody. #}
+<script>
+    setTimeout(function () { window.location.reload(); }, 60000);
+</script>
+{% endblock %}

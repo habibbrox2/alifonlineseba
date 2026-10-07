@@ -13,7 +13,7 @@ use Yiisoft\Session\SessionInterface;
  */
 final class IdentityRepository
 {
-    private const SESSION_KEY = 'user_id';
+    public const SESSION_KEY = 'user_id';
 
     public function __construct(
         private readonly SessionInterface $session,

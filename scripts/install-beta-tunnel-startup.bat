@@ -11,8 +11,8 @@ REM
 REM Alternatives, not companions -- pick one:
 REM   this script                              no elevation, runs at logon
 REM   install-beta-tunnel-service.bat          elevation, runs at boot
-REM The locally managed app still has to be running for any of this to answer
-REM requests: `php -S 127.0.0.1:8099 -t public public/index.php`. Without it
+REM The local Apache on 8080 (the same backend beta.yml's ingress points at)
+REM must be running for any of this to answer requests. Without it
 REM Cloudflare serves 502.
 
 setlocal

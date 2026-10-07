@@ -111,10 +111,12 @@ Errors: 403 non-superadmin · 400 business refusal (self-approval, already revie
 Query: `page`, `q`. `perPage: 20`. Superadmin listed first (`paginateStaff`).
 
 ### `GET /api/admin/settings` — `AdminSettingsApiAction` (**superadmin only**)
-Returns `SettingsRepository::all()` — defaults merged with `site_setting` rows. Keys are whitelisted (`SettingsRepository::KEYS`) with types text|url|multiline|number|checkbox, e.g. `site_tagline`, `contact_email`, `topup_min_amount` (10), `topup_max_amount` (100000), `topup_receipt_required` (checkbox), `wallet_bkash/nagad/rocket`, `referral_enabled`, `referrer_bonus_amount`, `order_window_enabled/start/end`.
+Returns `SettingsRepository::all()` — defaults merged with `site_setting` rows. Keys are whitelisted (`SettingsRepository::KEYS`) with types text|url|multiline|number|checkbox, e.g. `site_tagline`, `contact_email`, `topup_min_amount` (10), `topup_max_amount` (100000), `topup_receipt_required` (checkbox), `wallet_bkash/nagad/rocket`, `referral_enabled`, `referrer_bonus_amount`, `order_window_enabled/start/end`, `maintenance_enabled` (checkbox) + `maintenance_message`.
 
 ### `POST /api/admin/settings`
-Body: whitelisted keys only. Server validates: URL keys via `isSafeUrl` (http/https), email/phone formats, topup min/max > 0, referral bonuses 0–100000, `min ≤ max` thresholds; checkbox keys handled explicitly; unsafe URLs silently dropped. `putMany(body, identity->id)` records `updated_by`.
+Body: whitelisted keys only. Server validates: URL keys via `isSafeUrl` (http/https), email/phone formats, topup min/max > 0, referral bonuses 0–100000, `min ≤ max` thresholds, `maintenance_message` ≤ 300 chars; checkbox keys handled explicitly; unsafe URLs silently dropped. `putMany(body, identity->id)` records `updated_by`.
+
+`maintenance_enabled = 1` closes the public site (see `App\Web\MaintenanceMiddleware`): every non-admin path answers 503 with `maintenance_message` as JSON, while `/admin` and `/api/admin/*` — this endpoint included — stay reachable, so the app can always switch it back off. Unchecking it (or omitting the key, as a form does) reopens the site.
 
 ### `GET /api/admin/logs` — `AdminLogsApiAction`
 Query: `page`, `perPage` (≤25), `q` (searches action/description/ip_address). Response: `{ rows, total, page, perPage, q }` from `ActivityLogRepository::all()` (newest first).

@@ -20,6 +20,8 @@ fs.copyFileSync(root + '/resources/js/date-field.js', dest + '/js/date-field.js'
 fs.copyFileSync(root + '/resources/js/app-install.js', dest + '/js/app-install.js');
 fs.copyFileSync(root + '/resources/js/push-subscribe.js', dest + '/js/push-subscribe.js');
 fs.copyFileSync(root + '/resources/js/push-prompt.js', dest + '/js/push-prompt.js');
+fs.copyFileSync(root + '/resources/js/google-signin.js', dest + '/js/google-signin.js');
+fs.copyFileSync(root + '/resources/js/firebase-auth.js', dest + '/js/firebase-auth.js');
 
 // public/push-sw.js is NOT copied: the Push API requires the worker script to
 // be served from the web root so its scope covers every route, and that file is

@@ -6,6 +6,7 @@ Options -Indexes
     # Allow well-known resources to reach Apache/front controller.
     RewriteRule ^\.well-known/(?:assetlinks\.json|acme-challenge/) - [E=ALLOW_WELL_KNOWN:1]
 
+
     # Block dotfiles except explicitly allowed .well-known resources.
     RewriteCond %{ENV:ALLOW_WELL_KNOWN} !=1
     RewriteRule (^|/)\. - [F,L]

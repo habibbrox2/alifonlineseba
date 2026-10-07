@@ -157,6 +157,13 @@ final readonly class AdminSettingsAction
                 $errors['order_window_end'] = 'শুরু ও শেষের সময় আলাদা হতে হবে।';
             }
 
+            // The maintenance note is shown to every visitor and echoed back
+            // by the API, so it is refused rather than silently cut: a
+            // truncated sentence promises something the operator did not say.
+            if (mb_strlen((string) ($input['maintenance_message'] ?? '')) > 300) {
+                $errors['maintenance_message'] = '৩০০ অক্ষরের মধ্যে বার্তা লিখুন।';
+            }
+
             if ($errors === []) {
                 $this->settings->putMany($input, $identity !== null ? (int) $identity->id : null);
                 $this->session->set('flash_success', 'সাইট সেটিংস সংরক্ষণ হয়েছে।');

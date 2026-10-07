@@ -1,0 +1,136 @@
+{% if googleSigninClientId is not empty %}
+    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.2/firebase-ui-auth.css" />
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/ui/6.0.2/firebase-ui-auth.js"></script>
+    <style>
+        .firebaseui-idp-button {
+            background-color: #16a34a !important;
+            border: none !important;
+            border-radius: 0.5rem !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+            color: #ffffff !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease !important;
+            min-height: 44px !important;
+        }
+
+        .firebaseui-idp-button:hover {
+            background-color: #15803d !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+            transform: translateY(-1px) !important;
+        }
+
+        .firebaseui-idp-icon {
+            filter: brightness(0) invert(1) !important;
+            margin-right: 12px !important;
+        }
+
+        .firebaseui-idp-text {
+            color: #ffffff !important;
+            font-size: 0.95rem !important;
+        }
+
+        .firebaseui-idp-list {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .firebaseui-idp-list > li {
+            margin-bottom: 12px !important;
+        }
+    </style>
+
+    <script type="module">
+        // Firebase compat SDK — loaded from CDN so we do not need to vendor it.
+        // The compat build exposes a global `firebase` that this module imports
+        // via window; the `import` form below is the ES-module way to read a
+        // global without depending on script-load order.
+
+        // SDK must be initialised before auth is used. This object is built from
+        // the same environment values the server uses, so a missing or wrong
+        // value here and on the server cannot disagree — one of them is blank
+        // and the button is hidden.
+        const firebaseConfig = {
+            apiKey: "{{ googleSigninApiKey|e('js') }}",
+            authDomain: "{{ googleSigninAuthDomain|e('js') }}",
+            projectId: "{{ googleSigninProjectId|e('js') }}",
+            appId: "{{ googleSigninAppId|e('js') }}",
+        };
+
+        // Initialise only once; repeated calls are a no-op in the compat SDK.
+        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        // Initialise FirebaseUI only if the container exists on the current page.
+        const container = document.getElementById('firebaseui-auth-container');
+        if (container && typeof firebaseui !== 'undefined') {
+            const ui = new firebaseui.auth.AuthUI(firebase.auth());
+
+            ui.start(container, {
+                signInOptions: [
+                    firebase.auth.GoogleAuthProvider.PROVIDER_ID,
+                ],
+                signInFlow: 'popup',
+                callbacks: {
+                    signInSuccessWithAuthResult: async function(authResult, redirectUrl) {
+                        try {
+                            const idToken = await authResult.user.getIdToken();
+                            const response = await fetch('/auth/firebase', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'X-CSRF-Token': getCsrfToken(),
+                                },
+                                body: new URLSearchParams({ credential: idToken }),
+                                credentials: 'same-origin',
+                            });
+
+                            if (!response.ok) {
+                                let message = 'সাইন ইন করা যায়নি।';
+                                try {
+                                    const body = await response.json();
+                                    if (body?.message) {
+                                        message = body.message;
+                                    }
+                                } catch (_) {
+                                    // Not JSON — keep the generic message.
+                                }
+                                throw new Error(message);
+                            }
+
+                            window.location.href = '/dashboard';
+                            return false;
+                        } catch (error) {
+                            if (error instanceof Error) {
+                                alert(error.message || 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
+                            } else {
+                                alert('সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
+                            }
+                            return false;
+                        }
+                    },
+                },
+            });
+        }
+
+        function getCsrfToken() {
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta instanceof HTMLMetaElement && meta.content) {
+                return meta.content;
+            }
+
+            const input = document.querySelector('input[name="_csrf"]');
+            if (input instanceof HTMLInputElement && input.value) {
+                return input.value;
+            }
+
+            return '';
+        }
+    </script>
+{% endif %}
+
+{% if recaptchaSiteKey is not empty %}
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+{% endif %}

@@ -55,6 +55,74 @@ final class UserRepository
     }
 
     /**
+     * The live account with this verified email, or null.
+     *
+     * Used by Google sign-in to find an existing account before creating a new
+     * one. Unlike {@see findByIdentifier} this only matches the email column —
+     * a Google account is addressed by its email, not by username or phone.
+     *
+     * Trashed and disabled accounts are excluded: a suspended account that still
+     * holds the email prevents re-signing in with Google until it is restored,
+     * which is the same behaviour a password login already has.
+     */
+    public function findByEmail(string $email): ?array
+    {
+        $row = $this->db
+            ->createCommand(
+                'SELECT * FROM {{%user}} WHERE [[email]] = :email AND [[deleted_at]] IS NULL AND [[status]] = :status LIMIT 1'
+            )
+            ->bindValues([
+                ':email' => strtolower(trim($email)),
+                ':status' => 'active',
+            ])
+            ->queryOne();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * The live account that already claims a phone number, or null.
+     *
+     * Used by the Firebase phone-auth flow to find an existing account by its
+     * verified phone number before creating or re-linking one. Unlike
+     * {@see findByIdentifier} this only matches the phone column and only
+     * returns active, non-trashed rows.
+     */
+    public function findActiveByPhone(string $phone): ?array
+    {
+        $row = $this->db
+            ->createCommand(
+                'SELECT * FROM {{%user}} WHERE [[phone]] = :phone AND [[deleted_at]] IS NULL AND [[status]] = :status LIMIT 1'
+            )
+            ->bindValues([
+                ':phone' => $phone,
+                ':status' => 'active',
+            ])
+            ->queryOne();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * The live account that already claims a Firebase UID, or null.
+     *
+     * Used by the Firebase auth flow to find an existing account by its
+     * verified Firebase `sub` before creating or re-linking one. Unlike
+     * {@see findByEmail} this matches the Firebase UID column.
+     */
+    public function findByFirebaseUid(string $uid): ?array
+    {
+        $row = $this->db
+            ->createCommand(
+                'SELECT * FROM {{%user}} WHERE [[firebase_uid]] = :uid AND [[deleted_at]] IS NULL LIMIT 1'
+            )
+            ->bindValue(':uid', $uid)
+            ->queryOne();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
      * The live account that already claims a contact channel, or null.
      *
      * Used by the profile form to refuse a WhatsApp/Telegram number that belongs
@@ -158,6 +226,7 @@ final class UserRepository
             'status' => $row['status'] ?? 'active',
             'role' => $row['role'] ?? 'user',
             'balance' => $row['balance'] ?? 0,
+            'firebase_provider' => $row['firebase_provider'] ?? null,
             // Every account gets its API key on creation; rows predating the
             // column are covered lazily by ensureApiKey().
             'api_key' => self::generateApiKey(),

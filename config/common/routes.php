@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Auth\AdminApiMiddleware;
 use App\Auth\AdminMiddleware;
 use App\Auth\ApiAuthMiddleware;
 use App\Auth\AuthMiddleware;
 use App\Auth\OptionalAuthMiddleware;
 use App\Auth\SuperAdminMiddleware;
+use App\Web\Account\AvatarAction;
 use App\Web\Account\DeliverableAction;
 use App\Web\Account\NotificationsAction;
 use App\Web\Account\ProfileAction;
@@ -57,6 +59,7 @@ use App\Web\Api\Admin\AdminUsersApiAction;
 use App\Web\Api\Admin\AdminWithdrawsApiAction;
 use App\Web\Api\TransactionsApiAction;
 use App\Web\Auth\ForgotPasswordAction;
+use App\Web\Auth\GoogleSignInAction;
 use App\Web\Auth\LoginAction;
 use App\Web\Auth\LogoutAction;
 use App\Web\Auth\RegisterAction;
@@ -67,6 +70,7 @@ use App\Web\Services\ServiceDetailAction;
 use App\Web\Site\ApkDownloadAction;
 use App\Web\Site\AppPageAction;
 use App\Web\Site\AssetLinksAction;
+use App\Web\Site\FirebaseAuthProxyAction;
 use App\Web\Site\HomeAction;
 use App\Web\Site\RobotsAction;
 use App\Web\Site\SitemapAction;
@@ -106,9 +110,15 @@ return [
         ->action(AssetLinksAction::class)
         ->name('assetlinks'),
 
+    Route::methods(['GET', 'POST'], '/__/auth/{path:.*}')
+        ->action(FirebaseAuthProxyAction::class)
+        ->name('firebase-auth-proxy'),
+
     // Auth
     Route::methods(['GET', 'POST'], '/login')->action(LoginAction::class)->name('login'),
     Route::methods(['GET', 'POST'], '/register')->action(RegisterAction::class)->name('register'),
+    Route::post('/auth/google')->action(GoogleSignInAction::class)->name('auth-google'),
+    Route::post('/auth/firebase')->action(FirebaseAuthAction::class)->name('auth-firebase'),
     Route::post('/logout')->action(LogoutAction::class)->name('logout'),
     // Recovery. Public by definition — the visitor is by definition signed
     // out — and CSRF-protected by the global middleware, so a third party
@@ -137,6 +147,7 @@ return [
         Route::get('/service-requests/{id}/file')->action(DeliverableAction::class)->name('service-request-file'),
         Route::get('/referrals')->action(ReferralsAction::class)->name('referrals'),
         Route::get('/notifications')->action(NotificationsAction::class)->name('notifications'),
+        Route::get('/profile/avatar/{id}')->action(AvatarAction::class)->name('profile-avatar'),
         Route::post('/notifications/read-all')->action(NotificationsAction::class)->name('notifications-read-all'),
         Route::methods(['GET', 'POST'], '/profile')->action(ProfileAction::class)->name('profile'),
     ),
