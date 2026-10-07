@@ -9,7 +9,8 @@ use App\Repository\UserRepository;
 /**
  * Provision an account from a verified Firebase ID token.
  *
- * Works for any Firebase provider (email/password, phone, Google, etc.).
+ * Works with Firebase Authentication providers such as email/password, phone,
+ * and federated identity.
  * The two-entry rule: if a verified email or phone already owns an account,
  * sign in as that account; otherwise create one.
  *
@@ -39,7 +40,7 @@ final readonly class FirebaseAuthService
      *     picture?: string|null,
      *     firebase_provider: string,
      *     phone_number?: string|null,
-     * } $payload   the verified claims from {@see GoogleIdTokenVerifier::verify()}.
+     * } $payload   the verified claims from {@see FirebaseIdTokenVerifier::verify()}.
      *
      * @return array{id: int, isNew: bool, username: string, fullName: string, avatar: ?string}
      */

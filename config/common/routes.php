@@ -60,7 +60,6 @@ use App\Web\Api\Admin\AdminUsersApiAction;
 use App\Web\Api\Admin\AdminWithdrawsApiAction;
 use App\Web\Api\TransactionsApiAction;
 use App\Web\Auth\ForgotPasswordAction;
-use App\Web\Auth\GoogleSignInAction;
 use App\Web\Auth\LoginAction;
 use App\Web\Auth\LogoutAction;
 use App\Web\Auth\RegisterAction;
@@ -118,7 +117,6 @@ return [
     // Auth
     Route::methods(['GET', 'POST'], '/login')->action(LoginAction::class)->name('login'),
     Route::methods(['GET', 'POST'], '/register')->action(RegisterAction::class)->name('register'),
-    Route::post('/auth/google')->action(GoogleSignInAction::class)->name('auth-google'),
     Route::post('/auth/firebase')->action(FirebaseAuthAction::class)->name('auth-firebase'),
     Route::post('/logout')->action(LogoutAction::class)->name('logout'),
     // Recovery. Public by definition — the visitor is by definition signed
@@ -184,7 +182,7 @@ return [
         Route::get('/services/{slug}')->action(ServicesApiAction::class)->name('api-service'),
         // The dashboard's grid. A path of its own rather than a query on
         // /api/services: that one is `SELECT *` and a contract of the mobile
-        // app, while a card needs seven columns — see ServiceCatalogApiAction.
+        // app, while a card needs eight columns — see ServiceCatalogApiAction.
         Route::get('/catalog')->action(ServiceCatalogApiAction::class)->name('api-catalog'),
         Route::get('/transactions')->action(TransactionsApiAction::class)->name('api-transactions'),
         Route::get('/service-requests/{id}')->action(ServiceRequestDetailApiAction::class)->name('api-service-request-detail'),

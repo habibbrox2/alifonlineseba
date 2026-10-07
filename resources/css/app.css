@@ -360,6 +360,43 @@
   }
 }
 
+/* ————— Service-hub skeletons —————
+
+   The dashboard grid draws placeholder cards while the catalogue fetch is
+   in flight and again while the next window appends (see index.twig). A flat
+   gray box says "blank"; the light sweeping across it says "still working",
+   which is the difference between a grid that looks broken and one that
+   looks like it is about to fill. Keyframes live out here beside .badge-spin
+   for the same reason: Tailwind purges class names, not @keyframes names —
+   and the name is what the rule above references. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: #f5f5f5; /* neutral-100 */
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* The same courtesy .badge-loading::before gets above: the sweep is the
+   whole point of the element, so someone who asked for less motion gets a
+   still placeholder instead of a continuously animating one. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+}
+
 /* ============================================================
  * Category accent palette
  * ------------------------------------------------------------

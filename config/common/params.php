@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Web\View\GoogleSignInViewInjection;
+use App\Web\View\FirebaseAuthViewInjection;
 use App\Web\View\IdentityViewInjection;
 use Yiisoft\Definitions\Reference;
 use Yiisoft\View\Twig\TwigTemplateRenderer;
@@ -57,12 +57,11 @@ return [
             // that enforces them, so the widget cannot advertise different rules
             // than the server applies.
             Reference::to(\App\Web\View\ImageUploadViewInjection::class),
-            // Firebase/Google Sign-In: the web SDK config (client id, API key,
-            // auth domain, project id, app id) comes from the environment, and
-            // the button is hidden entirely when GOOGLE_SIGNIN_WEB_CLIENT_ID is
+            // Firebase Authentication web SDK config comes from the environment,
+            // and the button is hidden when FIREBASE_AUTH_WEB_CLIENT_ID is
             // not set — so this injection only has to produce values, the partial
             // guards on them.
-            Reference::to(GoogleSignInViewInjection::class),
+            Reference::to(FirebaseAuthViewInjection::class),
         ],
     ],
 ];

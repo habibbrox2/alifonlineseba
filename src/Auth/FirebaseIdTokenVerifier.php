@@ -7,13 +7,13 @@ namespace App\Auth;
 use App\Env;
 
 /**
- * Verifies a Google sign-in ID token issued to *this* Firebase project.
+ * Verifies a Firebase ID token issued to *this* Firebase project.
  *
- * ## Why this class exists at all
+ * ## Why this class exists
  *
  * The browser gets the token from Firebase (`signInWithPopup`), but the token
  * is only a claim until something on the server has checked it. Trusting the
- * client's word for who the caller is would make "Continue with Google" a
+ * client's word for who the caller is would make the sign-in UI a
  * button that logs you in as anybody, so the token is verified here and the
  * account is provisioned from what the signature proves rather than from what
  * the page posted.
@@ -22,28 +22,26 @@ use App\Env;
  *
  * 1. the algorithm is RS256 — a token that says `none` or `HS256` never gets
  *    as far as a key;
- * 2. the signature verifies against Google's certificate for the token's
+ * 2. the signature verifies against Firebase's signing certificate for the token's
  *    `kid`;
  * 3. `iss` is `https://securetoken.google.com/<project>` and `aud` is the
  *    project id, so a token minted for a *different* project — including one
  *    of ours on another domain — is refused;
  * 4. `sub` is a present, sane-length string and `exp`/`iat`/`auth_time` are
  *    in the past-to-future order they must be;
- * 5. `firebase.sign_in_provider` is `google.com`, so a token from a password
- *    or anonymous sign-in on the same project cannot be posted to the Google
- *    endpoint;
- * 6. and an email is present and marked verified — Google has already proved
- *    it, which is exactly why it is used as the account's identity.
+ * 5. `firebase.sign_in_provider` is present, so the token identifies a Firebase
+ *    Authentication provider;
+ * 6. a valid email is present, and an explicitly unverified email is rejected.
  *
  * {@see verifyWithKeys()} holds every one of those rules and takes the keys as
  * an argument, so the whole decision can be tested with a key pair generated
- * in the test itself: no network, no clock of Google's to wait on, and no way
+ * in the test itself: no network, no clock-dependent certificate fetch, and no way
  * for a test to pass because a fetch happened to fail.
  */
-class GoogleIdTokenVerifier
+class FirebaseIdTokenVerifier
 {
     /**
-     * Google's rotating JWKS. Rotates on a schedule Google does not publish,
+     * Firebase's rotating JWKS. Rotates on a schedule not publicly published,
      * so a `kid` we have never seen is a reason to refetch, not a reason to
      * reject — see {@see keys()}.
      */
@@ -171,10 +169,10 @@ class GoogleIdTokenVerifier
     }
 
     /**
-     * The certificate for one `kid`, from cache or from Google.
+     * The certificate for one `kid`, from cache or Firebase's signing-key endpoint.
      *
      * An unknown `kid` forces a refetch first: the usual reason a token
-     * carries a key we do not have is that Google rotated the day before and
+     * carries a key we do not have is that the signing-key set rotated and
      * our cached copy is the stale one. Only if the fresh set still lacks it
      * is the token refused.
      *
@@ -200,7 +198,7 @@ class GoogleIdTokenVerifier
     }
 
     /**
-     * Fetch and parse Google's JWKS. Empty on any failure — never throws:
+     * Fetch and parse Firebase's JWKS. Empty on any failure — never throws:
      * a network problem has to look like "this token is not acceptable",
      * not like a 500 on the login page.
      *
@@ -227,7 +225,7 @@ class GoogleIdTokenVerifier
     }
 
     /**
-     * JWKS JSON => kid => PEM. Google puts an `x5c` chain on every key; when
+     * JWKS JSON => kid => PEM. The signing endpoint puts an `x5c` chain on each key; when
      * one is missing the modulus/exponent are turned into a key directly, so
      * a format change costs a slower path rather than a broken login.
      *
@@ -381,7 +379,7 @@ class GoogleIdTokenVerifier
             return null;
         }
 
-        return $path . '/google-idp-keys.json';
+        return $path . '/firebase-idp-keys.json';
     }
 
     // ---- small helpers ----------------------------------------------------

@@ -1,4 +1,4 @@
-{% if googleSigninClientId is not empty %}
+{% if firebaseAuthWebClientId is not empty %}
     <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.2/firebase-ui-auth.css" />
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -52,10 +52,10 @@
         // value here and on the server cannot disagree — one of them is blank
         // and the button is hidden.
         const firebaseConfig = {
-            apiKey: "{{ googleSigninApiKey|e('js') }}",
-            authDomain: "{{ googleSigninAuthDomain|e('js') }}",
-            projectId: "{{ googleSigninProjectId|e('js') }}",
-            appId: "{{ googleSigninAppId|e('js') }}",
+            apiKey: "{{ firebaseAuthApiKey|e('js') }}",
+            authDomain: "{{ firebaseAuthDomain|e('js') }}",
+            projectId: "{{ firebaseAuthProjectId|e('js') }}",
+            appId: "{{ firebaseAuthAppId|e('js') }}",
         };
 
         // Initialise only once; repeated calls are a no-op in the compat SDK.

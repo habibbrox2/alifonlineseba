@@ -59,7 +59,7 @@ final readonly class FirebaseAuthProxyAction
     {
         // The query string is not optional. Firebase hands the handler its
         // whole state in it — `mode`, `provider`, `apiKey`, and the OAuth
-        // `state`/`code` Google redirects back with — and a proxy that drops
+        // `state`/`code` the identity provider redirects back with — and a proxy that drops
         // it returns a page that then reads a location the upstream never saw.
         $path = (string) $route->getArgument('path', '');
         $query = $request->getUri()->getQuery();

@@ -18,7 +18,7 @@ use Psr\Http\Message\ServerRequestInterface;
  * dashboard response, which (a) had to be parsed before the first card could
  * render, (b) made the page large enough to break a PCRE assertion in the
  * test suite, and (c) shipped `form_fields`, `variants` and `rules` nobody
- * asked for. This returns the seven columns a card draws — see
+ * asked for. This returns the eight columns a card draws — see
  * {@see ServiceCatalog} — so the same catalogue costs ~250 KB, compressed, on
  * a path of its own.
  *

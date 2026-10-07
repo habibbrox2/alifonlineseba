@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit;
 
-use App\Auth\GoogleIdTokenVerifier;
+use App\Auth\FirebaseIdTokenVerifier;
 
 use function PHPUnit\Framework\assertArrayHasKey;
 use function PHPUnit\Framework\assertNotNull;
@@ -16,7 +16,7 @@ use function PHPUnit\Framework\assertTrue;
  * The rules that decide who "Continue with Google" is allowed to sign in as.
  *
  * Every token here is minted by the test from a throwaway key pair stored in
- * `tests/Support/Data/google-id-token-fixture.php` and handed to
+ * `tests/Support/Data/firebase-id-token-fixture.php` and handed to
  * `verifyWithKeys()` directly — so what is being proved is the decision, not
  * that a network fetch happened to succeed. A regression that loosened the
  * audience check, accepted an expired token or let a password-token through
@@ -26,7 +26,7 @@ use function PHPUnit\Framework\assertTrue;
  * *generation* needs an openssl.cnf the test environment does not ship;
  * signing and verifying with an existing PEM needs nothing but the key.
  */
-final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
+final class FirebaseIdTokenVerifierTest extends \Codeception\Test\Unit
 {
     private const PROJECT = 'al-onlinesheba';
     private const KID = 'test-key-1';
@@ -38,7 +38,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $fixture = require dirname(__DIR__) . '/Support/Data/google-id-token-fixture.php';
+        $fixture = require dirname(__DIR__) . '/Support/Data/firebase-id-token-fixture.php';
         assertTrue(is_array($fixture), 'The key fixture is missing, so no token can be minted.');
         foreach (['private', 'public', 'certificate', 'private_other', 'public_other'] as $part) {
             assertTrue(is_string($fixture[$part] ?? null) && $fixture[$part] !== '', "Fixture part {$part} is missing.");
@@ -51,7 +51,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
 
     public function testAWellFormedTokenForThisProjectIsAccepted(): void
     {
-        $claims = GoogleIdTokenVerifier::verifyWithKeys(
+        $claims = FirebaseIdTokenVerifier::verifyWithKeys(
             $this->token(),
             [self::KID => $this->publicKey],
             self::PROJECT,
@@ -71,7 +71,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
         // Same key, same everything — except the audience names a different
         // Firebase project. Accepting it would mean any project the operator
         // has ever owned could sign people into this one.
-        $claims = GoogleIdTokenVerifier::verifyWithKeys(
+        $claims = FirebaseIdTokenVerifier::verifyWithKeys(
             $this->token(['aud' => 'someone-elses-project']),
             [self::KID => $this->publicKey],
             self::PROJECT,
@@ -84,7 +84,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
     public function testAnExpiredTokenIsRefused(): void
     {
         $now = self::now();
-        $claims = GoogleIdTokenVerifier::verifyWithKeys(
+        $claims = FirebaseIdTokenVerifier::verifyWithKeys(
             $this->token(['exp' => $now - 3600, 'iat' => $now - 7200, 'auth_time' => $now - 7200]),
             [self::KID => $this->publicKey],
             self::PROJECT,
@@ -100,7 +100,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
         // Inside the tolerated skew: accepted (a slightly slow clock must not
         // lock everybody out).
         assertNotNull(
-            GoogleIdTokenVerifier::verifyWithKeys(
+            FirebaseIdTokenVerifier::verifyWithKeys(
                 $this->token(['exp' => $now - 30]),
                 [self::KID => $this->publicKey],
                 self::PROJECT,
@@ -109,7 +109,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
         );
         // Well past it: refused.
         assertNull(
-            GoogleIdTokenVerifier::verifyWithKeys(
+            FirebaseIdTokenVerifier::verifyWithKeys(
                 $this->token(['exp' => $now - 300]),
                 [self::KID => $this->publicKey],
                 self::PROJECT,
@@ -122,7 +122,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
     {
         // The backend now accepts any Firebase provider ID token as long as
         // the project, signature and verified email are valid.
-        $claims = GoogleIdTokenVerifier::verifyWithKeys(
+        $claims = FirebaseIdTokenVerifier::verifyWithKeys(
             $this->token(['firebase' => ['sign_in_provider' => 'password']]),
             [self::KID => $this->publicKey],
             self::PROJECT,
@@ -140,7 +140,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
         $forged = $this->token([], self::KID, $this->fixture['private_other']);
 
         assertNull(
-            GoogleIdTokenVerifier::verifyWithKeys($forged, [self::KID => $this->publicKey], self::PROJECT, self::now()),
+            FirebaseIdTokenVerifier::verifyWithKeys($forged, [self::KID => $this->publicKey], self::PROJECT, self::now()),
             'A signature that does not match the published key is the whole definition of a forgery.',
         );
     }
@@ -148,7 +148,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
     public function testAnUnknownKeyIdIsRefused(): void
     {
         assertNull(
-            GoogleIdTokenVerifier::verifyWithKeys(
+            FirebaseIdTokenVerifier::verifyWithKeys(
                 $this->token([], 'rotated-away'),
                 [self::KID => $this->publicKey],
                 self::PROJECT,
@@ -164,7 +164,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
             . '.' . self::b64(json_encode($this->claims(), JSON_THROW_ON_ERROR)) . '.';
 
         assertNull(
-            GoogleIdTokenVerifier::verifyWithKeys($unsigned, [self::KID => $this->publicKey], self::PROJECT, self::now()),
+            FirebaseIdTokenVerifier::verifyWithKeys($unsigned, [self::KID => $this->publicKey], self::PROJECT, self::now()),
         );
     }
 
@@ -177,7 +177,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
         )) . '.' . $signature;
 
         assertNull(
-            GoogleIdTokenVerifier::verifyWithKeys($tampered, [self::KID => $this->publicKey], self::PROJECT, self::now()),
+            FirebaseIdTokenVerifier::verifyWithKeys($tampered, [self::KID => $this->publicKey], self::PROJECT, self::now()),
             'Changing the address after signing is exactly the attack this check exists for.',
         );
     }
@@ -185,7 +185,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
     public function testAnUnverifiedEmailIsRefused(): void
     {
         assertNull(
-            GoogleIdTokenVerifier::verifyWithKeys(
+            FirebaseIdTokenVerifier::verifyWithKeys(
                 $this->token(['email_verified' => false]),
                 [self::KID => $this->publicKey],
                 self::PROJECT,
@@ -198,7 +198,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
     public function testAnEmptySubjectIsRefused(): void
     {
         assertNull(
-            GoogleIdTokenVerifier::verifyWithKeys(
+            FirebaseIdTokenVerifier::verifyWithKeys(
                 $this->token(['sub' => '']),
                 [self::KID => $this->publicKey],
                 self::PROJECT,
@@ -226,11 +226,11 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
             'e' => self::b64($details['rsa']['e']),
         ]]], JSON_THROW_ON_ERROR);
 
-        $keys = GoogleIdTokenVerifier::keysFromJwks($jwks);
+        $keys = FirebaseIdTokenVerifier::keysFromJwks($jwks);
         assertArrayHasKey(self::KID, $keys, 'The JWK must be turned into a usable key.');
 
         assertNotNull(
-            GoogleIdTokenVerifier::verifyWithKeys($this->token(), $keys, self::PROJECT, self::now()),
+            FirebaseIdTokenVerifier::verifyWithKeys($this->token(), $keys, self::PROJECT, self::now()),
             'A key parsed from n/e must verify exactly like the PEM it was built from.',
         );
     }
@@ -244,11 +244,11 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
             'x5c' => [$certificate],
         ]]], JSON_THROW_ON_ERROR);
 
-        $keys = GoogleIdTokenVerifier::keysFromJwks($jwks);
+        $keys = FirebaseIdTokenVerifier::keysFromJwks($jwks);
         assertArrayHasKey(self::KID, $keys);
 
         assertNotNull(
-            GoogleIdTokenVerifier::verifyWithKeys($this->token(), $keys, self::PROJECT, self::now()),
+            FirebaseIdTokenVerifier::verifyWithKeys($this->token(), $keys, self::PROJECT, self::now()),
             'The x5c branch is what Google actually sends today.',
         );
     }
@@ -257,7 +257,7 @@ final class GoogleIdTokenVerifierTest extends \Codeception\Test\Unit
     {
         foreach (['', 'not-a-token', 'a.b.c', str_repeat('x.', 3)] as $broken) {
             assertNull(
-                GoogleIdTokenVerifier::verifyWithKeys($broken, [self::KID => $this->publicKey], self::PROJECT, self::now()),
+                FirebaseIdTokenVerifier::verifyWithKeys($broken, [self::KID => $this->publicKey], self::PROJECT, self::now()),
                 "Input {$broken} must read as “no”, never as an error.",
             );
         }

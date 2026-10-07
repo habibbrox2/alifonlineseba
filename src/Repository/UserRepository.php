@@ -57,12 +57,13 @@ final class UserRepository
     /**
      * The live account with this verified email, or null.
      *
-     * Used by Google sign-in to find an existing account before creating a new
+     * Used by Firebase Authentication to find an existing account before creating a new
      * one. Unlike {@see findByIdentifier} this only matches the email column —
-     * a Google account is addressed by its email, not by username or phone.
+     * a federated Firebase account is addressed by its verified email.
      *
      * Trashed and disabled accounts are excluded: a suspended account that still
-     * holds the email prevents re-signing in with Google until it is restored,
+     * holds the email prevents re-signing in through Firebase Authentication
+     * until it is restored,
      * which is the same behaviour a password login already has.
      */
     public function findByEmail(string $email): ?array

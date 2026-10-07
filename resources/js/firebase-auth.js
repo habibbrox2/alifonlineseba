@@ -21,7 +21,7 @@
  *
  * ## Why compat and not modular
  *
- * Same reason as google-signin.js: no bundler in this project. The compat
+ * No bundler is used in this project. The compat
  * SDK is a single global that works from a module without a build step.
  */
 export function initFirebaseAuth(): void

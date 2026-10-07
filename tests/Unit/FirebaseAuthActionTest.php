@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit;
 
 use App\Auth\FirebaseAuthService;
-use App\Auth\GoogleIdTokenVerifier;
+use App\Auth\FirebaseIdTokenVerifier;
 use App\Auth\IdentityRepository;
 use App\Repository\UserRepository;
 use App\Web\Auth\FirebaseAuthAction;
@@ -249,14 +249,14 @@ final class FirebaseAuthActionTest extends \Codeception\Test\Unit
 }
 
 /**
- * A test double for GoogleIdTokenVerifier used by FirebaseAuthActionTest.
+ * A test double for FirebaseIdTokenVerifier used by FirebaseAuthActionTest.
  *
  * Tokens starting with `test-token-new-` return a payload for a new user.
  * Tokens starting with `test-token-existing-` return a payload for an
  * existing user.
  * Any other token returns null (invalid).
  */
-final class TestFirebaseIdTokenVerifier extends GoogleIdTokenVerifier
+final class TestFirebaseIdTokenVerifier extends FirebaseIdTokenVerifier
 {
     public function verify(string $token): ?array
     {

@@ -30,6 +30,7 @@ c3.php
 
 # Local environment configuration
 .env
+/env
 
 # Runtime files (compiled Twig templates, caches, logs)
 /runtime
@@ -71,6 +72,20 @@ __pycache__/
 
 # Freebuff agent workspace metadata (local only)
 /.freebuff
+
+# Local editor temp metadata and crash files
+*.swp
+*.swo
+*.tmp
+*.log
+*.bak
+*~
+
+# Vite / frontend dev cache (if used locally)
+.vite/
+
+# Local PHP CLI / dev caches
+.phpunit.result.cache
 
 # Android build output, Gradle caches and the distributions Gradle downloads
 # on first run. One unpacked distribution is ~146 MB and the wrapper cache

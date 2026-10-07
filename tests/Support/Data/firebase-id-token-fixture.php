@@ -1,7 +1,7 @@
 <?php
 
 // Generated fixture: throwaway RSA key pairs used ONLY by
-// tests/Unit/GoogleIdTokenVerifierTest.php to mint ID tokens the verifier can
+// tests/Unit/FirebaseIdTokenVerifierTest.php to mint ID tokens the verifier can
 // check offline. They belong to no real Google or Firebase project, and are
 // safe to commit.
 

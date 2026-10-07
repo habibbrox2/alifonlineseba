@@ -15,7 +15,7 @@ final class Env
     private const DEFAULTS = [
         'APP_ENV' => 'dev',
         'APP_DEBUG' => 'false',
-        'APP_URL' => 'http://localhost:8080',
+        'APP_URL' => 'https://beta.allseba.online',
         // The one host that search engines are allowed to index. Empty = "same
         // as APP_URL". It only differs while a staging/beta copy of this app
         // is being published from elsewhere (beta.allseba.online), where APP_URL

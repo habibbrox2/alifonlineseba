@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Auth;
 
 use App\Auth\FirebaseAuthService;
-use App\Auth\GoogleIdTokenVerifier;
+use App\Auth\FirebaseIdTokenVerifier;
 use App\Auth\IdentityRepository;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -38,7 +38,7 @@ final readonly class FirebaseAuthAction
 {
     public function __construct(
         private WebViewRenderer $view,
-        private GoogleIdTokenVerifier $verifier,
+        private FirebaseIdTokenVerifier $verifier,
         private FirebaseAuthService $service,
         private SessionInterface $session,
     ) {}

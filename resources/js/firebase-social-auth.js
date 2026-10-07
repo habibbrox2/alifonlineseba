@@ -7,7 +7,7 @@
  * ## Flow
  *
  * 1. The page loads the Firebase compat SDK from the CDN (see the partial
- *    `partials/google-signin-head.twig` for the inline config).
+ *    `partials/firebase-auth-head.twig` for the inline config).
  * 2. On click, `signInWithPopup` gets an ID token from the provider.
  * 3. The token is POSTed to `/auth/firebase` as `credential`.
  * 4. The server verifies it and logs the user in / redirects to the dashboard.
@@ -21,13 +21,13 @@
  * and a module alike, and is what the rest of the Firebase web docs still show
  * for quick integrations.
  */
-export function initGoogleSignIn(): void
+export function initFirebaseSocialSignIn(): void
 {
     if (typeof firebase === 'undefined') {
         return;
     }
 
-    const btn = document.getElementById('google-signin-btn');
+    const btn = document.getElementById('firebase-signin-btn');
     if (!(btn instanceof HTMLButtonElement)) {
         return;
     }
@@ -53,7 +53,7 @@ async function handleProviderSignIn(providerName: 'google' | 'facebook'): Promis
 {
     let btn: HTMLButtonElement | null = null;
     if (providerName === 'google') {
-        btn = document.getElementById('google-signin-btn');
+        btn = document.getElementById('firebase-signin-btn');
     } else if (providerName === 'facebook') {
         btn = document.getElementById('facebook-signin-btn');
     }
@@ -156,10 +156,10 @@ function getCsrfToken(): string
 function showError(btn: HTMLButtonElement, message: string): void
 {
     // Brief inline message under the button, then clear it so a retry is clean.
-    let panel = document.getElementById('google-signin-error');
+    let panel = document.getElementById('firebase-signin-error');
     if (!(panel instanceof HTMLDivElement)) {
         panel = document.createElement('div');
-        panel.id = 'google-signin-error';
+        panel.id = 'firebase-signin-error';
         panel.className =
             'mt-3 text-sm text-danger-700 text-center transition-opacity';
         btn.after(panel);

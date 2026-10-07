@@ -115,7 +115,7 @@ final class ServiceRepository
     }
 
     /**
-     * The catalogue as a storefront *card* needs it — seven columns, no `*`.
+     * The catalogue as a storefront *card* needs it — eight columns, no `*`.
      *
      * `servicesByCategory()` is `SELECT *`, which for 3 000-odd services also
      * carries `form_fields`, `variants`, `rules` and two timestamps: none of
@@ -125,12 +125,13 @@ final class ServiceRepository
      * two cannot disagree about which service sits first.
      *
      * @return list<array{category_id: int|string, name: string, slug: string,
-     *                   description: string|null, price: string, badge: string|null}>
+     *                   description: string|null, price: string, badge: string|null,
+     *                   icon: string|null}>
      */
     public function gridServices(): array
     {
         return $this->db->createCommand(
-            'SELECT [[category_id]], [[name]], [[slug]], [[description]], [[price]], [[badge]]
+            'SELECT [[category_id]], [[name]], [[slug]], [[description]], [[price]], [[badge]], [[icon]]
              FROM {{%service}}
              WHERE [[status]] = :status AND [[deleted_at]] IS NULL
              ORDER BY [[sort_order]] ASC, [[id]] ASC'

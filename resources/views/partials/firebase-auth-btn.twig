@@ -1,21 +1,21 @@
-{% if googleSigninClientId is not empty %}
+{% if firebaseAuthWebClientId is not empty %}
     <div class="mt-5 rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-center">
         <div class="border-b border-neutral-200 mb-3"></div>
         <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3">
-            অথর সাথে সাইন ইন করুন
+            Firebase দিয়ে সাইন ইন করুন
         </p>
 
         <button
-                id="google-signin-btn"
+                id="firebase-signin-btn"
                 type="button"
                 class="btn btn-outline btn-block"
                 data-loading="0">
             {{ icon('log-in', 'w-4 h-4') }}
-            Continue with Google
+            Continue with Firebase
         </button>
 
         <p class="mt-3 text-xs text-neutral-400">
-            Google অ্যাকাউন্ট দিয়ে সাইন ইন করুন — পাসওয়ার্ড লাগবে না।
+            Firebase Authentication ব্যবহার করে সাইন ইন করুন।
         </p>
     </div>
 {% endif %}

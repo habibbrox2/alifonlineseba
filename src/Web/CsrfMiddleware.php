@@ -19,8 +19,8 @@ use Yiisoft\Csrf\CsrfTokenMiddleware;
  * `/__/auth/*`: that route is a pass-through proxy of Firebase's own sign-in
  * handler, posted to by the Firebase SDK's popup/iframe from a page that is
  * not ours and has never seen `_csrf`. Validating it would answer 422 before
- * the request ever reached Firebase, and Google sign-in would fail with no
- * error anyone could read.
+ * the request ever reached Firebase, and Firebase Authentication would fail
+ * with no error anyone could read.
  *
  * Skipping it grants nothing. The proxy reads no session, writes no state and
  * stores nothing — the only thing a forged POST could do is make somebody's

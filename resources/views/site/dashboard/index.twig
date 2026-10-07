@@ -80,13 +80,23 @@
 <!-- Service hub -->
 <section class="mt-8" x-data="thDashboard()" data-page="dashboard">
     <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 class="text-xl font-extrabold text-neutral-900">সার্ভিস হাব</h2>
-        <div class="relative sm:w-80">
-            <input x-ref="search" type="search" x-model.debounce.300ms="query"
-                   placeholder="সেবা খুঁজুন (যেমন: NID, টিন, লোকেশন)…"
-                   class="form-input pl-10" aria-label="সেবা খুঁজুন">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">{{ icon('search', 'w-5 h-5') }}</span>
+        <div>
+            <h2 class="text-xl font-extrabold text-neutral-900">সার্ভিস হাব</h2>
+            <p class="mt-1 text-sm text-neutral-500">
+                <span x-text="services.length.toLocaleString('bn-BD')"></span> টি সার্ভিস — ক্যাটাগরি বেছে নিন, অথবা
+                সার্চ করে সরাসরি যান
+            </p>
         </div>
+        <!-- The palette's handle. Keeps the shape of the old search field so
+             the affordance carries over, but opens a floating shortlist over
+             the whole catalogue instead of filtering the grid in place. -->
+        <button type="button" x-ref="searchTrigger" @click="openPalette()"
+                class="form-input flex w-full cursor-pointer items-center gap-2 text-left sm:w-80"
+                aria-haspopup="dialog">
+            <span class="text-neutral-400">{{ icon('search', 'w-5 h-5') }}</span>
+            <span class="flex-1 truncate text-neutral-400">সেবা খুঁজুন…</span>
+            <kbd class="shrink-0 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-[11px] font-semibold text-neutral-500">Ctrl K</kbd>
+        </button>
     </div>
 
     <!-- Category chips -->
@@ -110,17 +120,27 @@
          drawn client-side either way, so nothing server-rendered is lost. -->
     <div id="service-grid"
          class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        <template x-for="service in filtered" :key="service.slug">
+        <template x-for="service in visible" :key="service.slug">
+            <!-- The card. Icon tile first — the service's own icon, else its
+                 category's, else the grid glyph (resolved against the sprite
+                 in ServiceCatalog, because a <use> to a missing symbol draws
+                 nothing) — badge opposite it, then title, description, and a
+                 footer that pairs the price with the CTA instead of leaving
+                 the button alone under the text. -->
             <article class="card card-hover card-accent flex flex-col p-5" :class="'accent-' + (service.accent || 'emerald')">
-                <div class="mb-3 flex items-start justify-between gap-2">
-                    <span class="accent-value text-lg" x-text="money(service.price)"></span>
+                <div class="flex items-start justify-between gap-3">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                          style="background-color: var(--accent-soft); color: var(--accent-ink);">
+                        <svg class="h-5 w-5" aria-hidden="true"><use :href="'/assets/icons/lucide-sprite.svg#' + service.icon"></use></svg>
+                    </span>
                     <template x-if="service.badge">
                         <span class="badge" style="background-color: var(--accent-soft); color: var(--accent-ink);" x-text="service.badge"></span>
                     </template>
                 </div>
-                <h3 class="text-base font-bold leading-snug text-neutral-800" x-text="service.name"></h3>
+                <h3 class="mt-3.5 text-base font-bold leading-snug text-neutral-800" x-text="service.name"></h3>
                 <p class="mt-1.5 line-clamp-2 flex-1 text-sm leading-relaxed text-neutral-500" x-text="service.description"></p>
-                <div class="mt-4 flex items-center justify-between border-t border-neutral-100 pt-4">
+                <div class="mt-4 flex items-center justify-between gap-3 border-t border-neutral-100 pt-4">
+                    <span class="accent-value text-lg" x-text="money(service.price)"></span>
                     <a :href="'/services/view/' + service.slug" class="btn btn-accent-solid btn-sm">
                         অর্ডার করুন
                         <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#arrow-right"></use></svg>
@@ -129,23 +149,127 @@
             </article>
         </template>
 
-        <!-- Empty state, which also covers the two states that are not empty
-             at all: the fetch is still running, and the fetch failed. One
-             card, three messages, because "no services found" is a lie in
-             both of those cases — and the old markup showed it for the whole
-             window between page load and response. -->
-        <template x-if="filtered.length === 0">
+        <!-- Skeleton cards, the grid's loading signal: eight while the
+             catalogue fetch is in flight, four whenever the next window
+             appends. A placeholder that *moves* (see .skeleton in app.css) is
+             what tells the reader more services are on the way — cards that
+             simply appear read as a layout jump, and a bare spinner says
+             nothing about how much is coming. aria-hidden: decoration, not
+             content. -->
+        <template x-for="i in skeletons" :key="'skeleton-' + i">
+            <div class="card card-accent flex flex-col p-5" aria-hidden="true">
+                <div class="mb-3 flex items-start justify-between gap-2">
+                    <div class="skeleton h-6 w-24"></div>
+                    <div class="skeleton h-5 w-16 rounded-full"></div>
+                </div>
+                <div class="skeleton h-4 w-3/4"></div>
+                <div class="skeleton mt-2 h-4 w-full"></div>
+                <div class="skeleton mt-2 h-4 w-2/3"></div>
+                <div class="mt-4 border-t border-neutral-100 pt-4">
+                    <div class="skeleton h-8 w-28 rounded-lg"></div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Empty state. The loading case now draws skeletons above rather
+             than text here, so what is left is the honest pair: the fetch
+             failed, or this category really has nothing in it. -->
+        <template x-if="!loading && filtered.length === 0">
             <div class="card col-span-full flex flex-col items-center gap-2 py-14 text-center">
                 <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
                     {{ icon('search-x', 'w-6 h-6') }}
                 </span>
-                <p class="text-sm text-neutral-500" x-show="loading">সেবার তালিকা লোড হচ্ছে…</p>
-                <p class="text-sm text-neutral-500" x-show="!loading && failed">
+                <p class="text-sm text-neutral-500" x-show="failed">
                     সেবার তালিকা আনা যায়নি। পাতাটি রিফ্রেশ করে আবার চেষ্টা করুন।
                 </p>
-                <p class="text-sm text-neutral-500" x-show="!loading && !failed">কোনো সার্ভিস পাওয়া যায়নি।</p>
+                <p class="text-sm text-neutral-500" x-show="!failed">এই ক্যাটাগরিতে কোনো সার্ভিস নেই।</p>
             </div>
         </template>
+    </div>
+
+    <!-- The next window of cards. Grids render `visible`, a slice of the full
+         filtered list: 3 135 articles at once is a DOM the browser spends
+         hundreds of milliseconds laying out before anyone scrolls. This button
+         is also the scroll sentinel (see watchForMore), so it loads the next
+         slice as it comes near the bottom, while a click covers keyboards and
+         browsers without IntersectionObserver. The count is of what is left,
+         not of the page — the reader is told how much catalogue remains. -->
+    <div class="mt-6 flex justify-center" x-show="hasMore" x-cloak>
+        <button type="button" x-ref="more" class="btn btn-primary" @click="loadMore"
+                :disabled="loadingMore" aria-live="polite">
+            <span class="skeleton h-4 w-4 shrink-0 rounded-full" x-show="loadingMore"></span>
+            <span x-text="loadingMore ? 'আরো আসছে…' : 'আরও দেখুন (' + remaining + ' টি বাকি)'"></span>
+        </button>
+    </div>
+
+    <!-- Command palette — Ctrl+K (or "/") anywhere on the page. A floating
+         shortlist over the whole catalogue: arrow keys move, Enter opens the
+         service, Esc closes. The grid below stays a browsable page instead of
+         doubling as the search box. -->
+    <div x-show="paletteOpen" x-cloak
+         x-effect="document.body.classList.toggle('overflow-hidden', paletteOpen)"
+         class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[14vh]"
+         role="dialog" aria-modal="true" aria-label="সেবা খুঁজুন"
+         @keydown.escape.prevent="closePalette()"
+         @keydown.down.prevent="paletteMove(1)"
+         @keydown.up.prevent="paletteMove(-1)"
+         @keydown.enter.prevent="paletteChoose()">
+        <div class="absolute inset-0 bg-neutral-900/60" @click="closePalette()"></div>
+
+        <div class="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div class="flex items-center gap-3 border-b border-neutral-100 px-4">
+                <span class="text-neutral-400">{{ icon('search', 'w-5 h-5') }}</span>
+                <input x-ref="paletteInput" type="text" x-model.debounce.150ms="paletteQuery"
+                       placeholder="সেবা খুঁজুন (যেমন: NID, টিন, পাসপোর্ট)…"
+                       class="w-full border-0 bg-transparent py-4 text-base text-neutral-800 placeholder:text-neutral-400 focus:outline-none"
+                       role="combobox" aria-expanded="true" aria-controls="palette-listbox"
+                       aria-autocomplete="list" aria-label="সেবা খুঁজুন">
+                <button type="button" @click="closePalette()"
+                        class="shrink-0 rounded border border-neutral-200 px-1.5 py-0.5 text-[11px] font-semibold text-neutral-500 hover:bg-neutral-50">
+                    Esc
+                </button>
+            </div>
+
+            <p class="px-4 pt-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-400"
+               x-text="paletteQuery ? 'ফলাফল' : 'জনপ্রিয় সার্ভিস'"></p>
+
+            <ul id="palette-listbox" x-ref="paletteList" role="listbox" aria-label="সার্ভিসের তালিকা"
+                class="max-h-72 overflow-y-auto p-2">
+                <template x-for="(service, idx) in paletteResults" :key="service.slug">
+                    <li role="option" :aria-selected="idx === paletteIndex">
+                        <a :href="'/services/view/' + service.slug"
+                           @mouseenter="paletteIndex = idx"
+                           @click="paletteOpen = false"
+                           class="flex items-center gap-3 rounded-xl px-3 py-2.5 transition"
+                           :class="idx === paletteIndex ? 'bg-primary-50' : ''">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold"
+                                  :class="'accent-' + (service.accent || 'emerald')"
+                                  :style="'background-color: var(--accent-soft); color: var(--accent-ink);'"
+                                  x-text="service.name.charAt(0)"></span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-semibold text-neutral-800" x-text="service.name"></span>
+                                <span class="block truncate text-xs text-neutral-500" x-text="service.description || 'সার্ভিস সম্পর্কে বিস্তারিত নেই'"></span>
+                            </span>
+                            <span class="shrink-0 text-sm font-bold text-neutral-700" x-text="money(service.price)"></span>
+                            <svg class="h-4 w-4 shrink-0 text-neutral-400" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#arrow-right"></use></svg>
+                        </a>
+                    </li>
+                </template>
+
+                <template x-if="paletteResults.length === 0">
+                    <li class="flex flex-col items-center gap-1.5 px-3 py-8 text-center">
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">{{ icon('search-x', 'w-5 h-5') }}</span>
+                        <p class="text-sm text-neutral-500" x-text="'\u201C' + paletteQuery + '\u201D এর সাথে কোনো সার্ভিস মেলেনি।'"></p>
+                    </li>
+                </template>
+            </ul>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-100 bg-neutral-50 px-4 py-2.5 text-xs text-neutral-500">
+                <span class="flex items-center gap-1"><kbd class="rounded border border-neutral-200 bg-white px-1.5 py-0.5 font-semibold">↑</kbd><kbd class="rounded border border-neutral-200 bg-white px-1.5 py-0.5 font-semibold">↓</kbd> নেভিগেট</span>
+                <span class="flex items-center gap-1"><kbd class="rounded border border-neutral-200 bg-white px-1.5 py-0.5 font-semibold">Enter</kbd> খুলুন</span>
+                <span class="flex items-center gap-1"><kbd class="rounded border border-neutral-200 bg-white px-1.5 py-0.5 font-semibold">Esc</kbd> বন্ধ</span>
+            </div>
+        </div>
     </div>
 </section>
 
