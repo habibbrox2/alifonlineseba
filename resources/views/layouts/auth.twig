@@ -45,8 +45,12 @@
 
     <footer class="px-4 py-6 text-center text-xs text-white/50 sm:px-8">
         &copy; {{ 'now'|date('Y') }} Alif Group. সর্বস্বত্ব সংরক্ষিত।
+        {% if site.footer_updated_at %}
+            <p class="mt-1 text-white/30">সর্বশেষ হালনাগাদ: {{ site.footer_updated_at }}</p>
+        {% endif %}
     </footer>
 </div>
 
+{% include 'partials/google-signin-head.twig' %}
 {% include 'partials/whatsapp-float.twig' %}
 {% endblock %}

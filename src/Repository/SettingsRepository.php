@@ -108,6 +108,12 @@ final class SettingsRepository
         'maintenance_schedule_start' => ['মেইনটেন্যান্স শুরুর সময়', '', 'text'],
         'maintenance_schedule_end' => ['মেইনটেন্যান্স শেষের সময়', '', 'text'],
         'maintenance_schedule_message' => ['মেইনটেন্যান্স সময়ের বার্তা', '', 'multiline'],
+
+        // Footer — shown on every public page.
+        // The last-updated timestamp is set by the deploy script (or manually by
+        // the operator) whenever a release goes out, so the footer always reflects
+        // the real deploy date without the operator having to remember it.
+        'footer_updated_at' => ['সর্বশেষ আপডেটের তারিখ', '', 'text'],
     ];
 
     /** Human labels for the payment methods shown on the recharge form. */
