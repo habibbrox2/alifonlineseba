@@ -71,3 +71,14 @@ __pycache__/
 
 # Freebuff agent workspace metadata (local only)
 /.freebuff
+
+# Android build output, Gradle caches and the distributions Gradle downloads
+# on first run. One unpacked distribution is ~146 MB and the wrapper cache
+# hundreds more, none of it source — `gradlew` reproduces the build, and
+# local.properties is this machine's SDK path (see local.properties.example).
+# Without these, a plain `git add -A` would stage half a gigabyte of binaries.
+/android-admin/.gradle/
+/android-admin/build/
+/android-admin/app/build/
+/android-admin/gradle-*
+/android-admin/local.properties

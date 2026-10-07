@@ -43,6 +43,7 @@ use App\Web\Api\DeviceApiAction;
 use App\Web\Api\NotificationsApiAction;
 use App\Web\Api\ProfileApiAction;
 use App\Web\Api\PushApiAction;
+use App\Web\Api\ServiceCatalogApiAction;
 use App\Web\Api\ServiceRequestApiAction;
 use App\Web\Api\ServiceRequestDetailApiAction;
 use App\Web\Api\ServiceRequestsWatchApiAction;
@@ -181,6 +182,10 @@ return [
         Route::get('/dashboard')->action(DashboardApiAction::class)->name('api-dashboard'),
         Route::get('/services')->action(ServicesApiAction::class)->name('api-services'),
         Route::get('/services/{slug}')->action(ServicesApiAction::class)->name('api-service'),
+        // The dashboard's grid. A path of its own rather than a query on
+        // /api/services: that one is `SELECT *` and a contract of the mobile
+        // app, while a card needs seven columns — see ServiceCatalogApiAction.
+        Route::get('/catalog')->action(ServiceCatalogApiAction::class)->name('api-catalog'),
         Route::get('/transactions')->action(TransactionsApiAction::class)->name('api-transactions'),
         Route::get('/service-requests/{id}')->action(ServiceRequestDetailApiAction::class)->name('api-service-request-detail'),
         // The history page polls this for the rows it is currently showing.

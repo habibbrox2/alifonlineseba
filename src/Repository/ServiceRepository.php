@@ -115,6 +115,29 @@ final class ServiceRepository
     }
 
     /**
+     * The catalogue as a storefront *card* needs it — seven columns, no `*`.
+     *
+     * `servicesByCategory()` is `SELECT *`, which for 3 000-odd services also
+     * carries `form_fields`, `variants`, `rules` and two timestamps: none of
+     * which the grid draws, all of which get serialised if a caller inlines
+     * the rows. That is exactly what the dashboard used to do, and it is how
+     * one page reached 2.7 MB. Ordering matches servicesByCategory() so the
+     * two cannot disagree about which service sits first.
+     *
+     * @return list<array{category_id: int|string, name: string, slug: string,
+     *                   description: string|null, price: string, badge: string|null}>
+     */
+    public function gridServices(): array
+    {
+        return $this->db->createCommand(
+            'SELECT [[category_id]], [[name]], [[slug]], [[description]], [[price]], [[badge]]
+             FROM {{%service}}
+             WHERE [[status]] = :status AND [[deleted_at]] IS NULL
+             ORDER BY [[sort_order]] ASC, [[id]] ASC'
+        )->bindValue(':status', 'active')->queryAll();
+    }
+
+    /**
      * Every service regardless of status, trashed ones included — for the admin
      * list, which shows both so deleted rows can be restored.
      */

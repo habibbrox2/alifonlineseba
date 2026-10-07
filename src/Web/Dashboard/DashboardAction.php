@@ -6,11 +6,10 @@ namespace App\Web\Dashboard;
 
 use App\Auth\Identity;
 use App\Repository\NotificationRepository;
-use App\Repository\ServiceRepository;
 use App\Repository\SettingsRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\UserRepository;
-use App\Service\CategoryAccent;
+use App\Service\ServiceCatalog;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Yii\View\Renderer\WebViewRenderer;
@@ -19,12 +18,11 @@ final readonly class DashboardAction
 {
     public function __construct(
         private WebViewRenderer $view,
-        private ServiceRepository $services,
+        private ServiceCatalog $catalog,
         private ServiceOrderRepository $orders,
         private NotificationRepository $notifications,
         private UserRepository $users,
         private SettingsRepository $settings,
-        private CategoryAccent $accents,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -32,35 +30,19 @@ final readonly class DashboardAction
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
 
-        $categories = $this->services->allCategories();
-        $allServices = $this->services->servicesByCategory();
+        // The chips are server-rendered; the cards behind them are not. The
+        // grid's rows moved to `GET /api/catalog` (see ServiceCatalogApiAction)
+        // because inlining 3 135 services made this page 2.7 MB — so `services`
+        // is no longer a template parameter at all.
+        $categories = $this->catalog->categories();
         $stats = $this->orders->statsForUser($identity->id);
         // Recent searches for the dashboard panel. A small fixed list on purpose:
         // this is a shortcut back into a form, not a history page — /service-history
         // owns the full list.
         $searches = $this->orders->recentSearches($identity->id, 6);
 
-        // Attach category slug + accent to each service: the slug drives
-        // client-side filtering, the accent tints each card with its category colour.
-        $catMap = [];
-        foreach ($categories as $cat) {
-            $catMap[(int) $cat['id']] = ['slug' => $cat['slug'], 'accent' => $this->accents->key($cat)];
-        }
-        $allServices = array_map(static function (array $svc) use ($catMap): array {
-            $meta = $catMap[(int) $svc['category_id']] ?? null;
-            $svc['category_slug'] = $meta['slug'] ?? null;
-            $svc['accent'] = $meta['accent'] ?? CategoryAccent::DEFAULT_ACCENT;
-            return $svc;
-        }, $allServices);
-
-        $categories = array_map(function (array $cat): array {
-            $cat['accent'] = $this->accents->key($cat);
-            return $cat;
-        }, $categories);
-
         return $this->view->render('site/dashboard/index.twig', [
             'categories' => $categories,
-            'services' => $allServices,
             'stats' => [
                 'total' => $stats['total'],
                 'amount' => $stats['amount'],

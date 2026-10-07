@@ -102,9 +102,13 @@
         {% endfor %}
     </div>
 
-    <!-- Service grid -->
+    <!-- Service grid.
+
+         The rows are fetched from `GET /api/catalog` when the component boots
+         (ServiceCatalogApiAction) rather than carried in a data attribute:
+         inlining 3 135 services made this one page 2.7 MB, and the grid is
+         drawn client-side either way, so nothing server-rendered is lost. -->
     <div id="service-grid"
-         data-services="{{ services|json_encode|e('html_attr') }}"
          class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         <template x-for="service in filtered" :key="service.slug">
             <article class="card card-hover card-accent flex flex-col p-5" :class="'accent-' + (service.accent || 'emerald')">
@@ -125,13 +129,21 @@
             </article>
         </template>
 
-        <!-- Fallback (no JS) + empty state -->
+        <!-- Empty state, which also covers the two states that are not empty
+             at all: the fetch is still running, and the fetch failed. One
+             card, three messages, because "no services found" is a lie in
+             both of those cases — and the old markup showed it for the whole
+             window between page load and response. -->
         <template x-if="filtered.length === 0">
             <div class="card col-span-full flex flex-col items-center gap-2 py-14 text-center">
                 <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
                     {{ icon('search-x', 'w-6 h-6') }}
                 </span>
-                <p class="text-sm text-neutral-500">কোনো সার্ভিস পাওয়া যায়নি।</p>
+                <p class="text-sm text-neutral-500" x-show="loading">সেবার তালিকা লোড হচ্ছে…</p>
+                <p class="text-sm text-neutral-500" x-show="!loading && failed">
+                    সেবার তালিকা আনা যায়নি। পাতাটি রিফ্রেশ করে আবার চেষ্টা করুন।
+                </p>
+                <p class="text-sm text-neutral-500" x-show="!loading && !failed">কোনো সার্ভিস পাওয়া যায়নি।</p>
             </div>
         </template>
     </div>
