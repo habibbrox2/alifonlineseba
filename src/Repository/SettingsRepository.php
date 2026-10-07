@@ -82,6 +82,32 @@ final class SettingsRepository
         'order_window_enabled' => ['অর্ডার সময় ব্যবস্থা চালু', '1', 'checkbox'],
         'order_window_start'   => ['অর্ডার শুরুর সময়', '08:00', 'text'],
         'order_window_end'     => ['অর্ডার শেষের সময়', '22:00', 'text'],
+
+        // Operator-driven maintenance — "the site is closed, come back later",
+        // decided by the owner from /admin/settings rather than by a deploy.
+        // Read by App\Web\MaintenanceMiddleware, which is a *second*, later
+        // gate than `runtime/maintenance.lock`: that one runs before the
+        // autoloader because a broken deploy must still render a page, this one
+        // runs inside a healthy application because only a healthy application
+        // can ask the database whether it is switched on.
+        //
+        // The admin surfaces stay reachable while it is on (see the middleware
+        // for why that is a prefix check rather than a role check), so this
+        // switch can always be turned back off — it must never be a one-way one.
+        'maintenance_enabled' => ['মেইনটেন্যান্স মোড চালু', '0', 'checkbox'],
+        // What a visitor reads on the maintenance page, and the reason shown
+        // to the API client as `message`. Empty is allowed: the page then
+        // falls back to its own copy.
+        'maintenance_message' => ['মেইনটেন্যান্স বার্তা', '', 'multiline'],
+        // Scheduled maintenance — a daily HH:MM window (Bangladesh time) during
+        // which the site is closed automatically. Empty = no schedule. When the
+        // current time is inside the window the middleware treats the site as if
+        // maintenance_enabled were on, with the window's own message. The window
+        // is HH:MM in 24-hour format, e.g. "02:00" for 2 AM daily. Outside the
+        // window the site is open regardless of maintenance_enabled.
+        'maintenance_schedule_start' => ['মেইনটেন্যান্স শুরুর সময়', '', 'text'],
+        'maintenance_schedule_end' => ['মেইনটেন্যান্স শেষের সময়', '', 'text'],
+        'maintenance_schedule_message' => ['মেইনটেন্যান্স সময়ের বার্তা', '', 'multiline'],
     ];
 
     /** Human labels for the payment methods shown on the recharge form. */
