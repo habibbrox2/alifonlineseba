@@ -41,6 +41,17 @@ final readonly class CsrfMiddleware implements MiddlewareInterface
             return $handler->handle($request);
         }
 
+        // A `Bearer` header is proof the request did not come from a plain
+        // HTML form: a cross-site form post cannot set custom headers, and a
+        // cross-origin fetch that tried would fail its CORS preflight (this
+        // app sends no CORS headers). Such a client has no session to forge
+        // against — the Android admin app keeps no cookies at all — so there
+        // is nothing for CSRF to protect and demanding a token would only
+        // lock machine clients out of POST /api/auth/login forever.
+        if (strncasecmp($request->getHeaderLine('Authorization'), 'Bearer ', 7) === 0) {
+            return $handler->handle($request);
+        }
+
         return $this->csrf->process($request, $handler);
     }
 }
