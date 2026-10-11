@@ -50,8 +50,12 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 
-firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseMessaging" }
-firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+# firebaseMessaging is the messaging ARTIFACT version. There is no
+# firebase-bom here on purpose: the artifact used to carry no version of its
+# own, so whatever BOM happened to be on the classpath silently won — an
+# ancient firebase-bom:24.1.0 pinned messaging to 20.0.1, which has no
+# getToken() at all, and device registration could never compile.
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version = "21.2.0" }
 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }

@@ -3,6 +3,10 @@
 Base URL: `https://<host>` (from `BuildConfig`/local properties — never hardcoded, never a secret).
 Transport: HTTPS only. Auth: `Authorization: Bearer <selector>.<verifier>` (except the login endpoint).
 
+> **CSRF (`src/Web/CsrfMiddleware.php`):** validation is skipped when a request carries an `Authorization: Bearer …` header. A machine client keeps no session cookie (OkHttp sends none), and a cross-site HTML form cannot set custom headers — nor can a cross-origin fetch, since the app sends no CORS headers — so the exemption cannot be reached by the forgeries CSRF exists to stop. Login, holding no token yet, sends a proof-of-origin value (`Bearer android-admin`); `/api/auth/*` never reads the header for its own logic. Cookie-carrying browser requests still require `_csrf`. Covered by `tests/Functional/ApiCsrfCest.php`.
+
+> **Credential hygiene:** `GET /api/admin/users` and `GET /api/admin/staff` strip `password_hash`/`remember_token` from the `SELECT *` rows before they become JSON (asserted in `AdminApiTest`).
+
 ## Envelope (every response — `src/Service/Api.php`)
 
 ```json

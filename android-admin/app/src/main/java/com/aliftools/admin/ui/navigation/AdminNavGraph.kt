@@ -1,6 +1,8 @@
 package com.aliftools.admin.ui.navigation
 
 sealed class Screen(val route: String) {
+    /** Decides between Login and Dashboard by reading the stored token. */
+    data object Splash : Screen("splash")
     data object Login : Screen("login")
     data object Dashboard : Screen("dashboard")
     data object Users : Screen("users")

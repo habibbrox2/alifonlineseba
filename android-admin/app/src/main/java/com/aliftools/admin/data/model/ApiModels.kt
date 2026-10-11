@@ -20,11 +20,15 @@ data class LoginResponse(
     @SerializedName("token") val token: String,
     @SerializedName("refresh") val refresh: String,
     @SerializedName("expires_at") val expiresAt: String?,
-    val user: User
+    // Null on refresh: POST /api/auth/refresh returns only the token pair.
+    val user: User? = null
 )
 
 /**
  * Minimal user shape used across the app.
+ *
+ * `status` is nullable because the login payload ships a five-field user
+ * (id, username, phone, balance, role) with no status on it.
  */
 data class User(
     val id: Int,
@@ -33,8 +37,9 @@ data class User(
     val email: String?,
     val role: String,
     val balance: String,
-    val status: String,
-    val fullName: String?
+    val status: String? = null,
+    @SerializedName("full_name") val fullName: String? = null,
+    @SerializedName("deleted_at") val deletedAt: String? = null
 )
 
 /**
@@ -45,16 +50,30 @@ data class AdminDashboard(
     @SerializedName("categoryCount") val categoryCount: Int = 0,
     @SerializedName("serviceCount") val serviceCount: Int = 0,
     @SerializedName("txStats") val txStats: TxStats? = null,
-    @SerializedName("openOrders") val openOrders: Int = 0,
+    @SerializedName("openOrders") val openOrders: OpenOrders = OpenOrders(),
     @SerializedName("recentLogs") val recentLogs: List<ActivityLog> = emptyList(),
     @SerializedName("topupStats") val topupStats: TopupStats? = null,
     @SerializedName("unresolvedCount") val unresolvedCount: Int = 0,
     @SerializedName("unresolvedAmount") val unresolvedAmount: String = "0.00"
 )
 
+/**
+ * Shapes below mirror what the PHP backend actually emits from
+ * `AdminDashboardApiAction` — `TransactionRepository::statsAll()` returns
+ * `{total, credit, debit}` and `ServiceOrderRepository::openOrders()` returns
+ * `{count, amount}`. Declaring `openOrders` as a bare `Int` made Gson throw
+ * "Expected an int but was BEGIN_OBJECT", which turned a perfectly good 200
+ * into the dashboard's error state.
+ */
 data class TxStats(
+    val total: Int = 0,
+    val credit: Double = 0.0,
+    val debit: Double = 0.0
+)
+
+data class OpenOrders(
     val count: Int = 0,
-    val amount: String = "0.00"
+    val amount: Double = 0.0
 )
 
 data class TopupStats(
@@ -88,11 +107,14 @@ data class PagedResponse<T>(
 data class AdminOrder(
     val id: Int,
     val status: String,
-    val service: String?,
+    // The joined row aliases the service name as `service_name`.
+    @SerializedName("service_name") val service: String?,
     val username: String?,
+    val phone: String? = null,
     @SerializedName("user_id") val userId: Int,
     @SerializedName("created_at") val createdAt: String?,
-    @SerializedName("claimed_by") val claimedBy: Int? = null
+    @SerializedName("claimed_by") val claimedBy: Int? = null,
+    @SerializedName("claimed_by_name") val claimedByName: String? = null
 )
 
 /**
@@ -106,6 +128,8 @@ data class AdminTopup(
     val status: String,
     val method: String?,
     val reference: String?,
+    @SerializedName("sender_number") val senderNumber: String? = null,
+    val note: String? = null,
     @SerializedName("created_at") val createdAt: String?
 )
 
@@ -126,25 +150,19 @@ data class AdminWithdraw(
 )
 
 /**
- * Settings row.
- */
-data class Setting(
-    val id: Int,
-    @SerializedName("setting_key") val key: String,
-    @SerializedName("setting_value") val value: String,
-    val type: String?,
-    @SerializedName("updated_by") val updatedBy: Int?
-)
-
-/**
  * Admin notification queue row.
  */
 data class AdminNotification(
     val id: Int,
-    val subject: String?,
+    // notification_queue has no subject column: the event key is the label,
+    // and the human text lives inside the JSON `payload` string.
+    val event: String? = null,
+    val channel: String? = null,
     val status: String,
-    @SerializedName("created_at") val createdAt: String?,
-    val stats: Map<String, Int>? = null
+    val attempts: Int? = null,
+    @SerializedName("last_error") val lastError: String? = null,
+    val payload: String? = null,
+    @SerializedName("created_at") val createdAt: String?
 )
 
 /**

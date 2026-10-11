@@ -26,6 +26,12 @@
                 <textarea id="f-footer-note" name="footer_note" rows="2" class="form-input" maxlength="500" placeholder="ফুটারে দেখানো নোট বা ছোট বিবরণী">{{ settings.footer_note }}</textarea>
                 {% if errors.footer_note is defined %}<p class="form-error">{{ errors.footer_note }}</p>{% endif %}
             </div>
+            <div>
+                <label for="f-footer-updated-at" class="form-label">সর্বশেষ আপডেটের তারিখ</label>
+                <input type="date" id="f-footer-updated-at" name="footer_updated_at" value="{{ settings.footer_updated_at }}" class="form-input">
+                <p class="mt-1 text-xs text-neutral-500">তারিখ দিলে পাবলিক পেজের ফুটারে দেখাবে; খালি রাখলে দেখাবে না।</p>
+                {% if errors.footer_updated_at is defined %}<p class="form-error">{{ errors.footer_updated_at }}</p>{% endif %}
+            </div>
         </div>
     </div>
 

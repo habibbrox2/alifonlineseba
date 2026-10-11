@@ -69,50 +69,62 @@
             const ui = new firebaseui.auth.AuthUI(firebase.auth());
 
             ui.start(container, {
+                signInSuccessUrl: '/dashboard',
                 signInOptions: [
                     firebase.auth.GoogleAuthProvider.PROVIDER_ID,
                 ],
-                signInFlow: 'popup',
+                signInFlow: 'redirect',
                 callbacks: {
-                    signInSuccessWithAuthResult: async function(authResult, redirectUrl) {
-                        try {
-                            const idToken = await authResult.user.getIdToken();
-                            const response = await fetch('/auth/firebase', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded',
-                                    'X-CSRF-Token': getCsrfToken(),
-                                },
-                                body: new URLSearchParams({ credential: idToken }),
-                                credentials: 'same-origin',
-                            });
-
-                            if (!response.ok) {
-                                let message = 'সাইন ইন করা যায়নি।';
-                                try {
-                                    const body = await response.json();
-                                    if (body?.message) {
-                                        message = body.message;
-                                    }
-                                } catch (_) {
-                                    // Not JSON — keep the generic message.
-                                }
-                                throw new Error(message);
-                            }
-
-                            window.location.href = '/dashboard';
-                            return false;
-                        } catch (error) {
-                            if (error instanceof Error) {
-                                alert(error.message || 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
-                            } else {
-                                alert('সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
-                            }
-                            return false;
-                        }
+                    signInSuccessWithAuthResult: function(authResult) {
+                        completeFirebaseSignIn(authResult);
+                        return false;
                     },
                 },
             });
+        }
+
+        async function completeFirebaseSignIn(authResult) {
+            try {
+                const idToken = await authResult.user.getIdToken();
+                const response = await fetch('/auth/firebase', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-Token': getCsrfToken(),
+                    },
+                    body: new URLSearchParams({ credential: idToken }),
+                    credentials: 'same-origin',
+                });
+
+                const responsePath = new URL(response.url).pathname;
+                if (!response.ok || !response.redirected || responsePath !== '/dashboard') {
+                    let message = 'সাইন ইন করা যায়নি।';
+                    try {
+                        const responseBody = await response.text();
+                        const errorDocument = new DOMParser().parseFromString(responseBody, 'text/html');
+                        const serverMessage = errorDocument.querySelector('[role="alert"]')?.textContent?.trim();
+                        if (serverMessage) {
+                            message = serverMessage;
+                        } else {
+                            const body = JSON.parse(responseBody);
+                            if (body?.message) {
+                                message = body.message;
+                            }
+                        }
+                    } catch (_) {
+                        // Keep the generic message when the response has no readable error.
+                    }
+                    throw new Error(message);
+                }
+
+                window.location.href = '/dashboard';
+            } catch (error) {
+                if (error instanceof Error) {
+                    alert(error.message || 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
+                } else {
+                    alert('সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
+                }
+            }
         }
 
         function getCsrfToken() {

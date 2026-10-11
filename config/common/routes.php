@@ -59,6 +59,7 @@ use App\Web\Api\Admin\AdminTopupsApiAction;
 use App\Web\Api\Admin\AdminUsersApiAction;
 use App\Web\Api\Admin\AdminWithdrawsApiAction;
 use App\Web\Api\TransactionsApiAction;
+use App\Web\Auth\FirebaseAuthAction;
 use App\Web\Auth\ForgotPasswordAction;
 use App\Web\Auth\LoginAction;
 use App\Web\Auth\LogoutAction;

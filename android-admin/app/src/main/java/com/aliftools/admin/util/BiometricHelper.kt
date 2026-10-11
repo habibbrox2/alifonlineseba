@@ -4,10 +4,11 @@ import android.content.Context
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
-class BiometricHelper @Inject constructor(private val context: Context) {
+class BiometricHelper @Inject constructor(@ApplicationContext private val context: Context) {
 
     fun isBiometricAvailable(): Int {
         val manager = BiometricManager.from(context)
@@ -15,7 +16,7 @@ class BiometricHelper @Inject constructor(private val context: Context) {
     }
 
     fun showPrompt(
-        activity: ComponentActivity,
+        activity: FragmentActivity,
         onSuccess: () -> Unit,
         onFailure: () -> Unit
     ) {

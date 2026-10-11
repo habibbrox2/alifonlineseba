@@ -11,7 +11,7 @@ use App\Env;
  *
  * ## Why this class exists
  *
- * The browser gets the token from Firebase (`signInWithPopup`), but the token
+ * The browser gets the token from Firebase Authentication, but the token
  * is only a claim until something on the server has checked it. Trusting the
  * client's word for who the caller is would make the sign-in UI a
  * button that logs you in as anybody, so the token is verified here and the
@@ -41,11 +41,11 @@ use App\Env;
 class FirebaseIdTokenVerifier
 {
     /**
-     * Firebase's rotating JWKS. Rotates on a schedule not publicly published,
-     * so a `kid` we have never seen is a reason to refetch, not a reason to
-     * reject — see {@see keys()}.
+     * Firebase's rotating ID-token signing certificates. Rotates on a schedule
+     * not publicly published, so a `kid` we have never seen is a reason to
+     * refetch, not a reason to reject — see {@see keys()}.
      */
-    public const CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
+    public const CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 
     /** How long a fetched key set is trusted before it is fetched again. */
     private const CACHE_TTL = 3600;
@@ -198,7 +198,7 @@ class FirebaseIdTokenVerifier
     }
 
     /**
-     * Fetch and parse Firebase's JWKS. Empty on any failure — never throws:
+     * Fetch and parse Firebase's signing certificates. Empty on any failure — never throws:
      * a network problem has to look like "this token is not acceptable",
      * not like a 500 on the login page.
      *
@@ -221,13 +221,49 @@ class FirebaseIdTokenVerifier
             return [];
         }
 
-        return self::keysFromJwks($body);
+        return self::keysFromCertificates($body);
     }
 
     /**
-     * JWKS JSON => kid => PEM. The signing endpoint puts an `x5c` chain on each key; when
-     * one is missing the modulus/exponent are turned into a key directly, so
-     * a format change costs a slower path rather than a broken login.
+     * Firebase's ID-token certificate endpoint returns a JSON object of
+     * `kid => PEM certificate`, unlike Google's OAuth JWKS endpoint.
+     *
+     * @return array<string, string> kid => PEM public key
+     */
+    public static function keysFromCertificates(string $json): array
+    {
+        try {
+            $certificates = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+        if (!is_array($certificates)) {
+            return [];
+        }
+
+        $keys = [];
+        foreach ($certificates as $kid => $certificate) {
+            if (!is_string($kid) || !is_string($certificate) || $certificate === '') {
+                continue;
+            }
+
+            $publicKey = @openssl_pkey_get_public($certificate);
+            if (!$publicKey instanceof \OpenSSLAsymmetricKey) {
+                continue;
+            }
+
+            $details = openssl_pkey_get_details($publicKey);
+            if (is_array($details) && is_string($details['key'] ?? null)) {
+                $keys[$kid] = $details['key'];
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * Parse a JWKS into `kid => PEM`, supporting both x5c certificates and
+     * modulus/exponent keys.
      *
      * @return array<string, string>
      */

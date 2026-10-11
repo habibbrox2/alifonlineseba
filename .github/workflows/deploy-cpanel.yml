@@ -36,7 +36,7 @@ on:
     # docs changes are real commits but do not change a PHP file on the host,
     # and each deploy costs a full rsync + migration run.
     paths-ignore:
-      - 'android/**'
+      - 'android-admin/**'
       - 'twa/**'
       - 'docs/**'
       - 'tests/**'

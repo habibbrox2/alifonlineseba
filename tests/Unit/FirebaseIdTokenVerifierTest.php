@@ -208,9 +208,8 @@ final class FirebaseIdTokenVerifierTest extends \Codeception\Test\Unit
     }
 
     /**
-     * The JWKS path — and with it the hand-rolled DER of `pemFromModulus()` —
-     * is what production actually runs, so it has to be proved too: a modulus
-     * and exponent must become a key that verifies.
+     * A modulus and exponent must become a public key that verifies just like
+     * the certificate format used by Firebase's ID-token endpoint.
      */
     public function testAKeySetBuiltFromModulusAndExponentVerifies(): void
     {
@@ -250,6 +249,22 @@ final class FirebaseIdTokenVerifierTest extends \Codeception\Test\Unit
         assertNotNull(
             FirebaseIdTokenVerifier::verifyWithKeys($this->token(), $keys, self::PROJECT, self::now()),
             'The x5c branch is what Google actually sends today.',
+        );
+    }
+
+    public function testFirebaseCertificateEndpointFormatVerifies(): void
+    {
+        $certificate = "-----BEGIN CERTIFICATE-----\n"
+            . chunk_split($this->fixture['certificate'], 64, "\n")
+            . "-----END CERTIFICATE-----\n";
+        $keys = FirebaseIdTokenVerifier::keysFromCertificates(
+            json_encode([self::KID => $certificate], JSON_THROW_ON_ERROR),
+        );
+
+        assertArrayHasKey(self::KID, $keys);
+        assertNotNull(
+            FirebaseIdTokenVerifier::verifyWithKeys($this->token(), $keys, self::PROJECT, self::now()),
+            'A Firebase certificate-map key must verify the token signed by its private key.',
         );
     }
 

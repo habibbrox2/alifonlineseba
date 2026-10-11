@@ -31,7 +31,7 @@ final class SettingsRepositoryTest extends \Codeception\Test\Unit
         try {
             // Clean any rows written by tests so defaults stay pristine.
             $this->db->createCommand()->delete('{{%site_setting}}', ['setting_key' => [
-                'site_tagline', 'facebook_url', 'unknown_key',
+                'site_tagline', 'facebook_url', 'footer_updated_at', 'unknown_key',
             ]])->execute();
         } finally {
             // _before() builds a fresh container, and so a fresh PDO
@@ -48,6 +48,7 @@ final class SettingsRepositoryTest extends \Codeception\Test\Unit
 
         assertSame('ইনস্ট্যান্ট ডিজিটাল সার্ভিস প্ল্যাটফর্ম', $values['site_tagline']);
         assertSame('', $values['facebook_url']);
+        assertSame('', $values['footer_updated_at']);
         // Exactly the whitelisted keys — no unknown keys may leak through.
         assertSame(array_keys(SettingsRepository::KEYS), array_keys($values));
     }
@@ -57,11 +58,13 @@ final class SettingsRepositoryTest extends \Codeception\Test\Unit
         $this->settings->putMany([
             'site_tagline' => '  টেস্ট ট্যাগলাইন  ',
             'facebook_url' => 'https://facebook.com/test',
+            'footer_updated_at' => '2026-10-08',
         ], null);
 
         $values = $this->settings->all();
         assertSame('টেস্ট ট্যাগলাইন', $values['site_tagline'], 'Values must be trimmed.');
         assertSame('https://facebook.com/test', $values['facebook_url']);
+        assertSame('2026-10-08', $values['footer_updated_at']);
     }
 
     public function testPutManyDropsUnknownKeysAndUnsafeUrls(): void

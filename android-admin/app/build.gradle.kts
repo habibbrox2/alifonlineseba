@@ -16,13 +16,28 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// local.properties is the gitignored per-machine config documented by
+// local.properties.example; keystore.properties and env vars stay the
+// sources for release signing and CI.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
 fun secret(vararg keys: String): String? =
     keys.asSequence()
         .map { keystoreProperties.getProperty(it) ?: System.getenv(it) }
         .firstOrNull { !it.isNullOrBlank() }
 
+fun localProperty(key: String): String? =
+    localProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+
 val releaseStoreFile = secret("ADMIN_STORE_FILE", "storeFile")
-val baseUrl = secret("ADMIN_BASE_URL") ?: "https://your-domain.com/"
+val baseUrl = secret("ADMIN_BASE_URL")
+    ?: localProperty("ADMIN_BASE_URL")
+    ?: "https://your-domain.com/"
 
 android {
     namespace = "com.aliftools.admin"
@@ -80,8 +95,7 @@ android {
         jvmTarget = "17"
         freeCompilerArgs += listOf(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
-            "-opt-in=androidx.biometric.BiometricManager"
+            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
         )
     }
 
@@ -96,7 +110,7 @@ android {
 
     packaging {
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/{AL2.0,LGPL2.1,META-INF/LICENSE.md}"
         }
     }
 
@@ -145,8 +159,10 @@ dependencies {
     implementation(libs.androidx.biometric)
 
     // Firebase
-    implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // Phone/ID-token sign-in. Pinned like messaging (see libs.versions.toml):
+    // no firebase-bom here, so each artifact carries its own version.
+    implementation("com.google.firebase:firebase-auth:23.2.0")
 
     // Google Play Services
     implementation(libs.play.services.auth)

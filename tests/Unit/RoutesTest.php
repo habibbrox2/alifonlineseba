@@ -52,6 +52,36 @@ final class RoutesTest extends \Codeception\Test\Unit
         $this->assertMatches('/admin/', 'admin-slash');
     }
 
+    /**
+     * Every action and middleware name in the routes must name a class that exists.
+     *
+     * A missing `use` line in routes.php turns `FirebaseAuthAction::class` into
+     * the bare string "FirebaseAuthAction", which nothing notices until a
+     * request reaches that route: the dispatcher then throws
+     * InvalidMiddlewareDefinitionException and the endpoint answers 500 while
+     * every other page still works. Resolving each definition here catches that
+     * for all routes instead of one endpoint at a time.
+     */
+    public function testEveryMiddlewareDefinitionResolvesToAnExistingClass(): void
+    {
+        assertNotEmpty($this->flatRoutes());
+
+        $unresolvable = [];
+        foreach ($this->flatRoutes() as $name => $route) {
+            foreach ($route->getData('enabledMiddlewares') as $definition) {
+                if (!is_string($definition)) {
+                    continue;
+                }
+                if (class_exists($definition) || interface_exists($definition) || function_exists($definition)) {
+                    continue;
+                }
+                $unresolvable[] = "$name ($definition)";
+            }
+        }
+
+        assertSame([], $unresolvable, 'Route action/middleware names must resolve to existing classes.');
+    }
+
     public function testEveryGeneratedUrlIsRoutable(): void
     {
         $unroutable = [];

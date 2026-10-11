@@ -27,14 +27,19 @@ class AuthInterceptor @Inject constructor(
 
         val rotated = runBlocking {
             try {
-                val res = authApi.refresh(refresh)
+                // The backend extracts the token from `Authorization: Bearer …`.
+                val res = authApi.refresh("Bearer $refresh")
                 if (res.isSuccessful) {
                     val body = res.body()
                     val newToken = body?.data?.token
                     val newRefresh = body?.data?.refresh
-                    val role = body?.data?.user?.role ?: ""
                     if (newToken != null && newRefresh != null) {
-                        tokenStorage.saveTokens(newToken, newRefresh, body.data?.expiresAt, role)
+                        // Refresh returns no user object — keep the role that
+                        // login already stored instead of overwriting it.
+                        val role = body.data.user?.role
+                            ?: runCatching { tokenStorage.userRoleFlow.first() }.getOrNull()
+                            ?: ""
+                        tokenStorage.saveTokens(newToken, newRefresh, body.data.expiresAt, role)
                         newToken
                     } else null
                 } else null

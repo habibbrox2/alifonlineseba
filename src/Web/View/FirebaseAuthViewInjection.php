@@ -11,7 +11,7 @@ use Yiisoft\Yii\View\Renderer\CommonParametersInjectionInterface;
  * Exposes Firebase Authentication configuration to every template.
  *
  * The Firebase web SDK needs the Firebase web
- * app config to initialise the SDK and call `signInWithPopup`. That config is
+ * app config to initialise the SDK for sign-in. That config is
  * environment-specific (different projects, different client ids), so it comes
  * from the environment rather than being hardcoded.
  *

@@ -44,7 +44,12 @@ final readonly class AdminUsersApiAction
         $data = $this->users->paginate($page, self::PER_PAGE, $q, $sort, $dir, $deleted);
 
         return Api::ok([
-            'rows' => $data['rows'],
+            // paginate() runs SELECT *; a credential hash has no business in
+            // a JSON response no matter how trusted the caller is.
+            'rows' => array_map(static fn (array $row): array => array_diff_key(
+                $row,
+                array_flip(['password_hash', 'remember_token']),
+            ), $data['rows']),
             'total' => $data['total'],
             'page' => $page,
             'perPage' => self::PER_PAGE,

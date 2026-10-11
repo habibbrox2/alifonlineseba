@@ -1044,6 +1044,43 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $this->assertArrayHasKey('stats', $payload['data']);
     }
 
+    // ---- Credential hygiene --------------------------------------------
+
+    /**
+     * paginate() runs SELECT * over a table that holds the password hash.
+     * The action must strip it before the rows become JSON — an admin token
+     * should not be a way to walk away with everybody's credentials.
+     */
+    public function testUsersListNeverExposesPasswordHash(): void
+    {
+        $admin = $this->makeUser('hashhygiene', 'admin');
+
+        $response = $this->call($admin, 'GET', '/api/admin/users', [], null, ['page' => '1']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertNotEmpty($payload['data']['rows']);
+        foreach ($payload['data']['rows'] as $row) {
+            $this->assertArrayNotHasKey('password_hash', $row);
+            $this->assertArrayNotHasKey('remember_token', $row);
+        }
+    }
+
+    public function testStaffListNeverExposesPasswordHash(): void
+    {
+        $sa = $this->makeUser('staffhashhygiene', 'superadmin');
+
+        $response = $this->call($sa, 'GET', '/api/admin/staff');
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertNotEmpty($payload['data']['rows']);
+        foreach ($payload['data']['rows'] as $row) {
+            $this->assertArrayNotHasKey('password_hash', $row);
+            $this->assertArrayNotHasKey('remember_token', $row);
+        }
+    }
+
     public function testAdminNotificationsRetryRequiresId(): void
     {
         $admin = $this->makeUser('nretry', 'admin');

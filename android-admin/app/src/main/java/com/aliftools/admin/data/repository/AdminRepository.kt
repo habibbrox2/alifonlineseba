@@ -1,11 +1,16 @@
 package com.aliftools.admin.data.repository
 
+import com.aliftools.admin.data.api.ActionResponse
 import com.aliftools.admin.data.api.AdminApiService
+import com.aliftools.admin.data.api.AppVersion
 import com.aliftools.admin.data.api.AuthApiService
+import com.aliftools.admin.data.api.WithdrawEnvelope
 import com.aliftools.admin.data.local.TokenStorage
 import com.aliftools.admin.data.model.*
+import com.aliftools.admin.BuildConfig
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,9 +28,10 @@ class AdminRepository @Inject constructor(
             val res = authApi.login(identifier, password)
             if (res.isSuccessful) {
                 val body = res.body()
-                if (body?.success == true && body.data != null) {
-                    val d = body.data
-                    tokenStorage.saveTokens(d.token, d.refresh, d.expiresAt, d.user.role)
+                val d = body?.data
+                val user = d?.user
+                if (body?.success == true && d != null && user != null) {
+                    tokenStorage.saveTokens(d.token, d.refresh, d.expiresAt, user.role)
                     Result.success(d)
                 } else {
                     Result.failure(Exception(body?.message ?: "Login failed"))
@@ -38,16 +44,49 @@ class AdminRepository @Inject constructor(
         }
     }
 
-    suspend fun logout(): Result<Unit> {
+    /**
+     * Signs in with a Firebase ID token instead of a password.
+     *
+     * Shares the success path with {@see login} so both methods end with the
+     * same token pair stored and the same activity-log trail; only the way the
+     * user proved who they are differs.
+     */
+    suspend fun loginWithFirebase(idToken: String, provider: String = "phone"): Result<LoginResponse> {
         return try {
-            val res = authApi.logout()
-            tokenStorage.clearTokens()
+            val res = authApi.firebaseLogin(idToken, provider)
             if (res.isSuccessful) {
-                Result.success(Unit)
+                val body = res.body()
+                val d = body?.data
+                val user = d?.user
+                if (body?.success == true && d != null && user != null) {
+                    tokenStorage.saveTokens(d.token, d.refresh, d.expiresAt, user.role)
+                    Result.success(d)
+                } else {
+                    Result.failure(Exception(body?.message ?: "লগইন ফেইল হয়েছে।"))
+                }
             } else {
-                Result.failure(Exception(res.body()?.message ?: "Logout failed"))
+                Result.failure(Exception(res.body()?.message ?: "লগইন ফেইল হয়েছে।"))
             }
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun logout(): Result<Unit> {
+        return try {
+            val access = tokenStorage.accessTokenFlow.first()
+            val refresh = tokenStorage.refreshTokenFlow.first()
+            // The access token and its refresh token are two separate rows,
+            // each valid for its own TTL, so both have to be revoked or one
+            // credential survives the logout. A failed revoke (offline) must
+            // not trap the user in a half-logged-out state: local state is
+            // cleared either way.
+            refresh?.let { runCatching { authApi.logout("Bearer $it") } }
+            access?.let { runCatching { authApi.logout("Bearer $it") } }
+            tokenStorage.clearTokens()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            tokenStorage.clearTokens()
             Result.failure(e)
         }
     }
@@ -58,25 +97,19 @@ class AdminRepository @Inject constructor(
     suspend fun setBiometricEnabled(enabled: Boolean) = tokenStorage.setBiometricEnabled(enabled)
     suspend fun isBiometricEnabled(): Boolean = tokenStorage.biometricEnabledFlow.first()
 
+    // Remember me — identifier only, never the password.
+
+    fun rememberedIdentifierFlow() = tokenStorage.rememberedIdentifierFlow
+    suspend fun rememberedIdentifier(): String? = tokenStorage.rememberedIdentifierFlow.first()
+    suspend fun setRememberedIdentifier(identifier: String?) =
+        tokenStorage.setRememberedIdentifier(identifier)
+
     // Dashboard
 
-    suspend fun dashboard(): Result<AdminDashboard> {
-        return try {
-            val res = adminApi.dashboard()
-            if (res.isSuccessful) {
-                val body = res.body()
-                if (body?.success == true && body.data != null) {
-                    Result.success(body.data)
-                } else {
-                    Result.failure(Exception(body?.message ?: "Dashboard failed"))
-                }
-            } else {
-                Result.failure(Exception(res.body()?.message ?: "Dashboard failed"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    // Goes through safeApiCall so a 401 behaves like every other admin
+    // endpoint: the session is cleared and the caller gets a coded
+    // HttpException instead of an opaque "Dashboard failed".
+    suspend fun dashboard(): Result<AdminDashboard> = safeApiCall { adminApi.dashboard() }
 
     // Users
 
@@ -85,13 +118,12 @@ class AdminRepository @Inject constructor(
         query: String? = null,
         sort: String? = null,
         dir: String? = null,
-        trashed: Int? = null
+        trashed: String? = null
     ): Result<PagedResponse<User>> {
         return safeApiCall { adminApi.users(page, query, sort, dir, trashed) }
-            .map { it.data!! }
     }
 
-    suspend fun userAction(action: String, id: Int? = null, extra: Map<String, String> = emptyMap()): Result<Unit> {
+    suspend fun userAction(action: String, id: Int? = null, extra: Map<String, String> = emptyMap()): Result<ActionResponse> {
         return safeApiCall {
             adminApi.usersAction(
                 action = action,
@@ -99,88 +131,73 @@ class AdminRepository @Inject constructor(
                 username = extra["username"],
                 phone = extra["phone"],
                 password = extra["password"],
-                role = extra["role"]
+                role = extra["role"],
+                email = extra["email"]
             )
-        }.map { }
+        }
     }
 
     // Orders
 
     suspend fun orders(page: Int = 1, query: String? = null, scope: String? = null): Result<PagedResponse<AdminOrder>> {
         return safeApiCall { adminApi.orders(page, query, scope) }
-            .map { it.data!! }
     }
 
-    suspend fun bulkStatus(ids: List<Int>, status: String): Result<Unit> {
+    suspend fun bulkStatus(ids: List<Int>, status: String): Result<ActionResponse> {
         return safeApiCall { adminApi.ordersBulk(ids = ids, status = status) }
-            .map { }
     }
 
     // Topups / Recharges
 
     suspend fun topups(page: Int = 1, status: String? = null, query: String? = null): Result<PagedResponse<AdminTopup>> {
         return safeApiCall { adminApi.topups(page, status, query) }
-            .map { it.data!! }
     }
 
     suspend fun recharge(id: Int): Result<AdminTopup> {
         return safeApiCall { adminApi.recharge(id) }
-            .map { it.data!! }
+            .map { it.topup }
     }
 
-    suspend fun rechargeAction(id: Int, action: String, reason: String? = null): Result<AdminTopup> {
+    suspend fun rechargeAction(id: Int, action: String, reason: String? = null): Result<ActionResponse> {
         return safeApiCall { adminApi.rechargeAction(id, action, reason) }
-            .map { it.data!! }
     }
 
     // Withdraws
 
     suspend fun withdraws(page: Int = 1, status: String? = null, query: String? = null): Result<PagedResponse<AdminWithdraw>> {
         return safeApiCall { adminApi.withdraws(page, status, query) }
-            .map { it.data!! }
     }
 
-    suspend fun withdrawAction(id: Int, action: String, reason: String? = null): Result<AdminWithdraw> {
+    suspend fun withdrawAction(id: Int, action: String, reason: String? = null): Result<WithdrawEnvelope> {
         return safeApiCall { adminApi.withdrawAction(id, action, reason) }
-            .map { it.data!! }
     }
 
     // Staff
 
     suspend fun staff(page: Int = 1, query: String? = null): Result<PagedResponse<User>> {
         return safeApiCall { adminApi.staff(page, query) }
-            .map { it.data!! }
-    }
-
-    // Settings
-
-    suspend fun settings(): Result<List<Setting>> {
+    }    // Settings — GET and POST both return the flat {key: value} map that
+    // SettingsRepository::all() builds, not a list of rows.
+    suspend fun settings(): Result<Map<String, String>> {
         return safeApiCall { adminApi.settings() }
-            .map { it.data!! }
     }
 
     suspend fun saveSettings(values: Map<String, String>): Result<Unit> {
         return safeApiCall { adminApi.saveSettings(values) }
             .map { }
-    }
-
-    // Logs
-
+    }    // Logs
     suspend fun logs(page: Int = 1, perPage: Int = 25, query: String? = null): Result<PagedResponse<ActivityLog>> {
         return safeApiCall { adminApi.logs(page, perPage, query) }
-            .map { it.data!! }
     }
 
     // Notifications
 
     suspend fun notifications(page: Int = 1, status: String? = null): Result<PagedResponse<AdminNotification>> {
         return safeApiCall { adminApi.notifications(page, status) }
-            .map { it.data!! }
     }
 
-    suspend fun retryNotification(id: Int): Result<Unit> {
+    suspend fun retryNotification(id: Int): Result<ActionResponse> {
         return safeApiCall { adminApi.retryNotification(id) }
-            .map { }
     }
 
     // Devices
@@ -189,9 +206,11 @@ class AdminRepository @Inject constructor(
         return safeApiCall {
             adminApi.registerDevice(
                 mapOf(
-                    "device_token" to deviceToken,
+                    // DeviceApiAction reads `token` out of the JSON body.
+                    "token" to deviceToken,
                     "device_name" to (deviceName ?: "Android Admin"),
-                    "platform" to "android"
+                    "platform" to "android",
+                    "app_version" to BuildConfig.VERSION_NAME
                 )
             )
         }.map { }
@@ -199,14 +218,13 @@ class AdminRepository @Inject constructor(
 
     suspend fun devices(): Result<List<Device>> {
         return safeApiCall { adminApi.devices() }
-            .map { it.data!! }
+            .map { it.devices }
     }
 
     // App version
 
     suspend fun appVersion(): Result<AppVersion> {
         return safeApiCall { adminApi.appVersion() }
-            .map { it.data!! }
     }
 
     private suspend fun <T> safeApiCall(block: suspend () -> Response<ApiResponse<T>>): Result<T> {

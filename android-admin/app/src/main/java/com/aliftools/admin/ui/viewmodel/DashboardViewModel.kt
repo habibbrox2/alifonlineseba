@@ -1,6 +1,5 @@
 package com.aliftools.admin.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliftools.admin.data.model.AdminDashboard
 import com.aliftools.admin.data.repository.AdminRepository
@@ -20,13 +19,32 @@ sealed interface DashboardUiState {
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val repository: AdminRepository
-) : ViewModel() {
+) : ActionViewModel() {
 
     private val _state = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading)
     val state: StateFlow<DashboardUiState> = _state.asStateFlow()
 
+    /** Role from the login payload — drives which quick actions appear. */
+    val role: kotlinx.coroutines.flow.Flow<String?> = repository.userRoleFlow()
+
+    /** Set once logout finished clearing tokens; the screen navigates away. */
+    private val _loggedOut = MutableStateFlow(false)
+    val loggedOut: StateFlow<Boolean> = _loggedOut.asStateFlow()
+
     init {
         load()
+    }
+
+    /**
+     * Logout revokes both token rows server-side and clears local state
+     * unconditionally — being offline must not trap an operator in a session
+     * they asked to leave.
+     */
+    fun logout() {
+        viewModelScope.launch {
+            repository.logout()
+            _loggedOut.value = true
+        }
     }
 
     fun load() {

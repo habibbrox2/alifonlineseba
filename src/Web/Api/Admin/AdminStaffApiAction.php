@@ -33,7 +33,11 @@ final readonly class AdminStaffApiAction
         $data = $this->users->paginateStaff($page, self::PER_PAGE, $q);
 
         return Api::ok([
-            'rows' => $data['rows'],
+            // SELECT * with a credential column in it — never ship the hash.
+            'rows' => array_map(static fn (array $row): array => array_diff_key(
+                $row,
+                array_flip(['password_hash', 'remember_token']),
+            ), $data['rows']),
             'total' => $data['total'],
             'page' => $page,
             'perPage' => self::PER_PAGE,

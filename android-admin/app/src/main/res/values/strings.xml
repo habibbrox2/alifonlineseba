@@ -46,4 +46,6 @@
     <string name="unblock">আনব্লক</string>
     <string name="reason">কারণ</string>
     <string name="required">প্রয়োজন</string>
+    <!-- Notification channel the FCM service creates before posting. -->
+    <string name="default_channel_id">alif_admin_alerts</string>
 </resources>

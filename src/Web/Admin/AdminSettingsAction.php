@@ -51,6 +51,12 @@ final readonly class AdminSettingsAction
                 if ($value !== '' && $this->settings->isUrlKey($key) && !$this->settings->isSafeUrl($value)) {
                     $errors[$key] = 'সঠিক http(s) লিংক দিন (অথবা খালি রাখুন)।';
                 }
+                if ($key === 'footer_updated_at' && $value !== '') {
+                    $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+                    if ($date === false || $date->format('Y-m-d') !== $value) {
+                        $errors[$key] = 'সঠিক তারিখ দিন।';
+                    }
+                }
                 if ($value !== '' && ($key === 'contact_email' || $key === 'contact_phone')) {
                     $valid = $key === 'contact_email'
                         ? filter_var($value, FILTER_VALIDATE_EMAIL) !== false
