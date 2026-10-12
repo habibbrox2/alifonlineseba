@@ -56,7 +56,7 @@ final readonly class AdminUsersAction
                             'status' => $row['status'] === 'active' ? 'disabled' : 'active',
                         ]),
                         'role' => $this->users->update($userId, [
-                            'role' => in_array($input['role'] ?? '', ['user', 'staff', 'admin'], true) ? $input['role'] : 'user',
+                            'role' => $this->getAllowedRoles($identity, $input['role'] ?? ''),
                         ]),
                         'reset' => $temporaryPassword = $this->resetPassword($userId),
                         default => null,
@@ -92,6 +92,19 @@ final readonly class AdminUsersAction
             'deletedFilter' => $deleted,
             'trashedCount' => $this->users->countTrashed(),
         ]);
+    }
+
+    /**
+     * Get allowed roles based on current user's permissions.
+     * Superadmin can assign superadmin role; others can assign user, staff, admin.
+     */
+    private function getAllowedRoles(object $identity, string $requestedRole): string
+    {
+        $allowedRoles = ['user', 'staff', 'admin'];
+        if ($identity instanceof \App\Auth\Identity && $identity->isSuperAdmin()) {
+            $allowedRoles[] = 'superadmin';
+        }
+        return in_array($requestedRole, $allowedRoles, true) ? $requestedRole : 'user';
     }
 
     /**

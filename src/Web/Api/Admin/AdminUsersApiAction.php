@@ -7,6 +7,7 @@ namespace App\Web\Api\Admin;
 use App\Auth\Identity;
 use App\Repository\UserRepository;
 use App\Service\Api;
+use App\Service\PermissionService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -16,13 +17,14 @@ final readonly class AdminUsersApiAction
 
     public function __construct(
         private UserRepository $users,
+        private PermissionService $permissions,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
     {
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
-        if (!$identity->canAccessAdmin()) {
+        if (!$this->permissions->canAccessRoute($identity, 'admin-users')) {
             return Api::forbidden();
         }
 
@@ -62,6 +64,9 @@ final readonly class AdminUsersApiAction
         $action = (string) ($input['do'] ?? '');
 
         if ($action === 'create') {
+            if (!$this->permissions->canAccessRoute($identity, 'admin-user-create')) {
+                return Api::fail('আপনার ইউজার তৈরি করার অনুমতি নেই।');
+            }
             return $this->createUser($input, $identity);
         }
 
@@ -75,13 +80,30 @@ final readonly class AdminUsersApiAction
             return Api::fail('ইউজারটি পাওয়া যায়নি।', [], 404);
         }
 
+        // RBAC: check if current user can manage the target user
+        if (!$identity->canManageRole((string) $row['role'])) {
+            return Api::fail('এই ভূমিকার অ্যাকাউন্ট পরিবর্তন করার অনুমতি নেই।');
+        }
+
         return match ($action) {
-            'toggle' => $this->toggleUser($userId, $row),
-            'role' => $this->changeRole($userId, $input),
-            'reset' => $this->resetPassword($userId),
-            'delete' => $this->deleteUser($userId, $row, $identity),
-            'restore' => $this->restoreUser($userId, $row, $identity),
-            'restore_all' => $this->restoreAllUsers($identity),
+            'toggle' => $this->checkPermission($identity, 'admin-user-status-update')
+                ? $this->toggleUser($userId, $row)
+                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+            'role' => $this->checkPermission($identity, 'admin-user-role-update')
+                ? $this->changeRole($userId, $input, $identity)
+                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+            'reset' => $this->checkPermission($identity, 'admin-user-password-reset')
+                ? $this->resetPassword($userId)
+                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+            'delete' => $this->checkPermission($identity, 'admin-user-delete')
+                ? $this->deleteUser($userId, $row, $identity)
+                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+            'restore' => $this->checkPermission($identity, 'admin-user-restore')
+                ? $this->restoreUser($userId, $row, $identity)
+                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+            'restore_all' => $this->checkPermission($identity, 'admin-user-restore')
+                ? $this->restoreAllUsers($identity)
+                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
             default => Api::fail('অজানা অ্যাকশন।'),
         };
     }
@@ -138,9 +160,14 @@ final readonly class AdminUsersApiAction
         return Api::ok(['message' => 'ইউজার আপডেট হয়েছে।']);
     }
 
-    private function changeRole(int $userId, array $input): ResponseInterface
+    private function changeRole(int $userId, array $input, Identity $identity): ResponseInterface
     {
-        $role = in_array($input['role'] ?? '', ['user', 'staff', 'admin'], true) ? $input['role'] : 'user';
+        $allowedRoles = ['user', 'staff', 'admin'];
+        // Superadmin can also assign superadmin role
+        if ($identity->isSuperAdmin()) {
+            $allowedRoles[] = 'superadmin';
+        }
+        $role = in_array($input['role'] ?? '', $allowedRoles, true) ? $input['role'] : 'user';
         $this->users->update($userId, ['role' => $role]);
 
         return Api::ok(['message' => 'রোল আপডেট হয়েছে।']);
@@ -212,5 +239,13 @@ final readonly class AdminUsersApiAction
         }
 
         return $password;
+    }
+
+    /**
+     * Check if identity has the required permission.
+     */
+    private function checkPermission(Identity $identity, string $permission): bool
+    {
+        return $this->permissions->canAccessRoute($identity, $permission);
     }
 }

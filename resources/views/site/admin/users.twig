@@ -28,6 +28,7 @@
     {% endif %}
 </div>
 
+{% if can_access(identity, 'admin-users-create') %}
 <!-- Create user -->
 <details class="card mb-6 p-5" {{ flash_error is defined and flash_error ? 'open' }}>
     {# tap-row only kicks in under 640px, where a 24px summary line is too small to hit reliably. #}
@@ -83,6 +84,7 @@
         </div>
     </form>
 </details>
+{% endif %}
 
 <form method="get" action="/admin/users" class="mb-5 flex gap-2 sm:max-w-md">
     <input type="search" name="q" value="{{ q }}" class="form-input" placeholder="পুরো নাম, ইউজারনেম, মোবাইল বা ইমেইল দিয়ে খুঁজুন…">
@@ -143,16 +145,69 @@
                                 {% if isTrashed %}
                                     <span class="text-xs text-neutral-400">{{ user.role }}</span>
                                 {% else %}
-                                    <form method="post" action="/admin/users" class="flex items-center gap-1.5">
-                                        <input type="hidden" name="_csrf" value="{{ csrf }}">
-                                        <input type="hidden" name="do" value="role">
-                                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                                        <select name="role" onchange="this.form.submit()" class="form-input px-2 py-1 text-xs">
-                                            {% for role in ['user', 'staff', 'admin'] %}
-                                                <option value="{{ role }}" {{ user.role == role ? 'selected' }}>{{ role }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </form>
+                                    {% if can_access(identity, 'admin-users-role-update') and identity.canManageRole(user.role) %}
+                                        {# Quick promote buttons for regular users #}
+                                        {% if user.role == 'user' %}
+                                        <div class="flex flex-col gap-1">
+                                            <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে এডমিন বানাবেন?')">
+                                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                                <input type="hidden" name="do" value="role">
+                                                <input type="hidden" name="user_id" value="{{ user.id }}">
+                                                <input type="hidden" name="role" value="admin">
+                                                <button type="submit" class="btn btn-primary btn-xs px-2 py-1" title="এডমিন হিসেবেfilled">
+                                                    {{ icon('shield-check', 'w-3.5 h-3.5') }} এডমিন
+                                                </button>
+                                            </form>
+                                            <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে স্টাফ বানাবেন?')">
+                                                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                                <input type="hidden" name="do" value="role">
+                                                <input type="hidden" name="user_id" value="{{ user.id }}">
+                                                <input type="hidden" name="role" value="staff">
+                                                <button type="submit" class="btn btn-info btn-xs px-2 py-1" title="স্টাফ হিসেবেfilled">
+                                                    {{ icon('user-plus', 'w-3.5 h-3.5') }} স্টাফ
+                                                </button>
+                                            </form>
+                                        </div>
+                                        {% elseif user.role == 'staff' and identity.isSuperAdmin() %}
+                                        {# Superadmin can promote staff to admin #}
+                                        <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে এডমিন বানাবেন?')">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="role">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <input type="hidden" name="role" value="admin">
+                                            <button type="submit" class="btn btn-primary btn-xs px-2 py-1" title="এডমিন হিসেবেfilled">
+                                                {{ icon('shield-check', 'w-3.5 h-3.5') }} এডমিন
+                                            </button>
+                                        </form>
+                                        {% elseif user.role == 'admin' and identity.isSuperAdmin() %}
+                                        {# Superadmin can demote admin to staff #}
+                                        <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে স্টাফ করবেন?')">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="role">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <input type="hidden" name="role" value="staff">
+                                            <button type="submit" class="btn btn-warning btn-xs px-2 py-1" title="স্টাফ হিসেবেfilled">
+                                                {{ icon('user-minus', 'w-3.5 h-3.5') }} স্টাফ
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        {# Dropdown for other cases #}
+                                        <form method="post" action="/admin/users" class="flex items-center gap-1.5">
+                                            <input type="hidden" name="_csrf" value="{{ csrf }}">
+                                            <input type="hidden" name="do" value="role">
+                                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                                            <select name="role" onchange="this.form.submit()" class="form-input px-2 py-1 text-xs">
+                                                {% for role in ['user', 'staff', 'admin'] %}
+                                                    <option value="{{ role }}" {{ user.role == role ? 'selected' }}>{{ role }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </form>
+                                        {% endif %}
+                                    {% else %}
+                                    <select class="form-input px-2 py-1 text-xs opacity-50 cursor-not-allowed" disabled>
+                                        <option value="{{ user.role }}" selected>{{ user.role }}</option>
+                                    </select>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td>
@@ -166,6 +221,7 @@
                             <td>
                                 <div class="flex justify-end gap-2">
                                     {% if isTrashed %}
+                                        {% if can_access(identity, 'admin-users-restore') %}
                                         <form method="post" action="/admin/users">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="restore">
@@ -174,8 +230,12 @@
                                                 {{ icon('history', 'w-4 h-4') }} রিস্টোর
                                             </button>
                                         </form>
+                                        {% endif %}
                                     {% else %}
+                                        {% if can_access(identity, 'admin-users-edit') %}
                                         <a href="/admin/users/{{ user.id }}" class="btn btn-ghost btn-sm">এডিট</a>
+                                        {% endif %}
+                                        {% if can_access(identity, 'admin-users-status-update') %}
                                         <form method="post" action="/admin/users">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="toggle">
@@ -184,19 +244,24 @@
                                                 {{ user.status == 'active' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}
                                             </button>
                                         </form>
+                                        {% endif %}
+                                        {% if can_access(identity, 'admin-users-password-reset') %}
                                         <form method="post" action="/admin/users" onsubmit="return confirm('পাসওয়ার্ড রিসেট করবেন? একটি নতুন এলোমেলো পাসওয়ার্ড তৈরি হবে এবং একবারই দেখানো হবে।')">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="reset">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
                                             <button type="submit" class="btn btn-ghost btn-sm">রিসেট</button>
                                         </form>
+                                        {% endif %}
                                         {% if user.id != identity.id and user.role != 'admin' %}
-                                        <form method="post" action="/admin/users" onsubmit="return confirm('&quot;{{ user.username }}&quot; ট্র্যাশে পাঠাবেন? ইউজার লগইন করতে পারবে না, তবে চাইলে রিস্টোর করা যাবে।')">
+                                        {% if can_access(identity, 'admin-users-delete') %}
+                                        <form method="post" action="/admin/users" onsubmit="return confirm('"{{ user.username }}" ট্র্যাশে পাঠাবেন? ইউজার লগইন করতে পারবে না, তবে চাইলে রিস্টোর করা যাবে।')">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="delete">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
                                             <button type="submit" class="btn btn-danger btn-sm" aria-label="{{ user.username }} মুছুন">মুছুন</button>
                                         </form>
+                                        {% endif %}
                                         {% endif %}
                                     {% endif %}
                                 </div>
@@ -214,4 +279,4 @@
     baseUrl: usersQuery ~ 'page=',
     sort: sort, dir: dir,
 } %}
-{% endblock %}
+{% endblock %}
