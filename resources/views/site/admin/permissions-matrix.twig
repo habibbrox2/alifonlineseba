@@ -1,0 +1,129 @@
+﻿{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}অনুমতি ম্যাট্রিক্স — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% set headActions %}
+    <a href="/admin/role-hierarchy" class="btn btn-sm btn-ghost">{{ icon('layers', 'w-4 h-4') }} ভূমিকা পদক্রম</a>
+{% endset %}
+{% include 'components/page-header.twig' with {
+    title: 'অনুমতি ম্যাট্রিক্স',
+    description: 'প্রতিটি ভূমিকা কতটা সুপারের অ্যাক্সেস — অর্ডার, টাকা, সেটিংস, স্টাফ পরিচালনা',
+    actions: headActions,
+} %}
+
+{# The matrix is read-only documentation, not a control surface: a role's
+   permissions are enforced by PermissionService in PHP, so this page exists
+   to answer "why did my colleague get a refusal?" without reading code. #}
+<div class="mb-6 rounded-xl border border-info-200 bg-info-50 px-4 py-3 text-sm text-info-900">
+    <p class="flex items-center gap-1.5 font-semibold">
+        {{ icon('info', 'w-4 h-4') }} নোট
+    </p>
+    <p class="mt-1 text-[13px]">
+        এখানে শুধু দেখানো হয় কোন ভূমিকায় কী অনুমতি আছে। অনুমতি পরিবর্তন করতে হলে
+        <a href="/admin/role-hierarchy" class="font-semibold underline">ভূমিকা পদক্রম</a> পেজে যান।
+        সুপারএডমিন সর্বদা সম্পূর্ণ অ্যাক্সেস রাখেন।
+    </p>
+</div>
+
+{% if roles is empty %}
+    <div class="flex flex-col items-center gap-2 px-4 py-12 text-center card">
+        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+            {{ icon('alert-triangle', 'w-6 h-6') }}
+        </span>
+        <p class="text-sm text-neutral-500">কোনো ভূমিকা পাওয়া যায়নি।</p>
+    </div>
+{% else %}
+<div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="table-base">
+            <thead>
+                <tr>
+                    <th style="min-width: 200px;">অনুমতি</th>
+                    {% for role in roles %}
+                        <th class="text-center">
+                            {% if role == 'superadmin' %}
+                                <span class="inline-flex items-center gap-1 text-primary-700">{{ icon('crown', 'w-3.5 h-3.5 inline') }} {{ roleLabels[role] ?? role }}</span>
+                            {% else %}
+                                {{ roleLabels[role] ?? role }}
+                            {% endif %}
+                        </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {# Iterate the first role's own permission keys rather than a
+                   global action list: a category the first role does not have
+                   would otherwise render one empty row per phantom action. #}
+                {% set sample = roles[0] %}
+                {% for category, categoryLabel in categoryLabels %}
+                    {% set actions = matrix[sample][category] ?? [] %}
+                    {% if actions is not empty %}
+                        <tr class="bg-neutral-50">
+                            <td colspan="{{ roles|length + 1 }}" class="font-semibold text-neutral-800">
+                                {{ icon('folder', 'w-3.5 h-3.5 inline-block align-text-bottom text-neutral-400') }}
+                                {{ categoryLabel }}
+                            </td>
+                        </tr>
+                        {% for action in actions|keys %}
+                            <tr>
+                                <td class="text-neutral-600">{{ actionLabels[action]|default(action) }}</td>
+                                {% for role in roles %}
+                                    {% set allowed = matrix[role][category][action] ?? false %}
+                                    <td class="text-center">
+                                        {% if allowed %}
+                                            <span class="badge badge-success" title="অনুমতি আছে">{{ icon('check', 'w-3 h-3') }}</span>
+                                        {% else %}
+                                            <span class="badge badge-neutral" title="অনুমতি নেই">{{ icon('x', 'w-3 h-3') }}</span>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+    <div class="card p-5">
+        <h3 class="flex items-center gap-2 text-sm font-semibold text-neutral-800">
+            {{ icon('list-checks', 'w-4 h-4 text-primary-600') }} লিজেন্ড
+        </h3>
+        <div class="mt-3 flex gap-4 flex-wrap text-sm text-neutral-600">
+            <span class="inline-flex items-center gap-1.5">
+                <span class="badge badge-success">{{ icon('check', 'w-3 h-3') }}</span> অনুমতি আছে
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+                <span class="badge badge-neutral">{{ icon('x', 'w-3 h-3') }}</span> অনুমতি নেই
+            </span>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h3 class="flex items-center gap-2 text-sm font-semibold text-neutral-800">
+            {{ icon('trending-up', 'w-4 h-4 text-primary-600') }} বর্তমান ভূমিকা র‍্যাঙ্ক (উচ্চ থেকে নিম্ন)
+        </h3>
+        <ol class="mt-3 space-y-0.5">
+            {% for role in roles %}
+                <li class="flex items-center justify-between gap-3 border-b border-neutral-100 py-2 last:border-b-0">
+                    <span class="inline-flex items-center gap-2 text-sm text-neutral-700">
+                        {% if role == 'superadmin' %}
+                            <span class="badge badge-primary">{{ icon('crown', 'w-3 h-3') }} {{ roleLabels[role] ?? role }}</span>
+                            <span class="text-[10px] font-semibold text-danger-600">সর্বোচ্চ অধিকার</span>
+                        {% else %}
+                            <span class="badge badge-neutral">{{ roleLabels[role] ?? role }}</span>
+                        {% endif %}
+                    </span>
+                    <span class="badge badge-info tabular-nums">র‍্যাঙ্ক: {{ roleRanks[role] ?? 'N/A' }}</span>
+                </li>
+            {% endfor %}
+        </ol>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+

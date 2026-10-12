@@ -1,0 +1,164 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% block title %}ভূমিকার পদক্রম — Admin{% endblock %}
+
+{% block dashboard_content %}
+{% include 'components/page-header.twig' with {
+    title: 'ভূমিকার পদানুক্রম',
+    description: 'এখানে আপনি দেখতে পারবেন কোন ভূমিকা কে পরিচালনা করতে পারে। উচ্চতর র‍্যাঙ্কের ভূমিকা নিম্ন র‍্যাঙ্কের ভূমিকাকে পরিচালনা করতে পারে।',
+} %}
+
+<div class="card overflow-hidden mb-6">
+    <div class="p-4 border-b border-neutral-100 bg-neutral-50">
+        <h3 class="text-sm font-semibold text-neutral-800">বর্তমান ভূমিকা অর্ডার</h3>
+        <p class="mt-0.5 text-xs text-neutral-500">
+            র‍্যাঙ্ক ০ থেকে ১০০০ পর্যন্ত হতে পারে। বেশি সংখ্যা = বেশি ক্ষমতা।
+            <br>সুপারএডমিন সর্বদা সবচেয়ে উপর থাকতে হবে।
+        </p>
+    </div>
+
+    <div class="p-4">
+        {% set ranksSorted = ranks|sort((a, b) => b <=> a) %}
+
+        <div class="space-y-3">
+            {% for role, rank in ranksSorted %}
+                {% set isDefault = rank == defaultRanks[role] %}
+                <div class="flex items-center justify-between gap-4 p-3 rounded-lg {% if not isDefault %}bg-primary-50 border border-primary-200{% else %}bg-neutral-50 border border-neutral-200{% endif %}">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <span class="badge badge-{% if role == 'superadmin' %}primary{% elseif role == 'admin' %}info{% elseif role == 'staff' %}warning{% else %}neutral{% endif %} shrink-0">
+                            {{ roleLabels[role] ?? role }}
+                        </span>
+                        <span class="text-xs text-neutral-400 shrink-0">(র‍্যাঙ্ক: {{ rank }})</span>
+                        {% if not isDefault %}
+                            <span class="badge badge-primary">কাস্টম</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% if can_access(identity, 'admin-role-hierarchy-update') %}
+<div class="card overflow-hidden">
+    <div class="p-4 border-b border-neutral-100">
+        <h3 class="text-sm font-semibold text-neutral-800">র‍্যাঙ্ক পরিবর্তন করুন</h3>
+    </div>
+
+    <form method="post" action="/admin/role-hierarchy" class="p-4 space-y-4">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <input type="hidden" name="do" value="save_ranks">
+
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {% for role in ['superadmin', 'admin', 'staff', 'user'] %}
+                <div class="space-y-1.5">
+                    <label for="{{ role }}" class="block text-sm font-medium text-neutral-700">
+                        {{ roleLabels[role] }}
+                        <span class="text-xs font-normal text-neutral-400 ml-1">(ডিফল্ট: {{ defaultRanks[role] }})</span>
+                    </label>
+                    <input type="number"
+                           id="{{ role }}"
+                           name="{{ role }}"
+                           value="{{ ranks[role] }}"
+                           min="0"
+                           max="1000"
+                           step="1"
+                           class="form-input form-input-sm text-center text-lg font-mono"
+                           required
+                           aria-label="{{ roleLabels[role] }} এর র‍্যাঙ্ক">
+                    {% if role == 'superadmin' %}
+                        <p class="text-[10px] text-info-600">সর্বোচ্চ হতে হবে</p>
+                    {% elseif role == 'admin' %}
+                        <p class="text-[10px] text-info-600">স্টাফ ও ইউজারের চেয়ে বেশি</p>
+                    {% elseif role == 'staff' %}
+                        <p class="text-[10px] text-info-600">ইউজারের চেয়ে বেশি</p>
+                    {% else %}
+                        <p class="text-[10px] text-info-600">সর্বনিম্ন</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="pt-4 border-t border-neutral-100 flex gap-3">
+            <button type="submit" class="btn btn-primary">
+                {{ icon('save', 'w-4 h-4') }} সংরক্ষণ করুন
+            </button>
+
+            <button type="submit" name="do" value="reset" class="btn btn-ghost"
+                    onclick="return confirm('ডিফল্ট র‍্যাঙ্কে ফিরিয়ে আনবেন?')">
+                {{ icon('rotate-ccw', 'w-4 h-4') }} ডিফল্টে ফিরিয়ে আনুন
+            </button>
+        </div>
+    </form>
+</div>
+{% else %}
+<div class="card overflow-hidden">
+    <div class="p-4 border-b border-neutral-100">
+        <h3 class="text-sm font-semibold text-neutral-800">র‍্যাঙ্ক পরিবর্তন করুন</h3>
+    </div>
+    <div class="p-4 text-center text-neutral-500">
+        <p>আপনার এই পেজ সম্পাদনা করার অনুমতি নেই।</p>
+    </div>
+</div>
+{% endif %}
+
+{# Visual hierarchy diagram #}
+<div class="card overflow-hidden mt-6">
+    <div class="p-4 border-b border-neutral-100">
+        <h3 class="text-sm font-semibold text-neutral-800">পদক্রম চিত্র</h3>
+    </div>
+    <div class="p-4">
+        <div class="space-y-2">
+            {% for role in ['superadmin', 'admin', 'staff', 'user'] %}
+                {% set rank = ranks[role] %}
+                <div class="flex items-center gap-3">
+                    <div class="flex-1 h-8 rounded-lg relative overflow-hidden bg-neutral-100">
+                        <div class="h-full rounded-lg flex items-center justify-center {% if role == 'superadmin' %}bg-primary-600{% elseif role == 'admin' %}bg-info-600{% elseif role == 'staff' %}bg-warning-600{% else %}bg-neutral-600{% endif %}"
+                             style="width: {{ (rank / 1000 * 100) }}%">
+                            <span class="text-white text-xs font-medium px-2">{{ roleLabels[role] }}</span>
+                        </div>
+                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary-700 font-mono">{{ rank }}</span>
+                    </div>
+                    <div class="w-24 text-right text-xs text-neutral-500">
+                        {% if role == 'superadmin' %}
+                            সবার ভালো
+                        {% elseif role == 'admin' %}
+                            স্টাফ, ইউজার
+                        {% elseif role == 'staff' %}
+                            শুধু ইউজার
+                        {% else %}
+                            কাউকে নয়
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        {# Ranks are persisted to the role_rank table by RoleRankRepository, so
+           this note is about the effect being immediate — not about it being
+           session-local. #}
+        <p class="mt-4 text-xs text-neutral-500">
+            <strong>নোট:</strong> র‍্যাঙ্ক পরিবর্তন ডেটাবেজে সংরক্ষিত হয় এবং তাৎক্ষণিকভাবে কার্যকর হয়।
+            আগের অবস্থা অ্যাক্টিভিটি লগে জমা থাকে, তাই কে কখন পরিবর্তন করেছে তা দেখা যায়।
+        </p>
+    </div>
+</div>
+
+{# Rules explanation #}
+<div class="card overflow-hidden mt-6">
+    <div class="p-4 border-b border-neutral-100">
+        <h3 class="text-sm font-semibold text-neutral-800">নিয়মাবলী</h3>
+    </div>
+    <div class="p-4">
+        <ul class="list-disc list-inside space-y-2 text-sm text-neutral-700">
+            <li><strong>সুপারএডমিন</strong> — সব ভূমিকাকে পরিচালনা করতে পারে (এডমিন, স্টাফ, ইউজার)</li>
+            <li><strong>এডমিন</strong> — স্টাফ ও ইউজারকে পরিচালনা করতে পারে, সুপারএডমিনকে পারে না</li>
+            <li><strong>স্টাফ</strong> — শুধু ইউজারকে পরিচালনা করতে পারে</li>
+            <li><strong>ইউজার</strong> — কাউকে পরিচালনা করতে পারে না</li>
+            <li>কেউ নিজের অ্যাকাউন্ট পরিচালনা করতে পারে না (সেলফ-ম্যানেজমেন্ট ব্লক করা আছে)</li>
+            <li>সমান বা উচ্চতর র‍্যাঙ্কের ভূমিকাকে পরিচালনা করা যাবে না</li>
+            <li>অজানা ভূমিকার র‍্যাঙ্ক ০ (সবচেয়ে নিম্ন)</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
