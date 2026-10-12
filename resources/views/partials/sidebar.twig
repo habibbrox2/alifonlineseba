@@ -27,38 +27,84 @@
     ] %}
 
     {% if identity.canAccessAdmin() %}
-        {% set adminItems = [
-            { label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge', match: 'admin' },
-            { label: 'সার্ভিস অর্ডার', href: '/admin/orders', icon: 'inbox', match: 'admin-orders' },
-            { label: 'আমার হিসাব', href: '/admin/ledger', icon: 'receipt', match: 'admin-ledger' },
-            { label: 'সার্ভিস ম্যানেজমেন্ট', href: '/admin/services', icon: 'sparkles', match: 'admin-services' },
-            { label: 'রিচার্জ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' },
-            { label: 'রেফারেল', href: '/admin/referrals', icon: 'gift', match: 'admin-referrals' },
-        ] %}
-        {# Super-admin only. Shown by role rather than by trial-and-error:
-           these are the pages where one person's decision moves another
-           person's money or authority, and an operator who cannot see them
-           should not have to discover that by getting a refusal. #}
-        {% if identity.isSuperAdmin() %}
-            {% set adminItems = adminItems|merge([
-                { label: 'উত্তোলন অনুরোধ', href: '/admin/withdraws', icon: 'send', match: 'admin-withdraws' },
-                { label: 'স্টাফ পরিচালনা', href: '/admin/staff', icon: 'users', match: 'admin-staff' },
-                { label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' },
-            ]) %}
+        {% set adminManagement = [] %}
+        {% set adminFinance = [] %}
+        {% set adminSettings = [] %}
+        {% set adminMonitoring = [] %}
+
+        {% if can_access(identity, 'admin') %}
+            {% set adminManagement = adminManagement|merge([{ label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge', match: 'admin' }]) %}
         {% endif %}
-        {% set adminItems = adminItems|merge([
-            { label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring', match: 'admin-notifications' },
+        {% if can_access(identity, 'admin-services') %}
+            {% set adminManagement = adminManagement|merge([{ label: 'সার্ভিস ম্যানেজমেন্ট', href: '/admin/services', icon: 'sparkles', match: 'admin-services' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-categories') %}
+            {% set adminManagement = adminManagement|merge([{ label: 'বিভাগ ম্যানেজমেন্ট', href: '/admin/categories', icon: 'layers', match: 'admin-categories' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-staff') %}
+            {% set adminManagement = adminManagement|merge([{ label: 'স্টাফ পরিচালনা', href: '/admin/staff', icon: 'users', match: 'admin-staff' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-users') %}
+            {% set adminManagement = adminManagement|merge([{ label: 'ইউজার ম্যানেজমেন্ট', href: '/admin/users', icon: 'user-plus', match: 'admin-users' }]) %}
+        {% endif %}
+
+        {% if can_access(identity, 'admin-orders') %}
+            {% set adminManagement = adminManagement|merge([{ label: 'সার্ভিস অর্ডার', href: '/admin/orders', icon: 'inbox', match: 'admin-orders' }]) %}
+        {% endif %}
+
+        {% if can_access(identity, 'admin-ledger') %}
+            {% set adminFinance = adminFinance|merge([{ label: 'আমার হিসাব', href: '/admin/ledger', icon: 'receipt', match: 'admin-ledger' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-topups') %}
+            {% set adminFinance = adminFinance|merge([{ label: 'রিচার্জ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-withdraws') %}
+            {% set adminFinance = adminFinance|merge([{ label: 'উত্তোলন অনুরোধ', href: '/admin/withdraws', icon: 'send', match: 'admin-withdraws' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-referrals') %}
+            {% set adminFinance = adminFinance|merge([{ label: 'রেফারেল', href: '/admin/referrals', icon: 'gift', match: 'admin-referrals' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-transactions') %}
+            {% set adminFinance = adminFinance|merge([{ label: 'লেনদেন ইতিহাস', href: '/admin/transactions', icon: 'receipt', match: 'admin-transactions' }]) %}
+        {% endif %}
+
+        {% if can_access(identity, 'admin-settings-edit') %}
+            {% set adminSettings = adminSettings|merge([{ label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-role-hierarchy') %}
+            {% set adminSettings = adminSettings|merge([{ label: 'ভূমিকার পদক্ষেপ', href: '/admin/role-hierarchy', icon: 'layers', match: 'admin-role-hierarchy' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-permissions-matrix') %}
+            {% set adminSettings = adminSettings|merge([{ label: 'অনুমতি ম্যাট্রিক্স', href: '/admin/permissions-matrix', icon: 'grid', match: 'admin-permissions-matrix' }]) %}
+        {% endif %}
+
+        {% if can_access(identity, 'admin-logs') %}
+            {% set adminMonitoring = adminMonitoring|merge([{ label: 'অ্যাক্টিভিটি লগ', href: '/admin/activity-logs', icon: 'file-text', match: 'admin-logs' }]) %}
+        {% endif %}
+        {% if can_access(identity, 'admin-notifications') %}
+            {% set adminMonitoring = adminMonitoring|merge([{ label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring', match: 'admin-notifications' }]) %}
+        {% endif %}
+
+        {% set groups = groups|merge([
+            { label: 'পরিচালনা', icon: 'shield', items: adminManagement },
+            { label: 'অর্থনীতি', icon: 'wallet', items: adminFinance },
+            { label: 'সেটিংস', icon: 'settings', items: adminSettings },
+            { label: 'নিরীক্ষণ', icon: 'activity', items: adminMonitoring },
         ]) %}
-        {% set groups = groups|merge([{ label: 'অ্যাডমিন', icon: 'shield', items: adminItems }]) %}
     {% endif %}
 
     {% for group in groups %}
         <div class="mb-1" x-data="{ open: true }">
-            <button @click="open = !open" class="tap-target flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50" aria-expanded="true">
-                <span class="flex items-center gap-2.5">{{ icon(group.icon, 'w-4 h-4 text-primary-600') }} {{ group.label }}</span>
-                <svg class="h-4 w-4 text-neutral-400 transition" :class="open && 'rotate-180'" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#chevron-down"></use></svg>
+            <button @click="open = !open" class="sidebar-group-header" aria-expanded="true">
+                <span class="flex items-center gap-2.5">
+                    {{ icon(group.icon, 'w-4 h-4 sidebar-group-icon') }}
+                    {{ group.label }}
+                </span>
+                <svg class="sidebar-chevron" :class="{ open: 'rotate-180' }" aria-hidden="true">
+                    <use href="/assets/icons/lucide-sprite.svg#chevron-down"></use>
+                </svg>
             </button>
-            <div x-show="open" class="mt-0.5 space-y-0.5">
+            <div x-show="open" x-transition class="sidebar-items">
                 {% for item in group.items %}
                     {# Prefix match, except for '/admin' — every admin page starts with
                        it, so highlighting the dashboard link on all of them makes the
@@ -74,8 +120,10 @@
         </div>
     {% endfor %}
 
-    <div class="mt-6 rounded-xl bg-primary-50 p-4 text-center">
-        <p class="text-xs font-medium text-primary-800">💡 সহায়তা</p>
+    <div class="sidebar-help-card">
+        <p class="text-xs font-medium text-primary-800 flex items-center justify-center gap-1.5">
+            {{ icon('lightbulb', 'w-3.5 h-3.5') }} সহায়তা
+        </p>
         <p class="mt-1 text-[11px] leading-relaxed text-primary-700/80">অর্ডারের জন্য দেওয়া তথ্য সুরক্ষিত রাখা হয়। কোনো সমস্যা হলে সাপোর্টে যোগাযোগ করুন।</p>
     </div>
 </nav>
