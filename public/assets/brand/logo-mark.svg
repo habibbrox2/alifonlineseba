@@ -1,32 +1,86 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="All Seba">
-  <!-- All Seba mark: the service promise in two shapes.
-
-       A gold bolt for speed and a white tick for "verified and done". The old
-       mark was a single Arabic alif stroke with a dot and a baseline, which
-       spelled "Alif Tools" and nothing about what the site actually does.
-       This one keeps the two brand colours (primary-900 tile, accent-500
-       bolt) so the green-and-gold palette the whole UI is built on does not
-       have to change, and reads at 16px in the tab bar: the tile is a rounded
-       square, the bolt is a solid silhouette, and the tick is the only
-       stroke, so at favicon size it is the only part that has to survive.
-
-       The tick is drawn twice on purpose: once in the tile colour at a wider
-       stroke, then in white on top. That halo is what keeps the tick legible
-       where it passes close to the bolt, and it is the same reason the light
-       lockup gives its tile a faint white edge.
-
-       Geometry lives in one place only: scripts/build-brand-icons.php holds
-       the same coordinates and renders every PNG and ICO from them. Change a
-       number here and you must change it there, or the app icons and the
-       header logo stop being the same picture. -->
-  <rect width="64" height="64" rx="14" fill="#083f31"/>
-
-  <!-- bolt: speed. Four points, no curves, so it stays sharp at any size. -->
-  <path d="M34 7 L17 37 L27 37 L24 57 L43 27 L32 27 Z" fill="#f5b301"/>
-
-  <!-- tick: verified. Halo first, then the white stroke over it. -->
-  <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#083f31" stroke-width="11"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#ffffff" stroke-width="7"
-        stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Digital Sheba">
+  <!-- Digital Sheba mark: a modern abstract "D" & "S" monogram combined with a shield/check.
+       Represents: Digital (D), Sheba/Seba (S), Security (shield), Trust (checkmark).
+       The design uses the brand's primary green (#0d8f68) and accent gold (#f5b301).
+       Works at small sizes (16px favicon) and scales beautifully. -->
+  
+  <defs>
+    <!-- Primary gradient -->
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d8f68"/>
+      <stop offset="100%" stop-color="#083f31"/>
+    </linearGradient>
+    
+    <!-- Accent gradient -->
+    <linearGradient id="accentGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f5b301"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    
+    <!-- Subtle glow filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background tile with subtle gradient -->
+  <rect width="64" height="64" rx="14" fill="url(#primaryGrad)"/>
+  
+  <!-- Subtle inner highlight -->
+  <rect width="60" height="60" x="2" y="2" rx="12" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  
+  <!-- Main monogram group -->
+  <g filter="url(#glow)">
+    <!-- Abstract "D" shape - left curve -->
+    <path d="M16 12 
+             C16 8.686 18.686 6 22 6 
+             H34 
+             C37.314 6 40 8.686 40 12 
+             V52 
+             C40 55.314 37.314 58 34 58 
+             H22 
+             C18.686 58 16 55.314 16 52 
+             Z" 
+          fill="none" 
+          stroke="url(#accentGrad)" 
+          stroke-width="3" 
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    
+    <!-- Abstract "S" shape - inner curve -->
+    <path d="M28 18 
+             C28 15.791 29.791 14 32 14 
+             C34.209 14 36 15.791 36 18 
+             V28 
+             C36 30.209 34.209 32 32 32 
+             C29.791 32 28 30.209 28 28 
+             V24 
+             M24 36 
+             C24 33.791 25.791 32 28 32 
+             C30.209 32 32 33.791 32 36 
+             V46 
+             C32 48.209 30.209 50 28 50 
+             C25.791 50 24 48.209 24 46" 
+          fill="none" 
+          stroke="url(#accentGrad)" 
+          stroke-width="2.5" 
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    
+    <!-- Checkmark accent - verification/trust -->
+    <path d="M42 28 L46.5 34 L54 22" 
+          fill="none" 
+          stroke="#ffffff" 
+          stroke-width="2.5" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          opacity="0.95"/>
+    
+    <!-- Small dot accent -->
+    <circle cx="48" cy="48" r="3" fill="url(#accentGrad)" opacity="0.8"/>
+  </g>
 </svg>

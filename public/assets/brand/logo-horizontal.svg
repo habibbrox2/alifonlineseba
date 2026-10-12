@@ -1,32 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="All Seba">
-  <!-- All Seba horizontal lockup on a light background: mark + wordmark on
-       transparent background.
-
-       The wordmark is a <text> run, not outlined paths, and that is
-       deliberate and permanent. An earlier version drew it as hand-authored
-       path outlines; the "lif" of Alif and the final "s" of Tools were simply
-       missing and the "o" outline appeared twice, so the lockup rendered as
-       "ATOLoi" on the auth pages and on the share card. Hand-outlining a
-       wordmark is a bug waiting to happen for any future rename, which is
-       exactly what this rename is. If an exact vector lockup is ever needed,
-       convert this run with a text-to-outline tool, never by hand.
-
-       The viewBox is 320 wide rather than the 300 the old lockup used: the
-       tile is unchanged but the wordmark is a different word, and 20px of
-       slack means a slightly wider fallback font does not clip the last
-       letter. SVG loaded through <img> still lays <text> out with the system
-       font stack, so this stays one self-contained file. An XML comment
-       cannot contain a double hyphen, so these notes avoid it: ET.parse() in
-       the card generators rejects the whole file if one sneaks in. -->
-  <g>
-    <rect width="64" height="64" rx="14" fill="#083f31"/>
-    <path d="M34 7 L17 37 L27 37 L24 57 L43 27 L32 27 Z" fill="#f5b301"/>
-    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#083f31" stroke-width="11"
-          stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M39 46 L45.5 52 L56 36" fill="none" stroke="#ffffff" stroke-width="7"
-          stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="Digital Sheba">
+  <!-- Digital Sheba horizontal lockup: mark + wordmark on transparent background.
+       The wordmark uses system font stack for self-contained SVG.
+       ViewBox is 320 wide to accommodate the wordmark. -->
+  
+  <defs>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d8f68"/>
+      <stop offset="100%" stop-color="#083f31"/>
+    </linearGradient>
+    
+    <linearGradient id="accentGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f5b301"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Mark (64x64) -->
+  <g transform="translate(0,0)" filter="url(#glow)">
+    <rect width="64" height="64" rx="14" fill="url(#primaryGrad)"/>
+    <rect width="60" height="60" x="2" y="2" rx="12" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    
+    <path d="M16 12 
+             C16 8.686 18.686 6 22 6 
+             H34 
+             C37.314 6 40 8.686 40 12 
+             V52 
+             C40 55.314 37.314 58 34 58 
+             H22 
+             C18.686 58 16 55.314 16 52 
+             Z" 
+          fill="none" 
+          stroke="url(#accentGrad)" 
+          stroke-width="3" 
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    
+    <path d="M28 18 
+             C28 15.791 29.791 14 32 14 
+             C34.209 14 36 15.791 36 18 
+             V28 
+             C36 30.209 34.209 32 32 32 
+             C29.791 32 28 30.209 28 28 
+             V24 
+             M24 36 
+             C24 33.791 25.791 32 28 32 
+             C30.209 32 32 33.791 32 36 
+             V46 
+             C32 48.209 30.209 50 28 50 
+             C25.791 50 24 48.209 24 46" 
+          fill="none" 
+          stroke="url(#accentGrad)" 
+          stroke-width="2.5" 
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    
+    <path d="M42 28 L46.5 34 L54 22" 
+          fill="none" 
+          stroke="#ffffff" 
+          stroke-width="2.5" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          opacity="0.95"/>
+    
+    <circle cx="48" cy="48" r="3" fill="url(#accentGrad)" opacity="0.8"/>
   </g>
+  
+  <!-- Wordmark -->
   <text x="84" y="45" fill="#083f31"
         font-family="system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
-        font-size="42" font-weight="700" letter-spacing="0.5">All Seba</text>
+        font-size="42" font-weight="700" letter-spacing="0.5">Digital Sheba</text>
+  
+  <!-- Optional tagline -->
+  <text x="84" y="56" fill="#083f31" opacity="0.6"
+        font-family="system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="11" font-weight="400" letter-spacing="1.2" text-transform="uppercase">আলিফ টুলস</text>
 </svg>
