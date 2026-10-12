@@ -611,6 +611,8 @@ final class UserRepository
         int $page,
         int $perPage,
         string $q = '',
+        string $sort = 'role',
+        string $dir = 'asc',
         string $deleted = self::DELETED_EXCLUDE,
     ): array {
         $offset = max(0, ($page - 1) * $perPage);
@@ -633,13 +635,16 @@ final class UserRepository
         }
 
         $where = 'WHERE ' . implode(' AND ', $conditions);
+        [$sortCol, $dirSql] = $this->sortClause($sort, $dir, ['id', 'full_name', 'username', 'email', 'phone', 'role', 'status', 'balance', 'last_login_at', 'created_at'], 'role');
+        // Ensure superadmin always sorts first
+        $orderBy = "([[role]] = 'superadmin') DESC, {$sortCol} {$dirSql}";
         $total = (int) $this->db
             ->createCommand("SELECT COUNT(*) FROM {{%user}} {$where}")
             ->bindValues($params)
             ->queryScalar();
         $rows = $this->db
             ->createCommand(
-                "SELECT * FROM {{%user}} {$where} ORDER BY ([[role]] = 'superadmin') DESC, [[id]] ASC LIMIT {$perPage} OFFSET {$offset}"
+                "SELECT * FROM {{%user}} {$where} ORDER BY {$orderBy} LIMIT {$perPage} OFFSET {$offset}"
             )
             ->bindValues($params)
             ->queryAll();

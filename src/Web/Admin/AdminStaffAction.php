@@ -8,19 +8,26 @@ use App\Auth\Identity;
 use App\Repository\ActivityLogRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
+use App\Service\PermissionService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Yiisoft\Router\UrlGeneratorInterface;
 use Yiisoft\Session\SessionInterface;
 use Yiisoft\Yii\View\Renderer\WebViewRenderer;
 
 /**
- * GET|POST /admin/staff — the super-admin's roster of operators.
+ * GET|POST /admin/staff — the staff roster of operators.
  *
  * A platform with one operator does not need this page; a platform with several
  * does, and the moment it needs it is the moment somebody asks "who can approve
  * an order and who can pay it out?". The roster is the answer, and it is
  * deliberately a page rather than a settings dropdown, because an authority
  * that is changed quietly is an authority nobody knows exists.
+ *
+ * Access control:
+ * - Superadmins have full access (can view and modify all staff including superadmins)
+ * - Regular admins can view the roster but CANNOT modify superadmin accounts
+ *   (cannot change role, status, or reset password of superadmins)
  *
  * Two rules are enforced here that are easy to forget and expensive to get
  * wrong:
@@ -42,6 +49,7 @@ final readonly class AdminStaffAction
 {
     /** Roles this screen may assign. `user` is here so an operator can be stood down. */
     private const ASSIGNABLE = ['superadmin', 'admin', 'staff', 'user'];
+    private const PER_PAGE = 15;
 
     public function __construct(
         private WebViewRenderer $view,
@@ -49,6 +57,8 @@ final readonly class AdminStaffAction
         private TransactionRepository $ledger,
         private ActivityLogRepository $logs,
         private SessionInterface $session,
+        private PermissionService $permissions,
+        private UrlGeneratorInterface $url,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -61,15 +71,54 @@ final readonly class AdminStaffAction
             [$ok, $message] = $this->apply((string) ($input['do'] ?? ''), $input, $identity);
             $this->session->set($ok ? 'flash_success' : 'flash_error', $message);
 
-            return new \Nyholm\Psr7\Response(302, ['Location' => '/admin/staff']);
+            return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('admin-staff')]);
         }
 
+        $query = $request->getQueryParams();
+        $page = max(1, (int) ($query['page'] ?? 1));
+        $q = trim((string) ($query['q'] ?? ''));
+        $sort = (string) ($query['sort'] ?? 'role');
+        $dir = (string) ($query['dir'] ?? 'asc');
+        $trashed = match ((string) ($query['trashed'] ?? '')) {
+            UserRepository::DELETED_ONLY => UserRepository::DELETED_ONLY,
+            UserRepository::DELETED_ALL => UserRepository::DELETED_ALL,
+            default => UserRepository::DELETED_EXCLUDE,
+        };
+
+        $data = $this->users->paginateStaff($page, self::PER_PAGE, $q, $sort, $dir, $trashed);
+
+        $trashedQuery = $trashed !== UserRepository::DELETED_EXCLUDE ? ('trashed=' . $trashed . '&') : '';
+        $baseUrl = '/admin/staff?' . ($q ? ('q=' . urlencode($q) . '&') : '') . $trashedQuery;
+
         return $this->view->render('site/admin/staff.twig', [
-            'staff' => $this->users->listStaff(),
+            'staff' => $data['rows'],
+            'total' => $data['total'],
+            'page' => $page,
+            'perPage' => self::PER_PAGE,
+            'q' => $q,
+            'sort' => $sort,
+            'dir' => $dir,
+            'trashedFilter' => $trashed,
+            'trashedCount' => $this->users->countTrashed(),
             'earnings' => $this->earnings(),
             'roleLabels' => UserRepository::ROLE_LABELS,
             'identity' => $identity,
+            'baseUrl' => $baseUrl,
         ]);
+    }
+
+    /**
+     * Check if the current user can modify the target staff member.
+     * Uses RBAC role ranking: superadmin > admin > staff > user
+     */
+    private function canModify(Identity $identity, array $subject): bool
+    {
+        // Cannot modify self
+        if ((int) $subject['id'] === $identity->id) {
+            return false;
+        }
+        // Use RBAC role ranking
+        return $identity->canManageRole((string) $subject['role']);
     }
 
     /**
@@ -92,10 +141,24 @@ final readonly class AdminStaffAction
             return [false, 'নিজের অ্যাকাউন্টের ভূমিকা পরিবর্তন করা যায় না।'];
         }
 
+        // Regular admins cannot modify superadmin accounts
+        if (!$this->canModify($identity, $subject)) {
+            return [false, 'সুপারএডমিন অ্যাকাউন্ট পরিবর্তন করার অনুমতি নেই।'];}
+
+        // Check granular permissions
         return match ($do) {
-            'role' => $this->setRole($input, $identity, $subject),
-            'status' => $this->setStatus($input, $identity, $subject),
-            'password' => $this->resetPassword($input, $subject),
+            'role' => $this->checkPermission($identity, 'admin-staff-role-update')
+                ? $this->setRole($input, $identity, $subject)
+                : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
+            'status' => $this->checkPermission($identity, 'admin-staff-status-update')
+                ? $this->setStatus($input, $identity, $subject)
+                : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
+            'password' => $this->checkPermission($identity, 'admin-staff-password-reset')
+                ? $this->resetPassword($input, $subject)
+                : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
+            'restore_all' => $this->checkPermission($identity, 'admin-users-restore')
+                ? $this->restoreAllStaff($identity)
+                : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
             default => [false, 'অজানা অ্যাকশন।'],
         };
     }
@@ -201,6 +264,14 @@ final readonly class AdminStaffAction
     }
 
     /**
+     * Check if identity has the required permission.
+     */
+    private function checkPermission(Identity $identity, string $permission): bool
+    {
+        return $this->permissions->hasPermission($identity, $permission);
+    }
+
+    /**
      * Refuse a change that would leave the platform with no super-admin.
      *
      * @param array<string, mixed> $subject
@@ -238,6 +309,29 @@ final readonly class AdminStaffAction
         }
 
         return $map;
+    }
+
+    /**
+     * Restore all trashed staff accounts.
+     *
+     * @return array{0: bool, 1: string}
+     */
+    private function restoreAllStaff(Identity $identity): array
+    {
+        $count = $this->users->restoreAll();
+
+        if ($count === 0) {
+            return [false, 'ট্র্যাশে কোনো স্টাফ নেই।'];
+        }
+
+        $this->log(
+            $identity,
+            0,
+            'admin.staff.restored_all',
+            "All {$count} trashed staff account(s) restored",
+        );
+
+        return [true, "{$count} জন স্টাফ ফিরিয়ে আনা হয়েছে।"];
     }
 
     private function log(Identity $actor, int $subjectId, string $action, string $description): void
