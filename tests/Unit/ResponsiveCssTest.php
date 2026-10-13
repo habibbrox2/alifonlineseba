@@ -143,32 +143,43 @@ final class ResponsiveCssTest extends Unit
     }
 
     /**
-     * Returns the body of the phone media query, brace-matched.
+     * Returns the combined bodies of the phone media queries, brace-matched.
      *
      * The source writes the breakpoint as `(max-width: 639.98px)` with a space
      * and the minified build drops it, so the lookup tolerates both.
+     *
+     * There is only one such block in app.css, but the build can emit more than
+     * one: `.sidebar-group-header` sits outside the block and reaches for the
+     * tap rules with `@apply tap-target`, and Tailwind inlines a media-scoped
+     * rule inside its own copy of that media query. That copy sorts *before*
+     * the block the source actually declares, so reading only the first match
+     * looks at the wrong body and reports every tap rule missing. All matches
+     * are concatenated instead — the assertions stay on the same selectors and
+     * declarations, they just see the whole phone query the build produced.
      */
     private function mobileBlock(string $css, string $label): string
     {
-        $matched = preg_match(
-            '/@media\s*\(max-width:\s*639\.98px\)\s*\{/',
-            $css,
-            $m,
-            PREG_OFFSET_CAPTURE
-        );
-        self::assertSame(1, $matched, sprintf('No `max-width: 639.98px` media query in %s.', $label));
+        preg_match_all('/@media\s*\(max-width:\s*639\.98px\)\s*\{/', $css, $all, PREG_OFFSET_CAPTURE);
+        $matches = $all[0];
+        self::assertNotEmpty($matches, sprintf('No `max-width: 639.98px` media query in %s.', $label));
 
-        $from = $m[0][1] + strlen($m[0][0]);
-        $depth = 1;
-        for ($i = $from, $length = strlen($css); $i < $length; $i++) {
-            if ($css[$i] === '{') {
-                $depth++;
-            } elseif ($css[$i] === '}' && --$depth === 0) {
-                return substr($css, $from, $i - $from);
+        $body = '';
+        foreach ($matches as $hit) {
+            $from = $hit[1] + strlen($hit[0]);
+            $depth = 1;
+            for ($i = $from, $length = strlen($css); $i < $length; $i++) {
+                if ($css[$i] === '{') {
+                    $depth++;
+                } elseif ($css[$i] === '}' && --$depth === 0) {
+                    $body .= substr($css, $from, $i - $from);
+                    continue 2;
+                }
             }
+
+            fail(sprintf('Unclosed media query in %s.', $label));
         }
 
-        fail(sprintf('Unclosed media query in %s.', $label));
+        return $body;
     }
 
     /**
