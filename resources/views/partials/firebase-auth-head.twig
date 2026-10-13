@@ -117,14 +117,26 @@
                     throw new Error(message);
                 }
 
-                window.location.href = '/dashboard';
-            } catch (error) {
-                if (error instanceof Error) {
-                    alert(error.message || 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
-                } else {
-                    alert('সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
-                }
-            }
+                window.location.href = '/dashboard';        } catch (error) {
+            const message = error instanceof Error ? error.message : 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।';
+
+            // Surface the failure through the page's existing flash system:
+            // POST this payload and the server sets the login page's
+            // flash_error, which the auth layout already renders as a banner.
+            // No alert()/inline element — the template contains no JS popups.
+            fetch('/auth/firebase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-CSRF-Token': getCsrfToken(),
+                },
+                body: new URLSearchParams({
+                    credential: '',
+                    _forward_flash: '1',
+                    message: message,
+                }),
+                credentials: 'same-origin',
+            }).catch(() => {});
         }
 
         function getCsrfToken() {

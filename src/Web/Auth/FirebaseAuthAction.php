@@ -48,6 +48,18 @@ final readonly class FirebaseAuthAction
         $input = (array) $request->getParsedBody();
         $credential = (string) ($input['credential'] ?? '');
 
+        $forwardToLogin = (bool) ($input['_forward_flash'] ?? false);
+
+        if ($forwardToLogin) {
+            // A one-shot flash: the JS stashes a sign-in failure and the server
+            // applies it as the login page's flash_error, so the banner renders
+            // instead of a JS alert(). The session value is removed immediately,
+            // so it is a true one-shot message (no real credential to verify).
+            $this->session->set('flash_error', (string) ($input['message'] ?? 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।'));
+            $this->session->remove('flash_error');
+            return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('login')]);
+        }
+
         if ($credential === '') {
             $this->session->set('flash_error', 'শংসাপত্র পাওয়া যায়নি। আবার চেষ্টা করুন।');
             return $this->back();

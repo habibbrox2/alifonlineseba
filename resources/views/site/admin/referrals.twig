@@ -178,8 +178,7 @@
                                             </button>
                                         </form>
 
-                                        <form method="post" action="/admin/referrals" class="reject-form"
-                                              onsubmit="return rejectConfirm(this);">
+                                        <form method="post" action="/admin/referrals" class="reject-form">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="reject">
                                             <input type="hidden" name="referral_id" value="{{ r.id }}">
@@ -233,22 +232,6 @@
 {% block scripts %}
     {{ parent() }}
     <script>
-    (function () {
-        'use strict';
-        // A rejection reason is mandatory — the user is told why their bonus was
-        // voided — so ask for it before the form posts rather than bouncing back
-        // with a validation error.
-        window.rejectConfirm = function (form) {
-            var reason = window.prompt('বাতিলের কারণ লিখুন (বন্ধু এটি দেখতে পাবেন):');
-            if (reason === null) { return false; }
-            reason = reason.trim();
-            if (reason === '') {
-                window.alert('কারণ ছাড়া রেফারেল বাতিল করা যাবে না।');
-                return false;
-            }
-            form.querySelector('[name="reason"]').value = reason;
-            return true;
-        };
-    })();
+
     </script>
 {% endblock %}
