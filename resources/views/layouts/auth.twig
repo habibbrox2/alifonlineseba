@@ -3,14 +3,16 @@
 {% block body %}
 <div class="flex min-h-screen flex-col bg-gradient-to-br from-primary-900 via-primary-800 to-primary-600">
     <header class="flex items-center justify-between px-4 py-4 sm:px-8">
-        {# Full horizontal lockup instead of the bare mark + text: the wordmark
-           is drawn type, so it stays crisp at any DPI and the login screen
-           reads as the same brand as the app icon. The light variant is
-           required here — the default lockup is near-black green and vanishes
-           on this gradient. #}
-        <a href="/" class="flex items-center" aria-label="All Seba — হোম">
-            <img src="/assets/brand/logo-horizontal-light.svg" alt="All Seba"
-                 class="h-11 w-auto" width="165" height="44">
+        {# Exactly the lockup the public and dashboard headers use — the green
+           mark plus the "All Seba" wordmark in HTML text. This page used to
+           show logo-horizontal-light.svg instead: a different-looking
+           white-tile mark whose wordmark still read "Digital Sheba" (the old
+           brand), so the login screen looked like it belonged to another
+           site. HTML text is also what keeps the wordmark crisp at any DPI
+           without shipping a font. #}
+        <a href="/" class="flex items-center gap-2.5 font-bold text-white tap-target" aria-label="All Seba — হোম">
+            <img src="/assets/brand/logo-mark.svg" alt="" class="h-9 w-9" width="36" height="36">
+            <span class="text-lg tracking-tight">All Seba</span>
         </a>
         {% if site.telegram_url|default('') %}
             <a href="{{ site.telegram_url }}" target="_blank" rel="noopener noreferrer"
