@@ -73,6 +73,11 @@ __pycache__/
 # Freebuff agent workspace metadata (local only)
 /.freebuff
 
+# Project-local agent skill library (installed SKILL.md packs, ~1.3 MB of
+# third-party agent docs). Not app source: nothing in this repo references it,
+# and every clone would carry 137 files that no build or deploy reads.
+/.agents/
+
 # Local editor temp metadata and crash files
 *.swp
 *.swo
