@@ -9,6 +9,7 @@ use App\Auth\OptionalAuthMiddleware;
 use App\Notification\Push\VapidKeys;
 use App\Repository\ActivityLogRepository;
 use App\Repository\PushSubscriptionRepository;
+use App\Repository\RoleRankRepository;
 use App\Repository\UserRepository;
 use App\Web\Api\PushApiAction;
 use Nyholm\Psr7\Response;
@@ -23,6 +24,7 @@ use Yiisoft\Router\CurrentRoute;
 use Yiisoft\Router\Route;
 use Yiisoft\Router\UrlGeneratorInterface;
 use Yiisoft\Session\SessionInterface;
+use PHPUnit\Framework\MockObject\MockObject;
 
 use function PHPUnit\Framework\assertFalse;
 use function PHPUnit\Framework\assertInstanceOf;
@@ -93,6 +95,7 @@ final class PushSubscribeIdentityTest extends \Codeception\Test\Unit
 
         foreach ($this->userIds as $id) {
             $this->db->createCommand()->delete('{{%push_subscription}}', ['user_id' => $id])->execute();
+            $this->db->createCommand()->delete('{{%activity_log}}', ['user_id' => $id])->execute();
             $this->db->createCommand()->delete('{{%user}}', ['id' => $id])->execute();
         }
         $this->userIds = [];
@@ -245,7 +248,9 @@ final class PushSubscribeIdentityTest extends \Codeception\Test\Unit
     public function testStrictModeStillDeniesGuests(): void
     {
         $reached = false;
-        $guard = new AuthMiddleware($this->session(null), $this->users, $this->logs, $this->url(), 'admin', false);
+        $roleRanks = new RoleRankRepository($this->db);
+
+        $guard = new AuthMiddleware($this->session(null), $this->users, $this->logs, $roleRanks, $this->url(), 'admin', false);
 
         $response = $guard->process($this->pushRequest($this->makeEndpoint()), $this->reachedHandler($reached));
 
@@ -261,7 +266,9 @@ final class PushSubscribeIdentityTest extends \Codeception\Test\Unit
     {
         $userId = $this->makeUser('plain', 'user');
         $reached = false;
-        $guard = new AuthMiddleware($this->session($userId), $this->users, $this->logs, $this->url(), 'admin', true);
+        $roleRanks = new RoleRankRepository($this->db);
+
+        $guard = new AuthMiddleware($this->session($userId), $this->users, $this->logs, $roleRanks, $this->url(), 'admin', true);
 
         $response = $guard->process($this->pushRequest($this->makeEndpoint()), $this->reachedHandler($reached));
 
@@ -283,7 +290,9 @@ final class PushSubscribeIdentityTest extends \Codeception\Test\Unit
 
         $session = $this->session($userId);
         $seen = null;
-        $response = (new OptionalAuthMiddleware($session, $this->users, $this->logs, $this->url()))
+        $roleRanks = new RoleRankRepository($this->db);
+
+        $response = (new OptionalAuthMiddleware($session, $this->users, $this->logs, $roleRanks, $this->url()))
             ->process($this->pushRequest($endpoint), $this->captureHandler($seen));
 
         assertSame(200, $response->getStatusCode());
@@ -319,7 +328,7 @@ final class PushSubscribeIdentityTest extends \Codeception\Test\Unit
             '/api/push/key is expected to be declared exactly once'
         );
 
-        $block = $this->groupBlock($routes, 'middleware(OptionalAuthMiddleware::class)');
+        $block = $this->groupBlock($routes, 'OptionalAuthMiddleware::class)->routes(');
         assertTrue(
             str_contains($block, "'/api/push/subscribe'") && str_contains($block, "'/api/push/unsubscribe'"),
             'both push POSTs must sit inside the OptionalAuthMiddleware group,'
@@ -340,10 +349,13 @@ final class PushSubscribeIdentityTest extends \Codeception\Test\Unit
     private function subscribeThroughMiddleware(?int $userId, string $endpoint): ResponseInterface
     {
         $seen = null;
+        $roleRanks = new RoleRankRepository($this->db);
+
         $response = (new OptionalAuthMiddleware(
             $this->session($userId),
             $this->users,
             $this->logs,
+            $roleRanks,
             $this->url(),
         ))->process(
             $this->pushRequest($endpoint),
@@ -604,10 +616,16 @@ final class PushSubscribeIdentityTest extends \Codeception\Test\Unit
      * The text from `$marker` to the first `),` that closes the group call —
      * enough to see which routes a middleware wraps, without pulling in a YAML
      * parser or reimplementing the router.
+     *
+     * There are two OptionalAuthMiddleware groups in routes.php:
+     * 1. The first wraps /login and /register
+     * 2. The second wraps /api/push/subscribe and /api/push/unsubscribe
+     *
+     * We need the second one, so we find the *last* occurrence of the marker.
      */
     private function groupBlock(string $routes, string $marker): string
     {
-        $start = strpos($routes, $marker);
+        $start = strrpos($routes, $marker);
         assertTrue($start !== false, "expected to find '$marker' in config/common/routes.php");
 
         $end = strpos($routes, "\n    ),", $start);

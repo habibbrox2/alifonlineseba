@@ -9,6 +9,7 @@ use App\Repository\AdminWithdrawRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
 use App\Service\AdminWithdrawService;
+use App\Service\PermissionService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\CurrentRoute;
@@ -40,6 +41,14 @@ final readonly class AdminWithdrawsAction
 {
     private const PER_PAGE = 15;
 
+    /**
+     * Check if identity has the required permission.
+     */
+    private function checkPermission(?object $identity, string $permission): bool
+    {
+        return $identity !== null && $this->permissions->hasPermission($identity, $permission);
+    }
+
     public function __construct(
         private WebViewRenderer $view,
         private AdminWithdrawRepository $withdraws,
@@ -47,6 +56,7 @@ final readonly class AdminWithdrawsAction
         private TransactionRepository $ledger,
         private UserRepository $users,
         private SessionInterface $session,
+        private PermissionService $permissions,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
@@ -102,8 +112,22 @@ final readonly class AdminWithdrawsAction
 
         if ($request->getMethod() === 'POST') {
             $input = (array) $request->getParsedBody();
+            $do = (string) ($input['do'] ?? '');
 
-            [$ok, $message] = match ((string) ($input['do'] ?? '')) {
+            if ($do === 'approve' && !$this->checkPermission($identity, 'admin-withdraws-approve')) {
+                $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                return new \Nyholm\Psr7\Response(302, ['Location' => '/admin/withdraws']);
+            }
+            if ($do === 'reject' && !$this->checkPermission($identity, 'admin-withdraws-reject')) {
+                $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                return new \Nyholm\Psr7\Response(302, ['Location' => '/admin/withdraws']);
+            }
+            if ($do === 'release' && !$this->checkPermission($identity, 'admin-withdraws-release')) {
+                $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                return new \Nyholm\Psr7\Response(302, ['Location' => '/admin/withdraws']);
+            }
+
+            [$ok, $message] = match ($do) {
                 'approve' => $this->service->approve($id, $identity),
                 'reject' => $this->service->reject($id, $identity, trim((string) ($input['reason'] ?? ''))),
                 'release' => $this->service->release($id, $identity),

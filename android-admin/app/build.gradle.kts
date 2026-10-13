@@ -110,7 +110,12 @@ android {
 
     packaging {
         resources {
+            // Multiple JUnit 5 jars carry the same META-INF entries; they are
+            // only metadata and must not fail the merge of either APK.
             excludes += "/META-INF/{AL2.0,LGPL2.1,META-INF/LICENSE.md}"
+            excludes += "/META-INF/LICENSE.md"
+            excludes += "/META-INF/LICENSE-notice.md"
+            excludes += "/META-INF/NOTICE.md"
         }
     }
 
@@ -185,7 +190,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.turbine)
-    androidTestImplementation(libs.mockk)
+    androidTestImplementation(libs.mockk.android)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

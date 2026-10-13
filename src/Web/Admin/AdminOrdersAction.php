@@ -9,6 +9,7 @@ use App\Repository\BulkJobRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Service\BulkJobService;
 use App\Service\OrderExportService;
+use App\Service\PermissionService;
 use App\Service\StatusPresenter;
 use Nyholm\Psr7\Response;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -64,6 +65,14 @@ final readonly class AdminOrdersAction
      */
     private const PER_PAGE = 20;
 
+    /**
+     * Check if identity has the required permission.
+     */
+    private function checkPermission(?object $identity, string $permission): bool
+    {
+        return $identity !== null && $this->permissions->hasPermission($identity, $permission);
+    }
+
     /** Which slice of the queue this page is showing. */
     public const SCOPE_ALL = 'all';
     public const SCOPE_MINE = 'mine';
@@ -78,6 +87,7 @@ final readonly class AdminOrdersAction
         private SessionInterface $session,
         private ResponseFactoryInterface $responseFactory,
         private StreamFactoryInterface $streamFactory,
+        private PermissionService $permissions,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -86,7 +96,19 @@ final readonly class AdminOrdersAction
         $identity = $request->getAttribute('identity');
 
         if ($request->getMethod() === 'POST') {
-            return $this->submit((array) $request->getParsedBody(), $identity);
+            $input = (array) $request->getParsedBody();
+            $do = (string) ($input['do'] ?? '');
+
+            if ($do === 'bulk_status' && !$this->checkPermission($identity, 'admin-orders-bulk-status')) {
+                $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                return new Response(302, ['Location' => '/admin/orders']);
+            }
+            if ($do === 'bulk_export' && !$this->checkPermission($identity, 'admin-orders-bulk-export')) {
+                $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                return new Response(302, ['Location' => '/admin/orders']);
+            }
+
+            return $this->submit($input, $identity);
         }
 
         $state = $this->state($request->getQueryParams());

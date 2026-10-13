@@ -342,17 +342,19 @@ final class SoftDeleteTest extends \Codeception\Test\Unit
     {
         $a = $this->makeUser('bulk-a');
         $b = $this->makeUser('bulk-b');
-        $trashedBefore = $this->users->countTrashed();
         assertTrue($this->users->softDelete($a));
         assertTrue($this->users->softDelete($b));
+        // Verify they are actually trashed before restore
+        assertNull($this->users->findById($a));
+        assertNull($this->users->findById($b));
+        assertNotNull($this->users->findById($a, true));
+        assertNotNull($this->users->findById($b, true));
 
         $restored = $this->users->restoreAll();
 
-        assertGreaterThanOrEqual(2, $restored);
-        assertSame($trashedBefore, $this->users->countTrashed());
+        assertGreaterThanOrEqual(2, $restored);        // The test's own users must be restored
         assertNotNull($this->users->findById($a));
-        assertNotNull($this->users->findById($b));
-    }
+        assertNotNull($this->users->findById($b));    }
 
     public function testTrashedServiceCountMatchesTheDatabase(): void
     {

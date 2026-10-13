@@ -7,6 +7,7 @@ namespace App\Web\Admin;
 use App\Auth\Identity;
 use App\Repository\SettingsRepository;
 use App\Repository\TopupRepository;
+use App\Service\PermissionService;
 use App\Service\TopupService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -28,11 +29,20 @@ final readonly class AdminTopupsAction
 {
     private const PER_PAGE = 15;
 
+    /**
+     * Check if identity has the required permission.
+     */
+    private function checkPermission(?object $identity, string $permission): bool
+    {
+        return $identity !== null && $this->permissions->hasPermission($identity, $permission);
+    }
+
     public function __construct(
         private WebViewRenderer $view,
         private TopupRepository $topups,
         private TopupService $service,
         private SessionInterface $session,
+        private PermissionService $permissions,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
@@ -44,6 +54,10 @@ final readonly class AdminTopupsAction
             $input = (array) $request->getParsedBody();
 
             if ((string) ($input['do'] ?? '') === 'bulk-approve') {
+                if (!$this->checkPermission($identity, 'admin-topups-bulk-approve')) {
+                    $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                    return new \Nyholm\Psr7\Response(302, ['Location' => '/admin/topups']);
+                }
                 $ids = $input['ids'] ?? [];
                 $result = $this->service->approveMany(is_array($ids) ? $ids : [], $identity->id);
 

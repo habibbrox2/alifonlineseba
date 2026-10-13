@@ -68,6 +68,9 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 androidx-compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "composeUiTest" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest", version.ref = "composeUiTest" }
 mockk = { group = "io.mockk", name = "mockk", version = "1.13.12" }
+# Instrumented (connected) tests must not use plain `mockk`: on a device the
+# JVM agent is unavailable, so the Android agent variant is required.
+mockk-android = { group = "io.mockk", name = "mockk-android", version = "1.13.12" }
 mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 turbine = { group = "app.cash.turbine", name = "turbine", version = "1.2.0" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }

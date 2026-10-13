@@ -20,8 +20,12 @@
  * compat SDK is a single global (`firebase`) that works from a `<script>` tag
  * and a module alike, and is what the rest of the Firebase web docs still show
  * for quick integrations.
+ *
+ * Plain JavaScript only — these files are served without a build step, so any
+ * TypeScript annotation here would be a browser SyntaxError that silently
+ * disables the buttons.
  */
-export function initFirebaseSocialSignIn(): void
+export function initFirebaseSocialSignIn()
 {
     if (typeof firebase === 'undefined') {
         return;
@@ -32,10 +36,10 @@ export function initFirebaseSocialSignIn(): void
         return;
     }
 
-    btn.addEventListener('click', () => handleProviderSignIn('google'));
+    btn.addEventListener('click', () => handleProviderSignIn(btn, 'google'));
 }
 
-export function initFacebookSignIn(): void
+export function initFacebookSignIn()
 {
     if (typeof firebase === 'undefined') {
         return;
@@ -46,38 +50,30 @@ export function initFacebookSignIn(): void
         return;
     }
 
-    btn.addEventListener('click', () => handleProviderSignIn('facebook'));
+    btn.addEventListener('click', () => handleProviderSignIn(btn, 'facebook'));
 }
 
-async function handleProviderSignIn(providerName: 'google' | 'facebook'): Promise<void>
+async function handleProviderSignIn(btn, providerName)
 {
-    let btn: HTMLButtonElement | null = null;
-    if (providerName === 'google') {
-        btn = document.getElementById('firebase-signin-btn');
-    } else if (providerName === 'facebook') {
-        btn = document.getElementById('facebook-signin-btn');
-    }
-    if (!(btn instanceof HTMLButtonElement)) {
-        return;
-    }
-
     btn.disabled = true;
     btn.dataset.loading = '1';
 
     try {
         const auth = firebase.auth();
-        let provider: firebase.auth.AuthProvider;
+        let provider;
 
         if (providerName === 'google') {
             provider = new firebase.auth.GoogleAuthProvider();
-            (provider as firebase.auth.GoogleAuthProvider).setCustomParameters({ prompt: 'select_account' });
+            provider.setCustomParameters({ prompt: 'select_account' });
         } else {
             provider = new firebase.auth.FacebookAuthProvider();
         }
 
         const result = await auth.signInWithPopup(provider);
-        const credential = result.user?.getIdToken();
-        if (credential === null || credential === undefined) {
+        // getIdToken() is a promise; awaiting it gives the actual token. A
+        // raw Promise posted as a form field stringifies to "[object Promise]".
+        const credential = result.user ? await result.user.getIdToken() : null;
+        if (!credential) {
             throw new Error('No ID token from provider.');
         }
 
@@ -107,19 +103,20 @@ async function handleProviderSignIn(providerName: 'google' | 'facebook'): Promis
         const url = new URL('/dashboard', window.location.origin);
         window.location.href = url.href;
     } catch (error) {
-        if (error instanceof Error) {
-            let message = error.message;
-            if (message === 'Popup closed by user.' || message === 'Sign-in canceled.') {
+        let message = 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।';
+        if (error instanceof Error && error.message) {
+            const raw = error.message;
+            if (raw === 'Popup closed by user.' || raw === 'Sign-in canceled.' || raw.includes('popup-closed') || raw.includes('/auth/popup')) {
                 message = 'সাইন ইন বাতিল করা হয়েছে।';
-            } else if (message.includes('No ID token')) {
+            } else if (raw.includes('No ID token')) {
                 message = 'সাইন ইন শেষে শংসাপত্র পাওয়া যায়নি।';
-            } else if (message.includes('auth/') || message.includes(' Firebase ')) {
-                message = message.replace(/^auth\/[a-z-]+:\s*/, '');
+            } else {
+                // Keep Firebase's own copy (already human-readable); only the
+                // machine prefix `auth/foo: ` is stripped.
+                message = raw.replace(/^auth\/[a-z-]+:\s*/, '');
             }
-            showError(btn, message);
-        } else {
-            showError(btn, 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।');
         }
+        showError(btn, message);
     } finally {
         btn.disabled = false;
         delete btn.dataset.loading;
@@ -132,9 +129,12 @@ async function handleProviderSignIn(providerName: 'google' | 'facebook'): Promis
  * The auth layout renders the token in a meta tag so Alpine/Alpine-adjacent
  * scripts can read it without depending on any particular form being present.
  */
-function getCsrfToken(): string
+function getCsrfToken()
 {
-    const meta = document.querySelector('meta[name="csrf-token"]');
+    // Layouts/base.twig renders the token as `<meta name="_csrf">` (and the
+    // older name "csrf" in legacy pages); the auth pages never use
+    // "csrf-token", so fall through until a name actually matches.
+    const meta = document.querySelector('meta[name="_csrf"]') || document.querySelector('meta[name="csrf"]');
     if (meta instanceof HTMLMetaElement && meta.content) {
         return meta.content;
     }
@@ -147,13 +147,14 @@ function getCsrfToken(): string
     return '';
 }
 
+
 /**
  * Show a transient error on the button without cluttering the page.
  *
  * The server-side flash is the primary error channel; this is only for
  * client-side failures (popup cancelled, network error) where no flash was set.
  */
-function showError(btn: HTMLButtonElement, message: string): void
+function showError(btn, message)
 {
     // Brief inline message under the button, then clear it so a retry is clean.
     let panel = document.getElementById('firebase-signin-error');

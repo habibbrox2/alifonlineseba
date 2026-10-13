@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Web\Admin;
 
+use App\Auth\Identity;
 use App\Repository\SettingsRepository;
 use App\Service\OrderWindowService;
+use App\Service\PermissionService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Session\SessionInterface;
@@ -13,10 +15,19 @@ use Yiisoft\Yii\View\Renderer\WebViewRenderer;
 
 final readonly class AdminSettingsAction
 {
+    /**
+     * Check if identity has the required permission.
+     */
+    private function checkPermission(?object $identity, string $permission): bool
+    {
+        return $identity !== null && $this->permissions->hasPermission($identity, $permission);
+    }
+
     public function __construct(
         private WebViewRenderer $view,
         private SettingsRepository $settings,
         private SessionInterface $session,
+        private PermissionService $permissions,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -26,6 +37,12 @@ final readonly class AdminSettingsAction
 
         if ($request->getMethod() === 'POST') {
             $identity = $request->getAttribute('identity');
+
+            if (!$this->checkPermission($identity, 'admin-settings-edit')) {
+                $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                return new \Nyholm\Psr7\Response(302, ['Location' => '/admin/settings']);
+            }
+
             $body = (array) $request->getParsedBody();
 
             $input = array_map(

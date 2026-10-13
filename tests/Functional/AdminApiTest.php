@@ -11,10 +11,12 @@ use App\Repository\AdminWithdrawRepository;
 use App\Repository\SettingsRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\TopupRepository;
+use App\Repository\RoleRankRepository;
 use App\Repository\UserRepository;
 use App\Service\AdminWithdrawService;
 use App\Service\Api;
 use App\Service\BulkJobService;
+use App\Service\PermissionService;
 use App\Web\Api\Admin\AdminDashboardApiAction;
 use App\Web\Api\Admin\AdminLogsApiAction;
 use App\Web\Api\Admin\AdminNotificationsApiAction;
@@ -53,6 +55,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
     private AdminWithdrawService $withdrawService;
     private BulkJobService $bulk;
     private QueueRepository $queue;
+    private PermissionService $permissions;
 
     private string $suffix = '';
 
@@ -106,6 +109,8 @@ final class AdminApiTest extends \Codeception\Test\Unit
             \App\Service\ReceiptStorage::fromProjectRoot(),
             $notify,
         );
+        $roleRanks = new RoleRankRepository($this->db);
+        $this->permissions = new PermissionService($roleRanks);
 
         $this->suffix = 'a' . substr(md5(uniqid('', true)), 0, 10);
     }
@@ -285,7 +290,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
             );
         }
         if (preg_match('#^/api/admin/users$#', $uri)) {
-            return new AdminUsersApiAction($this->users);
+            return new AdminUsersApiAction($this->users, $this->permissions);
         }
         if (preg_match('#^/api/admin/orders$#', $uri)) {
             return new AdminOrdersApiAction($this->orders, $this->bulk);
@@ -303,7 +308,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
             return new AdminWithdrawsApiAction($this->withdraws, $this->withdrawService);
         }
         if (preg_match('#^/api/admin/staff$#', $uri)) {
-            return new AdminStaffApiAction($this->users);
+            return new AdminStaffApiAction($this->users, $this->permissions);
         }
         if (preg_match('#^/api/admin/settings$#', $uri)) {
             return new AdminSettingsApiAction($this->settings);
@@ -451,7 +456,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $response = $this->call($admin, 'POST', '/api/admin/users', [], [
             'do' => 'create',
             'username' => 'newadminuser_' . $this->suffix,
-            'phone' => '01712345679',
+            'phone' => '017' . substr(str_replace(['a','b','c','d','e','f'], '0', md5($this->suffix . 'newuser')), 0, 8),
             'password' => 'ValidPass123!',
             'role' => 'user',
         ]);
@@ -669,15 +674,17 @@ final class AdminApiTest extends \Codeception\Test\Unit
 
     // ---- Staff list (superadmin only) ------------------------------------
 
-    public function testStaffListIsForbiddenToAdmin(): void
+    public function testAdminCanReadStaffList(): void
     {
         $admin = $this->makeUser('staffrbac', 'admin');
 
         $response = $this->call($admin, 'GET', '/api/admin/staff');
         $payload = $this->decode($response);
 
-        $this->assertSame(403, $response->getStatusCode());
-        $this->assertFalse($payload['success']);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertArrayHasKey('rows', $payload['data']);
+        $this->assertArrayHasKey('total', $payload['data']);
     }
 
     public function testStaffListReturnsRowsForSuperAdmin(): void

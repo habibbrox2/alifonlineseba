@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Auth;
 
 use App\Repository\ActivityLogRepository;
+use App\Repository\RoleRankRepository;
 use App\Repository\UserRepository;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -62,9 +63,10 @@ final readonly class OptionalAuthMiddleware implements MiddlewareInterface
         SessionInterface $session,
         UserRepository $users,
         ActivityLogRepository $logs,
+        RoleRankRepository $roleRanks,
         UrlGeneratorInterface $url,
     ) {
-        $this->inner = new AuthMiddleware($session, $users, $logs, $url, '', true);
+        $this->inner = new AuthMiddleware($session, $users, $logs, $roleRanks, $url, '', true);
     }
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface

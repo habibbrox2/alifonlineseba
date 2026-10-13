@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cleartext HTTP is blocked by default on Android 9+, which is correct for
+    the production BASE_URL (always HTTPS). The one exception is the loopback
+    address used for device testing via `adb reverse tcp:<port> tcp:<port>`,
+    where the "server" is the developer's own machine over USB. Only localhost
+    and 127.0.0.1 are permitted in cleartext; every other host still requires
+    TLS, so this cannot weaken production traffic.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">[::1]</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

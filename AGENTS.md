@@ -14,7 +14,57 @@
   - `docs/notification-architecture-audit.md`, `docs/push-notifications.md`, `docs/webpush-runbook.md` — notification design and operations.
   - `docs/referral-qualifying-recharge-rule.md` — referral qualification and payout invariants.
 
-## 2. Architecture and code placement
+## 2. Path and File Location Rules (CRITICAL – NEVER VIOLATE)
+
+### 2.1 Project Root
+- Canonical project root on this machine: `D:\xampp-server\digital-sheba`
+- Always treat this as the single source of truth for paths.
+- Never invent, assume, or fall back to other roots (e.g. `D:\upal-server\...`, `C:\...`, `/home/...`, or any other drive/folder name).
+
+### 2.2 Source vs Served Assets (Very Important)
+
+| Category                        | Correct Location                          | Never use / Never assume                  |
+|--------------------------------|-------------------------------------------|-------------------------------------------|
+| Source JavaScript              | `resources/js/`                           | Do not treat as browser-ready             |
+| Source CSS                     | `resources/css/`                          | Do not treat as browser-ready             |
+| Twig templates                 | `resources/views/`                        | —                                         |
+| Compiled / publicly served JS  | `public/assets/js/`                       | Never put source-only files here          |
+| Compiled / publicly served CSS | `public/assets/css/`                      | Never hand-edit generated files           |
+| Other public static assets     | `public/assets/` or `public/`             | —                                         |
+| Controllers / Actions          | `src/Web/`                                | —                                         |
+| Services                       | `src/Service/`                            | —                                         |
+| Repositories                   | `src/Repository/`                         | —                                         |
+| Migrations                     | `migrations/`                             | —                                         |
+| Android Admin                  | `android-admin/`                          | —                                         |
+| TWA                            | `twa/`                                    | —                                         |
+
+### 2.3 Absolute Rules for AI about paths
+
+1. **Never guess a file path.**
+   If you are not 100% certain where a file lives, first list the directory or ask the user.
+
+2. **Prefer full absolute paths** when referring to any file in replies or commands:
+   Example: `D:\xampp-server\digital-sheba\public\assets\js\firebase-social-auth.js`
+
+3. **Client-side JavaScript that is loaded directly by the browser** lives under `public/assets/js/`.
+   Source files that go through the build process live under `resources/js/`.
+   Do not mix them up.
+
+4. Before creating or editing any file:
+   - Confirm the exact folder exists.
+   - Use the table above.
+   - If the file is a browser-loaded script (e.g. Firebase auth, third-party SDKs, standalone utilities), put it in `public/assets/js/`.
+
+5. When the user mentions a relative path, always expand it against the canonical root `D:\xampp-server\digital-sheba`.
+
+6. If you are about to use a path that does not match the table above, **stop and ask the user for confirmation**.
+
+### 2.4 Common real examples
+- Firebase Social Auth (browser): `D:\xampp-server\digital-sheba\public\assets\js\firebase-social-auth.js`
+- Source JS that needs building: `D:\xampp-server\digital-sheba\resources\js\...`
+- Twig layout: `D:\xampp-server\digital-sheba\resources\views\...`
+
+## 3. Architecture and code placement
 
 - Web routes and middleware: `config/common/routes.php` and the relevant configuration under `config/`.
 - HTTP actions are normally invokable classes under `src/Web/`; use constructor dependency injection and keep request parsing/response handling in the action.
@@ -26,7 +76,7 @@
 - `twa/` is the user-facing Android TWA, not the native admin app. Do not mix their signing, identity, navigation, or release configuration.
 - Prefer established project patterns and dependencies. Do not add another framework, ORM, CSS framework, JavaScript framework, or dependency without a clear need and explicit approval.
 
-## 3. Financial and business invariants — treat as critical
+## 4. Financial and business invariants — treat as critical
 
 - Balance, ledger, top-up/recharge, withdrawal, service-order and referral changes are financial operations. Trace the complete flow before editing it, including transaction boundaries, audit logging, notifications and all clients.
 - Never change a user's balance with a bare SQL update or a separate write that bypasses the established ledger service. Use the existing `LedgerService` and repository/service methods so balance, ledger references and before/after values remain consistent.
@@ -36,7 +86,7 @@
 - Do not let a client decide prices, balances, roles, approval eligibility, ownership or permission outcomes. Validate and authorize on the server.
 - Keep audit/activity-log records for privileged actions and money-moving operations. Do not remove audit events as a side effect of refactoring.
 
-## 4. Authentication, authorization and API contracts
+## 5. Authentication, authorization and API contracts
 
 - Server-side authorization is authoritative. Enforce the appropriate user/staff/admin/superadmin permissions in middleware and/or the action/service itself; hiding a button or screen is not security.
 - Preserve session-cookie and CSRF protections for browser requests. Follow the established bearer-token flow for machine clients; do not weaken CSRF checks globally to make an API request work.
@@ -46,14 +96,14 @@
 - Treat uploaded identity documents, receipts, images and personal information as sensitive. Validate file size and actual type, generate safe server-side names, prevent path traversal, and store private files outside the publicly served directory unless the existing design explicitly requires otherwise.
 - Keep external-provider integrations (FCM, Web Push, Telegram, payment/support providers) behind the established service/channel boundaries. Network failure must not accidentally repeat or reverse a financial action.
 
-## 5. Notifications and scheduled work
+## 6. Notifications and scheduled work
 
 - Reuse the existing notification event/channel matrix, manager, queue, channel implementations and console worker. Do not create a second parallel notification pipeline.
 - Preserve user push preferences, multi-device fan-out, deduplication keys, retry/dead-letter behavior, and admin fan-out for events that require it.
 - Do not make slow third-party HTTP calls inside the critical balance/ledger transaction path. Enqueue work and use the existing console/cron mechanism.
 - Keep the shared-hosting constraint in mind: production cannot depend on a continuously running Node process, Redis, or an unconfigured daemon. Document any required cron command and cadence in the operational runbook.
 
-## 6. PHP, database and migration style
+## 7. PHP, database and migration style
 
 - Use `declare(strict_types=1);` and follow the neighboring PHP style, namespaces, imports and return types. Prefer focused `final` action/service/repository classes where consistent with existing code.
 - Keep actions thin; put reusable business rules in services and SQL/data mapping in repositories. Inject collaborators through the constructor rather than creating service dependencies ad hoc.
@@ -63,15 +113,16 @@
 - Keep migrations repeat-safe where the project convention requires it. Never run a production migration, destructive database command, seed/reset, or rollback without explicit authorization.
 - Do not add secrets, customer data, database dumps, production receipts, private keys, or generated runtime artifacts to source control.
 
-## 7. Web UI, assets and accessibility
+## 8. Web UI, assets and accessibility
 
 - Use Twig for server-rendered pages, Tailwind utility classes for styling, Alpine.js for small declarative interactions, and vanilla JavaScript for established browser utilities. Do not introduce Bootstrap or a competing UI stack.
 - Preserve the shared layouts, Twig macros/components, CSRF-aware fetch helpers, responsive behavior, keyboard access, visible focus, labels, loading/error/empty states and Bengali user-facing copy.
 - Use the project's Lucide sprite and established icon conventions; do not add inline icon libraries or new runtime dependencies without need.
 - Edit source files under `resources/` and regenerate compiled assets with the documented build. Do not hand-edit generated `public/assets/css/app.css`, copied JavaScript bundles or generated sprite output unless the task specifically concerns the build output.
+- Files that are loaded directly by the browser without going through the build pipeline (e.g. third-party SDKs, Firebase auth helpers, standalone utilities) must live in `public/assets/js/`.
 - Keep public pages, customer dashboard and admin interfaces consistent with existing design tokens and permission boundaries. Never rely on client-side validation alone.
 
-## 8. Android admin app
+## 9. Android admin app
 
 - Follow Kotlin, Jetpack Compose, Material 3, MVVM, StateFlow/coroutines, Retrofit/OkHttp, repository and existing dependency-injection patterns already in `android-admin/`.
 - The server remains the single source of truth. Do not add a local database or offline write queue unless the backend and project design explicitly support it.
@@ -80,7 +131,7 @@
 - Keep signing keystores and signing properties out of version control. Do not weaken cleartext/TLS settings, certificate checks, release hardening or minimum-version handling to work around a development issue.
 - For API changes, check `AdminApiService.kt`, `ApiModels.kt`, `AdminRepository.kt`, affected ViewModels/screens and the API contract document.
 
-## 9. Code style and maintainability
+## 10. Code style and maintainability
 
 - Keep comments minimal and explain why a non-obvious decision or constraint exists—not what the code already says.
 - Do not add change-history comments such as `// newly added`, `// updated logic` or `// fixed issue`. Put change summaries in commit/PR descriptions.
@@ -90,7 +141,7 @@
 - Make the smallest coherent change that solves the request. Avoid file-wide rewrites and unrelated formatting or dependency changes.
 - Add/update focused tests for behavior changes. Report the checks actually run and their real outcomes; never claim unrun checks passed.
 
-## 10. Build, test and verification
+## 11. Build, test and verification
 
 Run only checks relevant to the changed area, using the project's installed tools and current environment:
 
@@ -102,7 +153,7 @@ Run only checks relevant to the changed area, using the project's installed tool
 - Inspect `git diff --check`, the full diff and `git status --short` before finishing. If a test cannot run, state why; do not replace a real test with an unsupported assumption.
 - Do not automatically run every expensive test, build, migration, release or deployment command. Choose checks proportional to the change and its risk.
 
-## 11. Git, environment and repository hygiene
+## 12. Git, environment and repository hygiene
 
 - Start by checking `git status --short --branch` and reviewing the relevant diff. The working tree may contain the user's in-progress work.
 - Never reset, checkout, clean, stash, rebase, amend, force-push, delete, or overwrite unrelated user changes. Never use `git checkout -- .`, `git reset --hard`, `git clean -fd`, or equivalent destructive shortcuts.
@@ -112,14 +163,14 @@ Run only checks relevant to the changed area, using the project's installed tool
 - Use LF line endings for text files where compatible with the existing repository configuration; keep binary assets binary and avoid repository-wide renormalization without explicit approval.
 - Do not copy real secrets into examples, docs, test output, screenshots or prompts. If a credential appears exposed, avoid repeating it and report the exposure without rotating it unless authorized.
 
-## 12. AI-assisted changes and contribution quality
+## 13. AI-assisted changes and contribution quality
 
 - Understand every generated or suggested change before keeping it. Do not introduce code you cannot explain or verify.
 - Follow the repository's and target project's contribution policies. If AI disclosure is required, disclose it accurately; do not invent human review or test results.
 - Respond to review feedback by addressing the underlying issue, not by making superficial repetitive edits.
 - Before finishing, review the final diff for security regressions, financial correctness, redundant comments, unclear names, duplicated logic, accidental secrets and unrelated changes.
 
-## 13. Documentation maintenance
+## 14. Documentation maintenance
 
 - For every substantial project change, assess whether the root `README.md` must be updated. Major feature additions/removals, architecture or workflow changes, setup/deployment changes, new integrations, changed environment variables, new commands, and meaningful changes to project capabilities must be reflected in the README when relevant.
 - Update the README as part of the same task when it is needed; do not leave documentation for a later step if the implementation has already changed.
@@ -128,7 +179,7 @@ Run only checks relevant to the changed area, using the project's installed tool
 - Avoid unnecessary README churn for trivial internal fixes or changes that do not affect user-facing behavior, setup, operation, architecture or project capabilities. If no documentation update is needed, keep the README unchanged.
 - Include README and other documentation changes in the final changed-files summary, and report documentation checks actually performed.
 
-## 14. Completion report
+## 15. Completion report
 
 When reporting work, summarize:
 1. What changed and why.

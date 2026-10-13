@@ -9,6 +9,7 @@ use App\Console\NotificationPurgeCommand;
 use App\Console\NotificationWorkCommand;
 use App\Console\OrderSeedCommand;
 use App\Console\PushWatchCommand;
+use App\Console\RoleRankInitCommand;
 use App\Console\SeedCommand;
 use App\Console\StaffCommand;
 use App\Console\SuperAdminCommand;
@@ -34,6 +35,7 @@ return [
             // /admin/staff promotes an account but cannot create one, and
             // app:seed skips every user on a database that already has rows.
             'app:staff' => StaffCommand::class,
+            'app:role-rank-init' => RoleRankInitCommand::class,
             'app:notification:work' => NotificationWorkCommand::class,
             'app:notification:purge' => NotificationPurgeCommand::class,
             'app:api-key:regenerate' => ApiKeyRegenerateCommand::class,

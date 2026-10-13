@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Auth;
 
 use App\Repository\ActivityLogRepository;
+use App\Repository\RoleRankRepository;
 use App\Repository\UserRepository;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -44,6 +45,7 @@ final class AuthMiddleware implements MiddlewareInterface
         private readonly SessionInterface $session,
         private readonly UserRepository $users,
         private readonly ActivityLogRepository $logs,
+        private readonly RoleRankRepository $roleRanks,
         private readonly UrlGeneratorInterface $url,
         private readonly string $requiredRole = '',
         private readonly bool $optional = false,
@@ -51,6 +53,9 @@ final class AuthMiddleware implements MiddlewareInterface
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
+        // Load role ranks from database for this request
+        Identity::setRoleRanks($this->roleRanks->all());
+
         $userId = $this->session->get('user_id');
         $identity = null;
 
@@ -76,13 +81,13 @@ final class AuthMiddleware implements MiddlewareInterface
         }
 
         if ($this->requiredRole === 'admin' && !$identity->canAccessAdmin()) {
-            return $this->deny($request, 403);
+            return $this->deny($request, 403, $identity);
         }
 
         return $handler->handle($request);
     }
 
-    private function deny(ServerRequestInterface $request, int $code): ResponseInterface
+    private function deny(ServerRequestInterface $request, int $code, ?Identity $identity = null): ResponseInterface
     {
         $wantsJson = str_starts_with($request->getUri()->getPath(), '/api/')
             || str_contains($request->getHeaderLine('Accept'), 'application/json');
@@ -107,6 +112,20 @@ final class AuthMiddleware implements MiddlewareInterface
             $loginUrl = $this->url->generate('login');
             return new \Nyholm\Psr7\Response(302, ['Location' => $loginUrl]);
         }
+
+        // Log denied access (403) with user identity and requested path
+        $this->logs->create([
+            'user_id' => $identity?->id,
+            'action' => $identity === null ? 'auth.denied' : 'admin.access_denied',
+            'description' => 'Access denied to ' . $request->getUri()->getPath() . ' for role ' . ($identity?->role ?? 'unknown'),
+            'ip_address' => $request->getServerParams()['REMOTE_ADDR'] ?? null,
+            'user_agent' => substr($request->getHeaderLine('User-Agent'), 0, 512),
+            'metadata' => [
+                'path' => $request->getUri()->getPath(),
+                'method' => $request->getMethod(),
+                'role' => $identity?->role ?? null,
+            ],
+        ]);
 
         return new \Nyholm\Psr7\Response(403, ['Content-Type' => 'text/html; charset=UTF-8'],
             '<!DOCTYPE html><html lang="bn"><head><meta charset="UTF-8"><title>403</title></head>'

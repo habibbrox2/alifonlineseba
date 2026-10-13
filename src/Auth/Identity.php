@@ -92,13 +92,85 @@ final class Identity
         return $this->role === self::ROLE_SUPERADMIN;
     }
 
+    /**
+     * Default role hierarchy for RBAC: higher rank can manage lower ranks.
+     * superadmin > admin > staff > user
+     * Used as fallback when database ranks are not available.
+     */
+    private const DEFAULT_ROLE_RANK = [
+        'superadmin' => 100,
+        'admin' => 50,
+        'staff' => 25,
+        'user' => 10,
+    ];
+
+    /** @var array<string, int>|null Cached role ranks from database (per request) */
+    private static ?array $roleRanks = null;
+
+    /**
+     * Set the role ranks for the current request (loaded from database).
+     * Called by AuthMiddleware on each request.
+     */
+    public static function setRoleRanks(array $ranks): void
+    {
+        self::$roleRanks = $ranks;
+    }
+
+    /**
+     * Get the role ranks to use (database ranks or defaults).
+     * @return array<string, int>
+     */
+    private static function getRoleRanks(): array
+    {
+        return self::$roleRanks ?? self::DEFAULT_ROLE_RANK;
+    }
+
+    /**
+     * Get the numeric rank of this identity's role.
+     */
+    public function getRoleRank(): int
+    {
+        return self::getRoleRanks()[$this->role] ?? 0;
+    }
+
+    /**
+     * Check if this identity can manage a target role.
+     * A role can manage another if its rank is strictly higher.
+     */
+    public function canManageRole(string $targetRole): bool
+    {
+        $ranks = self::getRoleRanks();
+        return $this->getRoleRank() > ($ranks[$targetRole] ?? 0);
+    }
+
+    /**
+     * Check if this identity can manage another identity.
+     * Cannot manage self, and cannot manage equal or higher rank.
+     */
+    public function canManage(Identity $target): bool
+    {
+        if ($this->id === $target->id) {
+            return false;
+        }
+        return $this->canManageRole($target->role);
+    }
+
     public function canAccessAdmin(): bool
     {
-        return $this->isAdmin() || $this->isStaff();
+        return $this->isActive() && ($this->isAdmin() || $this->isStaff());
     }
 
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * Check if this identity can access admin API endpoints.
+     * Admins and staff can access admin API endpoints if active.
+     */
+    public function canAccessApiAdmin(): bool
+    {
+        return $this->isActive() && ($this->isAdmin() || $this->isStaff());
     }
 }

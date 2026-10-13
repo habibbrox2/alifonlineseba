@@ -12,7 +12,11 @@ use App\Notification\TemplateRenderer;
 use App\Repository\AppReleaseRepository;
 use App\Repository\BotConnectionRepository;
 use App\Repository\DeviceRepository;
+use App\Repository\RoleRankRepository;
 use App\Service\AppReleaseService;
+use App\Service\PermissionService;
+use App\Service\ScraperApiService;
+use App\Twig\PermissionExtension;
 use App\Service\EmailSender;
 use App\Service\ImageUploadStorage;
 use App\Service\PasswordResetService;
@@ -21,8 +25,28 @@ use App\Service\DeliverableStorage;
 use App\Service\OrderWindowService;
 use App\Service\ReceiptStorage;
 use App\Service\TwaAssetLinks;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\UriFactoryInterface;
+use Symfony\Component\HttpClient\Psr18Client;
 
 return [
+    // PSR-18 HTTP client (Symfony)
+    ClientInterface::class => static fn (): ClientInterface => new Psr18Client(),
+    // PSR-17 factories (RequestFactoryInterface, UriFactoryInterface) are defined in config/web/di/psr17.php for web context
+
+    // ScraperAPI service for web scraping
+    ScraperApiService::class => static fn (
+        ClientInterface $client,
+        RequestFactoryInterface $requestFactory,
+        UriFactoryInterface $uriFactory,
+    ): ScraperApiService => new ScraperApiService(
+        $client,
+        $requestFactory,
+        $uriFactory,
+        $_ENV['SCRAPERAPI_KEY'] ?? '',
+    ),
+
     // `ReceiptStorage` takes a filesystem path, which the container cannot infer,
     // so it is built through its own factory rather than autowired.
     ReceiptStorage::class => static fn (): ReceiptStorage => ReceiptStorage::fromProjectRoot(),
@@ -56,6 +80,9 @@ return [
     QueueRepository::class => QueueRepository::class,
     DeviceRepository::class => DeviceRepository::class,
     BotConnectionRepository::class => BotConnectionRepository::class,
+    RoleRankRepository::class => RoleRankRepository::class,
+    PermissionService::class => static fn (RoleRankRepository $r): PermissionService => new PermissionService($r),
+    PermissionExtension::class => static fn (PermissionService $p): PermissionExtension => new PermissionExtension($p),
     TemplateRenderer::class => TemplateRenderer::class,
     NotificationManager::class => NotificationManager::class,
     FcmChannel::class => FcmChannel::class,

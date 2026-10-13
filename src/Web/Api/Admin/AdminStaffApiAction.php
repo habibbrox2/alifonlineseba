@@ -7,6 +7,7 @@ namespace App\Web\Api\Admin;
 use App\Auth\Identity;
 use App\Repository\UserRepository;
 use App\Service\Api;
+use App\Service\PermissionService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -16,13 +17,15 @@ final readonly class AdminStaffApiAction
 
     public function __construct(
         private UserRepository $users,
+        private PermissionService $permissions,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
     {
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
-        if (!$identity->isSuperAdmin()) {
+        // Check granular permission for staff read
+        if (!$this->permissions->canAccessRoute($identity, 'admin-staff')) {
             return Api::forbidden();
         }
 

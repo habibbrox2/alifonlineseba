@@ -28,6 +28,8 @@ use App\Web\Admin\AdminLedgerAction;
 use App\Web\Admin\AdminOrderAction;
 use App\Web\Admin\AdminOrdersAction;
 use App\Web\Admin\AdminServicesAction;
+use App\Web\Admin\AdminPermissionsMatrixAction;
+use App\Web\Admin\AdminRoleHierarchyAction;
 use App\Web\Admin\AdminSettingsAction;
 use App\Web\Admin\AdminStaffAction;
 use App\Web\Admin\AdminTopupsAction;
@@ -116,8 +118,10 @@ return [
         ->name('firebase-auth-proxy'),
 
     // Auth
-    Route::methods(['GET', 'POST'], '/login')->action(LoginAction::class)->name('login'),
-    Route::methods(['GET', 'POST'], '/register')->action(RegisterAction::class)->name('register'),
+    Group::create()->middleware(OptionalAuthMiddleware::class)->routes(
+        Route::methods(['GET', 'POST'], '/login')->action(LoginAction::class)->name('login'),
+        Route::methods(['GET', 'POST'], '/register')->action(RegisterAction::class)->name('register'),
+    ),
     Route::post('/auth/firebase')->action(FirebaseAuthAction::class)->name('auth-firebase'),
     Route::post('/logout')->action(LogoutAction::class)->name('logout'),
     // Recovery. Public by definition — the visitor is by definition signed
@@ -254,6 +258,9 @@ return [
             Route::get('/notifications')->action(AdminNotificationsAction::class)->name('admin-notifications'),
             Route::post('/notifications/{id}/retry')->action(AdminNotificationsAction::class)->name('admin-notification-retry'),
             Route::get('/activity-logs')->action(AdminLogsAction::class)->name('admin-logs'),
+            // Staff roster — visible to all admins; modifications to superadmin accounts
+            // are guarded inside the action.
+            Route::methods(['GET', 'POST'], '/staff')->action(AdminStaffAction::class)->name('admin-staff'),
         ),
 
     // Super-admin only. A separate group rather than a per-route middleware,
@@ -272,7 +279,6 @@ return [
         ->routes(
             Route::methods(['GET', 'POST'], '/withdraws')->action(AdminWithdrawsAction::class)->name('admin-withdraws'),
             Route::methods(['GET', 'POST'], '/withdraws/{id}')->action(AdminWithdrawsAction::class)->name('admin-withdraw-desk'),
-            Route::methods(['GET', 'POST'], '/staff')->action(AdminStaffAction::class)->name('admin-staff'),
             // Site settings *and* the recharge rules inside them (min/max,
             // receipt, wallet numbers) are owner decisions: they change what
             // every user is asked to pay and where the money goes. The admin's
@@ -280,5 +286,7 @@ return [
             // request at /topups and /recharges/{id} — stays in the group
             // above; only the *rules* move here.
             Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsAction::class)->name('admin-settings'),
+            Route::methods(['GET', 'POST'], '/role-hierarchy')->action(AdminRoleHierarchyAction::class)->name('admin-role-hierarchy'),
+            Route::get('/permissions-matrix')->action(AdminPermissionsMatrixAction::class)->name('admin-permissions-matrix'),
         ),
 ];

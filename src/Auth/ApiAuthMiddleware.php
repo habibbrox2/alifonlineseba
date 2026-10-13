@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Auth;
 
 use App\Repository\ActivityLogRepository;
+use App\Repository\RoleRankRepository;
 use App\Repository\UserRepository;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -27,10 +28,11 @@ final readonly class ApiAuthMiddleware implements MiddlewareInterface
         SessionInterface $session,
         UserRepository $users,
         ActivityLogRepository $logs,
+        private RoleRankRepository $roleRanks,
         UrlGeneratorInterface $url,
         ApiTokenRepository $tokens,
     ) {
-        $this->inner = new AuthMiddleware($session, $users, $logs, $url, AuthMiddleware::ROLE_USER);
+        $this->inner = new AuthMiddleware($session, $users, $logs, $roleRanks, $url, AuthMiddleware::ROLE_USER);
         $this->tokens = $tokens;
     }
 
@@ -38,6 +40,9 @@ final readonly class ApiAuthMiddleware implements MiddlewareInterface
     {
         $bearer = self::bearer($request);
         if ($bearer !== null) {
+            // Only the bearer path needs the ranks here; the session path falls
+            // through to the inner AuthMiddleware, which already loads them.
+            Identity::setRoleRanks($this->roleRanks->all());
             $userId = $this->tokens->resolve($bearer);
             if ($userId !== null) {
                 $row = $this->users->findById($userId);

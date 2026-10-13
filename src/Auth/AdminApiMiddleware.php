@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Auth;
 
 use App\Repository\ActivityLogRepository;
+use App\Repository\RoleRankRepository;
 use App\Repository\UserRepository;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -43,10 +44,13 @@ final readonly class AdminApiMiddleware implements MiddlewareInterface
         // the ones the class body actually reaches for are.
         private UserRepository $users,
         ActivityLogRepository $logs,
+        // Promoted because the bearer path in process() loads the ranks
+        // itself, before delegating to AdminMiddleware.
+        private RoleRankRepository $roleRanks,
         UrlGeneratorInterface $url,
         ApiTokenRepository $tokens,
     ) {
-        $this->inner = new AdminMiddleware($session, $users, $logs, $url);
+        $this->inner = new AdminMiddleware($session, $users, $logs, $roleRanks, $url);
         $this->tokens = $tokens;
     }
 
@@ -54,6 +58,9 @@ final readonly class AdminApiMiddleware implements MiddlewareInterface
     {
         $bearer = ApiAuthMiddleware::bearer($request);
         if ($bearer !== null) {
+            // Only the bearer path needs the ranks here; the session path falls
+            // through to the inner AuthMiddleware, which already loads them.
+            Identity::setRoleRanks($this->roleRanks->all());
             $userId = $this->tokens->resolve($bearer);
             if ($userId !== null) {
                 $row = $this->users->findById($userId);
