@@ -191,3 +191,5 @@ Do not claim that code is deployed, a notification was delivered, a migration su
 
 
 AGENTS ALWAYS TRY USE MCP CPMMECTOPM RETRY AND USE.
+
+ALAWAYS SHOW NEXT FOLLOWUP PROMPT SUGGESTED.
