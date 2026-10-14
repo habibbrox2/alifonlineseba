@@ -26,16 +26,35 @@ use Yiisoft\Db\Migration\RevertibleMigrationInterface;
  * user is the only one who can change it, so two accounts can never claim the
  * same path. The path is hashed by `ImageUploadStorage`, so it is already not
  * guessable.
+ *
+ * `CreateCoreTables` already ships this column, so databases created from the
+ * full migration chain have it before this migration runs; only databases that
+ * predate the column still need the ALTER.
  */
 final class M261007000000_AddAvatarToUser implements RevertibleMigrationInterface
 {
     public function up(MigrationBuilder $b): void
     {
+        if ($this->hasAvatarColumn($b)) {
+            return;
+        }
+
         $b->addColumn('{{%user}}', 'avatar', 'string NULL');
     }
 
     public function down(MigrationBuilder $b): void
     {
+        if (!$this->hasAvatarColumn($b)) {
+            return;
+        }
+
         $b->dropColumn('{{%user}}', 'avatar');
+    }
+
+    private function hasAvatarColumn(MigrationBuilder $b): bool
+    {
+        $table = $b->getDb()->getTableSchema('{{%user}}', true);
+
+        return $table !== null && in_array('avatar', $table->getColumnNames(), true);
     }
 }
