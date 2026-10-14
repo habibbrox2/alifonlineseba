@@ -84,6 +84,7 @@ php yii app:super-admin --dry-run
 - **অ্যাডমিন প্যানেল** — স্ট্যাটস ড্যাশবোর্ড, ইউজার ম্যানেজমেন্ট (রোল, স্ট্যাটাস, পাসওয়ার্ড রিসেট), ক্যাটাগরি ও সার্ভিস CRUD, লেনদেন পরিদর্শন, অ্যাক্টিভিটি লগ
 - **JSON API** — `/api/*` এ ড্যাশবোর্ড, সার্ভিস, অর্ডার, নোটিফিকেশন ও প্রোফাইল API, স্ট্যান্ডার্ড `{success, message, data, errors}` রেসপন্স ফরম্যাট
 - **নিরাপত্তা** — CSRF (ফর্ম + `X-CSRF-Token` হেডার), RBAC (user/staff/admin/superadmin), সিকিউরিটি হেডার ও হ্যাশড পাসওয়ার্ড
+- **কনফার্মেশন ডায়ালগ** — টাকা-মুখম ও ধ্বংসাত্মক প্রতিটি অ্যাকশন `data-confirm` দিয়ে নিজস্ব মডালে জিজ্ঞেস করে (টোন, আলাদা করে দেখানো পরিমাণ, উল্লেখযোগ্য ফলাফল); `window.confirm()` আর ব্যবহার হয় না
 - **টেস্টিং** — Codeception (Unit, Console, Functional, Web স্যুট)
 
 ## প্রয়োজনীয়তা
@@ -159,7 +160,7 @@ vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8080-�
 ├── resources/
 │   ├── css/                # Tailwind সোর্স
 │   ├── js/                 # ES modules (app.js, dashboard.js …) → public/assets এ sync হয়
-│   └── views/              # Twig টেমপ্লেট (layouts/, site/, errors/)
+│   └── views/              # Twig টেমপ্লেট (layouts/, site/, components/, errors/)
 ├── scripts/                # sync-js.js, generate-sprite.php
 ├── src/
 │   ├── Auth/               # Identity, session auth, role guards

@@ -509,6 +509,12 @@ beta.allseba.online → Cloudflare edge → টানেল allseba-beta (QUIC)
 > `http://127.0.0.1:8080`-এ বসানো (§১০.৩), যেটাই `config.yml`-এ `allseba.online`-এর
 > জন্যও আছে — তাই বিটা এখন একই ব্যাকএন্ডের লোকাল ওয়ার্কিং-কপি দেখায়। প্রকাশ্য
 > সাইট cPanel-এ থাকায় বিটা মানে সার্ভারের কপি নয়, এই মেশিনের কপি।
+>
+> **অরিজিন পোর্ট vhost-এর সাথে মিলিয়ে নিন:** ৮০৮০ কেবল এই ডকুমেন্টেশনের রেফারেন্স
+> মেশিনের সেটআপ। অন্য কোনো অ্যাপ যদি ৮০৮০ দখল করে রাখে, তাহলে এই প্রজেক্টের vhost-এ
+> অন্য পোর্ট (যেমন ৮০৯০) বসান, `Listen` ডাইরেক্টিভটাও `httpd.conf`-এ যোগ করুন, আর
+> `beta.yml`-এর ingress `service:` সেই পোর্টে বদলান। Apache বন্ধ থাকলে বা পোর্ট
+> না মিললে টানেল ৫০২ দেবে — চেক: `curl -sI http://127.0.0.1:<port>/ | head -1`।
 
 **আলাদা টানেল কেন:** ইনস্টল করা `cloudflared` সার্ভিসটি চলে
 `tunnel run --token-file C:\ProgramData\cloudflared\token` — সেটা remotely managed,
@@ -518,9 +524,30 @@ Windows সার্ভিস (`cloudflared-beta`)।
 
 ```bash
 cloudflared tunnel create allseba-beta
-cloudflared tunnel route dns allseba-beta beta.allseba.online
+cloudflared tunnel --config ~/.cloudflared/beta.yml route dns allseba-beta beta.allseba.online
 cloudflared tunnel --config ~/.cloudflared/beta.yml run
 ```
+
+> ⚠️ **`route dns`-এ `--config` না দিলে ভুল টানেলে রুট হয়।** `--config` ছাড়া cloudflared
+> ডিফল্ট `~/.cloudflared/config.yml` পড়ে, আর টানেলের নামের বদলে সেই ফাইলের `tunnel:`-ই
+> ব্যবহার করে — চুপচাপ করে ভুল টানেলের আইডি দেখিয়ে "Added CNAME …" বলে। ওই মেশিনে
+> `config.yml` অন্য প্রজেক্টের (`portal.govinpqms.online`) ছিল, তাই প্রথমবার CNAME-টা
+> ওই টানেলে চলে গিয়েছিল আর `beta.allseba.online` ভেঙে গিয়েছিল। তাই উপরের কমান্ডে
+> `--config` অবশ্যই আছে। ফ্ল্যাগটা অবস্থানের উপর নির্ভর করে: `--config` আগে দিলে
+> "flag provided but not defined" এরর দেয়।
+>
+> আগের CNAME থাকলে `route dns` বলবে "An A, AAAA, or CNAME record with that host already
+> exists" — তখন `--overwrite-dns` দিন (`cloudflared tunnel --config ~/.cloudflared/beta.yml
+> route dns --overwrite-dns allseba-beta beta.allseba.online`)। ওটা বাস্তব ডোমেইনের রেকর্ড
+> বদলে দেয়, তাই আগে বর্তমান রেকর্ডটা কোথায় যাচ্ছে দেখে নিন।
+
+> **`unauthorized` এলে `cert.pem` নতুন করে লগইন:** `cloudflared tunnel list` যদি
+> `Error Parsing page 1: REST request failed: unauthorized` দেয়, তার মানে মেশিনের
+> `~/.cloudflared/cert.pem` আর কোনো অ্যাকাউন্টের সাথে যুক্ত নয় (মেয়াদোত্তীর্ণ বা অন্য
+> অ্যাকাউন্টের)। `tunnel create`/`route dns` তখন চলবে না। প্রডাকশনের টানেল টোকেন-ভিত্তিক,
+> তাই সেটা চলতে থাকে — কিন্তু নতুন টানেলের জন্য লগইন লাগবে। পুরনো `cert.pem` মুছে ফেলবেন
+> না (অন্য প্রজেক্টের টানেলে লাগে); সরিয়ে `cert.pem.bak-<তারিখ>` নামে রেখে দিন, তারপর
+> `cloudflared tunnel login` চালান — ব্রাউজারে অনুমোদনের পর নতুন `cert.pem` লেখে।
 
 > **কনফিগ বদলালে সার্ভিস রিস্টার্ট লাগে:** `cloudflared` ingress কনফিগ হট-রিলোড করে না।
 > `beta.yml` এডিট করে অ্যাডমিন কমান্ড প্রম্পটে `Restart-Service cloudflared-beta`
