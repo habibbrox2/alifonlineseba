@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\IdentityRepository;
 use App\Repository\ActivityLogRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\UserRepository;
 use App\Tests\Support\TestGraph;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 use Yiisoft\Session\SessionInterface;
 
 use function PHPUnit\Framework\assertContains;
@@ -45,10 +44,7 @@ final class SoftDeleteTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->services = new ServiceRepository($this->db);
         $this->users = new UserRepository($this->db);
         $this->suffix = 't' . substr(md5(uniqid('', true)), 0, 10);

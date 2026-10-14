@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
 use App\Repository\ServiceRepository;
@@ -14,8 +15,6 @@ use App\Service\ServiceManager;
 use App\ServiceProvider\ServiceField;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Definitions\Exception\NotFoundException;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertCount;
 use function PHPUnit\Framework\assertFalse;
@@ -34,10 +33,7 @@ final class ServiceFormFieldsTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->manager = new ServiceManager(
             new ServiceRepository($this->db),
             TestGraph::orders($this->db),

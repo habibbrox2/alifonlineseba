@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit;
 
+use App\Tests\Support\Database;
 use App\Auth\AuthThrottle;
 use App\Auth\IdentityRepository;
 use App\Notification\NotificationManager;
@@ -18,8 +19,6 @@ use App\Service\ReferralService;
 use App\Tests\Support\TestGraph;
 use Psr\SimpleCache\CacheInterface;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 use Yiisoft\Session\SessionInterface;
 
 use function PHPUnit\Framework\assertSame;
@@ -55,17 +54,16 @@ final class AuthServiceTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->logs = new ActivityLogRepository($this->db);
         $this->settings = new SettingsRepository($this->db);
         $this->referralRepo = new ReferralRepository($this->db);
 
-        // Use a real throttle with a file cache for integration-like behavior
-        $cache = $container->get(CacheInterface::class);
+        // Use a real throttle with a file cache for integration-like behavior.
+        // The cache binding lives in the same config as the connection, so it
+        // comes from the same shared container.
+        $cache = Database::container()->get(CacheInterface::class);
         $this->throttle = new AuthThrottle($cache);
 
         // Build ReferralService with all its dependencies (like functional tests)

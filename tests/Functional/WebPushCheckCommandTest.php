@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
+use App\Tests\Support\EnvOverride;
 use App\Console\WebPushCheckCommand;
 use App\Notification\Channel\WebPushChannel;
 use App\Notification\Push\VapidKeys;
@@ -12,8 +14,6 @@ use App\Repository\UserRepository;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertSame;
 use function PHPUnit\Framework\assertStringContainsString;
@@ -50,10 +50,7 @@ final class WebPushCheckCommandTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->subs = new PushSubscriptionRepository($this->db);
 
@@ -65,13 +62,7 @@ final class WebPushCheckCommandTest extends \Codeception\Test\Unit
 
     protected function _after(): void
     {
-        foreach (['VAPID_SUBJECT', 'VAPID_PRIVATE_KEY'] as $name) {
-            if (($this->previousEnv[$name] ?? null) === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = (string) $this->previousEnv[$name];
-            }
-        }
+        EnvOverride::restore($this->previousEnv);
         $this->previousEnv = [];
 
         foreach (glob($this->tempDir . '/*') ?: [] as $file) {

@@ -40,12 +40,23 @@ final class EnvironmentTest extends Unit
     private function setEnv(string $key, string $value): void
     {
         $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+        putenv($key . '=' . $value);
         Environment::prepare();
     }
 
+    /**
+     * Clears the name everywhere Env::get() looks for it.
+     *
+     * All three, not just $_ENV: phpdotenv populates $_ENV, $_SERVER and the
+     * process environment together, so clearing one of them left the others
+     * still holding the value — which is how "defaults to false" could pass
+     * while the value came from .env rather than from Env::DEFAULTS.
+     */
     private function unsetEnv(string $key): void
     {
-        unset($_ENV[$key]);
+        unset($_ENV[$key], $_SERVER[$key]);
+        putenv($key);
         Environment::prepare();
     }
 

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
+use App\Tests\Support\EnvOverride;
 use App\Notification\QueueRepository;
 use App\Repository\DeviceRepository;
 use App\Repository\UserRepository;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertSame;
 use function PHPUnit\Framework\assertStringContainsString;
@@ -61,10 +61,7 @@ final class NotificationWorkerIsolationTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->queue = new QueueRepository($this->db);
         $this->users = new UserRepository($this->db);
         $this->devices = new DeviceRepository($this->db);
@@ -81,19 +78,15 @@ final class NotificationWorkerIsolationTest extends \Codeception\Test\Unit
             'FIREBASE_CREDENTIALS_PATH' => $this->credentials,
             'FIREBASE_PROJECT_ID' => 'iso-test',
         ] as $name => $value) {
-            $this->previousEnv[$name] = $_ENV[$name] ?? null;
-            $_ENV[$name] = $value;
+            $this->previousEnv[$name] = EnvOverride::snapshot($name)[$name];
+            EnvOverride::set($name, (string) $value);
         }
     }
 
     protected function _after(): void
     {
         foreach ($this->previousEnv as $name => $value) {
-            if ($value === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = $value;
-            }
+            EnvOverride::set((string) $name, (string) $value);
         }
         $this->previousEnv = [];
 

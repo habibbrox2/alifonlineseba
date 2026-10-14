@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
+use App\Tests\Support\EnvOverride;
 use App\Notification\Channel\WebPushChannel;
 use App\Notification\NotificationEvent;
 use App\Notification\NotificationManager;
@@ -15,8 +17,6 @@ use App\Repository\PushSubscriptionRepository;
 use App\Repository\SettingsRepository;
 use App\Repository\UserRepository;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertContains;
 use function PHPUnit\Framework\assertFalse;
@@ -64,10 +64,7 @@ final class WebPushOptOutTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->subs = new PushSubscriptionRepository($this->db);
         $this->channel = new WebPushChannel($this->subs, $this->users);
@@ -113,13 +110,7 @@ final class WebPushOptOutTest extends \Codeception\Test\Unit
             ->bindValue(':from', $this->startedAt)
             ->execute();
 
-        foreach (['VAPID_SUBJECT', 'VAPID_PRIVATE_KEY'] as $name) {
-            if ($this->previousEnv[$name] === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = $this->previousEnv[$name];
-            }
-        }
+        EnvOverride::restore($this->previousEnv);
         $this->previousEnv = [];
     }
 

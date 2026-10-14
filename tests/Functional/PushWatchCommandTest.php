@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
+use App\Tests\Support\EnvOverride;
 use App\Console\PushWatchCommand;
 use App\Notification\NotificationEvent;
 use App\Notification\NotificationManager;
@@ -17,8 +19,6 @@ use App\Repository\UserRepository;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertFileDoesNotExist;
 use function PHPUnit\Framework\assertGreaterThan;
@@ -93,10 +93,7 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->subs = new PushSubscriptionRepository($this->db);
 
@@ -180,13 +177,7 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
         if (!$this->staffPushEnabled) {
             $this->users->setPushEnabled($this->staffId, false);
         }
-        foreach ($this->previousEnv as $name => $value) {
-            if ($value === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = $value;
-            }
-        }
+        EnvOverride::restore($this->previousEnv);
         $this->previousEnv = [];
 
         foreach (glob($this->tempDir . '/*') ?: [] as $file) {
@@ -696,10 +687,7 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
      */
     private function loadVapidKeys(): void
     {
-        $this->previousEnv = [
-            'VAPID_SUBJECT' => $_ENV['VAPID_SUBJECT'] ?? null,
-            'VAPID_PRIVATE_KEY' => $_ENV['VAPID_PRIVATE_KEY'] ?? null,
-        ];
+        $this->previousEnv = EnvOverride::snapshot('VAPID_SUBJECT', 'VAPID_PRIVATE_KEY');
 
         if (VapidKeys::fromEnv() !== null) {
             return;

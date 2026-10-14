@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
+use App\Tests\Support\EnvOverride;
 use App\Auth\Identity;
 use App\Notification\NotificationEvent;
 use App\Notification\NotificationManager;
@@ -24,8 +26,6 @@ use App\Service\ServiceManager;
 use App\Service\ServiceRequestAdminService;
 use App\Service\StatusPresenter;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertArrayHasKey;
 use function PHPUnit\Framework\assertContains;
@@ -87,10 +87,7 @@ final class ServiceOrderNotificationTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->services = new ServiceRepository($this->db);
         $this->users = new UserRepository($this->db);
         $this->orders = TestGraph::orders($this->db);
@@ -190,13 +187,7 @@ final class ServiceOrderNotificationTest extends \Codeception\Test\Unit
         TestGraph::purgeServiceOrders($this->db, $this->serviceId);
         $this->db->createCommand()->delete('{{%service}}', ['id' => $this->serviceId])->execute();
 
-        foreach (['VAPID_SUBJECT', 'VAPID_PRIVATE_KEY'] as $name) {
-            if ($this->previousEnv[$name] === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = $this->previousEnv[$name];
-            }
-        }
+        EnvOverride::restore($this->previousEnv);
         $this->previousEnv = [];
     }
 
@@ -211,10 +202,7 @@ final class ServiceOrderNotificationTest extends \Codeception\Test\Unit
      */
     private function loadVapidKeys(): void
     {
-        $this->previousEnv = [
-            'VAPID_SUBJECT' => $_ENV['VAPID_SUBJECT'] ?? null,
-            'VAPID_PRIVATE_KEY' => $_ENV['VAPID_PRIVATE_KEY'] ?? null,
-        ];
+        $this->previousEnv = EnvOverride::snapshot('VAPID_SUBJECT', 'VAPID_PRIVATE_KEY');
 
         if (VapidKeys::fromEnv() !== null) {
             return;

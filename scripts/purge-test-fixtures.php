@@ -25,10 +25,22 @@ declare(strict_types=1);
 
 $dryRun = in_array('--dry-run', $argv, true);
 
-$dsn = sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', '127.0.0.1', 'th_tools');
-$pdo = new PDO($dsn, 'root', '', [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-]);
+// The same database the suite ran against, read the same way the application
+// reads it. Hard-coding a host and a database name here meant the script
+// silently pointed at a different database than the tests on every machine
+// whose .env names another one.
+require_once __DIR__ . '/../vendor/autoload.php';
+
+if (empty($_ENV['APP_ENV']) && class_exists(\Dotenv\Dotenv::class)) {
+    \Dotenv\Dotenv::createImmutable(dirname(__DIR__))->safeLoad();
+}
+
+$pdo = new PDO(
+    (string) \App\Env::get('DB_DSN'),
+    (string) \App\Env::get('DB_USERNAME'),
+    (string) \App\Env::get('DB_PASSWORD'),
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+);
 
 /** Every fixture user id, captured once so the deletes cannot drift mid-run. */
 $fixtureIds = $pdo

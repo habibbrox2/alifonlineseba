@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\Identity;
 use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
@@ -15,8 +16,6 @@ use App\Repository\UserRepository;
 use App\Service\OrderWindowService;
 use App\Service\ServiceManager;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertFalse;
 use function PHPUnit\Framework\assertSame;
@@ -51,10 +50,7 @@ final class OrderWindowTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->settings = new SettingsRepository($this->db);
         $this->users = new UserRepository($this->db);
         $this->managerFor = fn (OrderWindowService $window): ServiceManager => new ServiceManager(

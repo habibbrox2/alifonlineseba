@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\ApiTokenRepository;
 use App\Notification\MessageTemplates;
 use App\Notification\NotificationEvent;
@@ -15,10 +16,9 @@ use App\Repository\SettingsRepository;
 use App\Repository\UserRepository;
 use ReflectionClass;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertContains;
+use function PHPUnit\Framework\assertGreaterThan;
 use function PHPUnit\Framework\assertGreaterThanOrEqual;
 use function PHPUnit\Framework\assertNotContains;
 use function PHPUnit\Framework\assertStringContainsString;
@@ -46,10 +46,7 @@ final class NotificationCoreTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->queue = new QueueRepository($this->db);
 
@@ -147,16 +144,33 @@ final class NotificationCoreTest extends \Codeception\Test\Unit
         $userId = $this->makeUser('b');
         $params = ['amount' => '250.00', 'method' => 'bKash', 'reference' => 'TRXDUPE', 'topup_id' => 7, 'user_id' => $userId];
 
-        // topup.approved queues fcm for the user — the replayed business
-        // action (double-clicked approve) must not enqueue a second row.
-        $this->notify->dispatch(NotificationEvent::TOPUP_APPROVED, $userId, $params);
-        $this->notify->dispatch(NotificationEvent::TOPUP_APPROVED, $userId, $params);
-
-        $count = (int) $this->db
+        // topup.approved queues the channels this user can receive on - the
+        // replayed business action (double-clicked approve) must not enqueue a
+        // second row for any of them.
+        //
+        // How many channels that is depends on the deployment: a machine with
+        // VAPID keys configured gives the user in_app *and* webpush, so counting
+        // rows and expecting a fixed number asserts the environment rather than
+        // the dedupe key. Comparing the count before and after the replay states
+        // the invariant itself, and is what would still catch a dedupe key that
+        // stopped working.
+        $count = fn (): int => (int) $this->db
             ->createCommand('SELECT COUNT(*) FROM {{%notification_queue}} WHERE [[user_id]] = :u')
             ->bindValue(':u', $userId)
             ->queryScalar();
-        assertSame(1, $count, 'The replayed dispatch must enqueue nothing new (dedupe key).');
+
+        $this->notify->dispatch(NotificationEvent::TOPUP_APPROVED, $userId, $params);
+        $afterFirst = $count();
+
+        assertGreaterThan(0, $afterFirst, 'the first dispatch must enqueue something to dedupe against.');
+
+        $this->notify->dispatch(NotificationEvent::TOPUP_APPROVED, $userId, $params);
+
+        assertSame(
+            $afterFirst,
+            $count(),
+            'The replayed dispatch must enqueue nothing new (dedupe key).',
+        );
     }
 
     public function testTopupRequestedFansOutToAdmins(): void

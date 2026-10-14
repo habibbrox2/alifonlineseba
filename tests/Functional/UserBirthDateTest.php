@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Repository\UserRepository;
 use App\Service\ServiceDate;
 use App\Service\UserFields;
@@ -13,8 +14,6 @@ use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Definitions\Exception\NotFoundException;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertNotNull;
 use function PHPUnit\Framework\assertNull;
@@ -38,10 +37,7 @@ final class UserBirthDateTest extends Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
     }
 
     /** Stands in for App\Auth\Identity, which needs a session-backed row. */
@@ -78,6 +74,17 @@ final class UserBirthDateTest extends Unit
             ['cache' => false, 'autoescape' => 'html', 'strict_variables' => false],
         );
         $twig->addExtension(new TwigExtension());
+
+        // partials/sidebar.twig, which the dashboard pulls in, gates every admin
+        // link on can_access(). The real PermissionExtension is type-hinted to
+        // the real Identity and reads the role matrix, so it cannot be built for
+        // the stand-in identity this test renders with — the function is stubbed
+        // to answer from canAccessAdmin() instead. Without it the render died on
+        // "Call to a member function getCallable() on null".
+        $twig->addFunction(new \Twig\TwigFunction(
+            'can_access',
+            static fn (object $identity, string $route): bool => $identity->canAccessAdmin(),
+        ));
 
         return $twig;
     }

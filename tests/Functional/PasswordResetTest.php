@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\AuthThrottle;
 use App\Notification\Channel\TelegramChannel;
 use App\Notification\Channel\WhatsAppChannel;
@@ -14,8 +15,6 @@ use App\Service\PasswordResetService;
 use App\Tests\Support\TestGraph;
 use Yiisoft\Cache\ArrayCache;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertFalse;
 use function PHPUnit\Framework\assertNotNull;
@@ -58,10 +57,7 @@ final class PasswordResetTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
 
         // ArrayCache, not the app's file cache: the throttle counters must not

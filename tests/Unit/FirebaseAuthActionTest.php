@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit;
 
+use App\Tests\Support\Database;
 use App\Auth\FirebaseAuthService;
 use App\Auth\FirebaseIdTokenVerifier;
 use App\Auth\IdentityRepository;
@@ -13,8 +14,6 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 use Yiisoft\Session\SessionInterface;
 use Yiisoft\Aliases\Aliases;
 use Yiisoft\View\WebView;
@@ -43,10 +42,7 @@ final class FirebaseAuthActionTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->suffix = 'faa' . substr(md5(uniqid('', true)), 0, 8);
     }

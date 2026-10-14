@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Repository\ActivityLogRepository;
 use App\Repository\ServiceRepository;
 use App\Repository\UserRepository;
@@ -11,8 +12,6 @@ use App\Service\ServiceBulkAction;
 use App\Tests\Support\TestGraph;
 use App\Web\Admin\AdminServicesAction;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertContains;
 use function PHPUnit\Framework\assertCount;
@@ -67,10 +66,7 @@ final class AdminServicesBulkTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->services = new ServiceRepository($this->db);
         $this->logs = new ActivityLogRepository($this->db);
         $this->users = new UserRepository($this->db);

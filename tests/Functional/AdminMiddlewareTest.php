@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\Identity;
 use App\Repository\ActivityLogRepository;
 use App\Repository\RoleRankRepository;
@@ -12,8 +13,6 @@ use App\Service\PermissionService;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 use Yiisoft\Router\CurrentRoute;
 use Yiisoft\Router\Route;
 
@@ -36,10 +35,7 @@ final class AdminMiddlewareTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->logs = new ActivityLogRepository($this->db);
         $this->roleRanks = new RoleRankRepository($this->db);

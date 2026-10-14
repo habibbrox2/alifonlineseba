@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Repository\SettingsRepository;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Definitions\Exception\NotFoundException;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertSame;
 
@@ -19,10 +18,7 @@ final class SettingsRepositoryTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->settings = new SettingsRepository($this->db);
     }
 

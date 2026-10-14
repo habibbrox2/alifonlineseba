@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Env;
+use App\Tests\Support\EnvOverride;
 use App\Notification\Push\VapidKeys;
 use App\Repository\UserRepository;
 use App\Tests\Support\FunctionalTester;
@@ -712,7 +714,22 @@ final class PushPromptCest
      */
     private function signIn(FunctionalTester $tester, string $username): array
     {
-        $form = $this->send($tester, new ServerRequest(uri: '/login'));
+        // A new visitor arrives with no session cookie, and the server mints
+        // one. This harness cannot express that: the application's session
+        // object is reused across these in-process requests and re-applies the
+        // id it is holding, so a request that arrives without a cookie silently
+        // adopts the *previous* request's session instead of getting a fresh
+        // one. Two sign-ins then shared one session, the second account never
+        // became the signed-in identity, and every assertion after it read the
+        // first account's page. Handing the request an id of its own says what
+        // the server would have done; strict mode replaces it regardless,
+        // because no session file exists under it yet.
+        $name = (string) Env::get('SESSION_NAME', 'ALIF_SESSION');
+
+        $form = $this->send($tester, new ServerRequest(
+            uri: '/login',
+            cookieParams: [$name => bin2hex(random_bytes(13))],
+        ));
         assertSame(200, $form->getStatusCode());
 
         $cookie = $this->sessionCookies($form->getHeaderLine('Set-Cookie'));
@@ -789,6 +806,15 @@ final class PushPromptCest
 
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
+            // write_close() ends the session but leaves $_SESSION populated,
+            // and PHP keeps exactly one session per process. Every request this
+            // harness runs is in-process, so without this the *next* request
+            // starts out already holding the previous one's identity — two
+            // sign-ins ended up sharing one session id, and every assertion
+            // after them read the first account's page while believing it had
+            // signed in as the second. The cookie the test hands over is the only
+            // thing that should carry a request across; the leftovers must not.
+            $_SESSION = [];
         }
 
         return $response;
@@ -876,11 +902,8 @@ final class PushPromptCest
      */
     private function withoutVapidKeys(): array
     {
-        $saved = [
-            'VAPID_SUBJECT' => $_ENV['VAPID_SUBJECT'] ?? null,
-            'VAPID_PRIVATE_KEY' => $_ENV['VAPID_PRIVATE_KEY'] ?? null,
-        ];
-        unset($_ENV['VAPID_SUBJECT'], $_ENV['VAPID_PRIVATE_KEY']);
+        $saved = EnvOverride::snapshot('VAPID_SUBJECT', 'VAPID_PRIVATE_KEY');
+        EnvOverride::clear('VAPID_SUBJECT', 'VAPID_PRIVATE_KEY');
         return $saved;
     }
 
@@ -889,13 +912,7 @@ final class PushPromptCest
      */
     private function restoreEnv(array $saved): void
     {
-        foreach ($saved as $name => $value) {
-            if ($value === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = $value;
-            }
-        }
+        EnvOverride::restore($saved);
     }
 
     /**
@@ -907,10 +924,7 @@ final class PushPromptCest
      */
     private function loadVapidKeys(): void
     {
-        $this->previousEnv = [
-            'VAPID_SUBJECT' => $_ENV['VAPID_SUBJECT'] ?? null,
-            'VAPID_PRIVATE_KEY' => $_ENV['VAPID_PRIVATE_KEY'] ?? null,
-        ];
+        $this->previousEnv = EnvOverride::snapshot('VAPID_SUBJECT', 'VAPID_PRIVATE_KEY');
 
         if (VapidKeys::fromEnv() !== null) {
             return;
@@ -920,7 +934,7 @@ final class PushPromptCest
         $values = \Dotenv\Dotenv::createArrayBacked(dirname(__DIR__, 2))->safeLoad();
         foreach (['VAPID_SUBJECT', 'VAPID_PRIVATE_KEY'] as $name) {
             if (isset($values[$name]) && $values[$name] !== '') {
-                $_ENV[$name] = $values[$name];
+                EnvOverride::set((string) $name, (string) $values[$name]);
             }
         }
 

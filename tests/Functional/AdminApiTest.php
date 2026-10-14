@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\Identity;
 use App\Notification\QueueRepository;
 use App\Repository\ActivityLogRepository;
@@ -30,8 +31,6 @@ use App\Web\Api\Admin\AdminWithdrawsApiAction;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 use Yiisoft\Router\CurrentRoute;
 use Yiisoft\Router\Route;
 
@@ -76,10 +75,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->topups = new TopupRepository($this->db);
         $this->orders = new ServiceOrderRepository($this->db);
@@ -287,6 +283,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
                 new \App\Repository\TransactionRepository($this->db),
                 $this->logs,
                 $this->topups,
+                $this->queue,
             );
         }
         if (preg_match('#^/api/admin/users$#', $uri)) {
@@ -1090,10 +1087,15 @@ final class AdminApiTest extends \Codeception\Test\Unit
 
     public function testStaffPasswordResetRequiresPermission(): void
     {
-        $admin = $this->makeUser('sprestaff', 'admin');
+        // Staff, not admin: the matrix grants admins `staff.update` (they may
+        // create, read and edit staff — only delete and superadmin promotion
+        // are withheld), so an admin is *supposed* to be allowed here and would
+        // have been the wrong negative case. A staff account is what actually
+        // lacks the permission, which is what this test is about.
+        $staff = $this->makeUser('sprestaff', 'staff');
         $target = $this->makeUser('spretarget', 'staff');
 
-        $response = $this->call($admin, 'POST', '/api/admin/staff', [], [
+        $response = $this->call($staff, 'POST', '/api/admin/staff', [], [
             'do' => 'reset',
             'user_id' => (string) $target->id,
         ]);

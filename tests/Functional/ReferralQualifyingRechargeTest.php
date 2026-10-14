@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\Identity;
 use App\Repository\ActivityLogRepository;
 use App\Repository\NotificationRepository;
@@ -19,8 +20,6 @@ use App\Service\TopupService;
 use App\Tests\Support\TestGraph;
 use Nyholm\Psr7\UploadedFile;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertEquals;
 use function PHPUnit\Framework\assertFalse;
@@ -96,10 +95,7 @@ final class ReferralQualifyingRechargeTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
 
         $this->users = new UserRepository($this->db);
         $this->settings = new SettingsRepository($this->db);

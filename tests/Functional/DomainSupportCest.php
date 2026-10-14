@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\EnvOverride;
 use App\Tests\Support\FunctionalTester;
 use HttpSoft\Message\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
@@ -148,7 +149,7 @@ final class DomainSupportCest
     {
         $this->stashEnv();
         $saved = $this->previousEnv;
-        unset($_ENV['APP_URL'], $_ENV['CANONICAL_URL'], $_SERVER['APP_URL'], $_SERVER['CANONICAL_URL']);
+        EnvOverride::clear('APP_URL', 'CANONICAL_URL');
 
         try {
             $response = $this->send($tester, self::OTHER_HOST . '/');
@@ -173,8 +174,8 @@ final class DomainSupportCest
     private function withDomainEnv(callable $scenario): void
     {
         $this->stashEnv();
-        $_ENV['APP_URL'] = self::DEFAULT_DOMAIN;
-        $_ENV['CANONICAL_URL'] = self::DEFAULT_DOMAIN;
+        EnvOverride::set('APP_URL', self::DEFAULT_DOMAIN);
+        EnvOverride::set('CANONICAL_URL', self::DEFAULT_DOMAIN);
 
         try {
             $scenario();
@@ -186,21 +187,13 @@ final class DomainSupportCest
 
     private function stashEnv(): void
     {
-        foreach (['APP_URL', 'CANONICAL_URL'] as $name) {
-            $this->previousEnv[$name] = $_ENV[$name] ?? null;
-        }
+        $this->previousEnv = EnvOverride::snapshot('APP_URL', 'CANONICAL_URL');
     }
 
     /** @param array<string, string|null> $saved */
     private function restoreEnv(array $saved): void
     {
-        foreach ($saved as $name => $value) {
-            if ($value === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = $value;
-            }
-        }
+        EnvOverride::restore($saved);
     }
 
     private function send(FunctionalTester $tester, string $uri): ResponseInterface

@@ -68,6 +68,18 @@ final class AdminCreateServiceLinkTest extends Unit
         );
         $twig->addExtension(new TwigExtension());
 
+        // partials/sidebar.twig gates every admin link on can_access(), which
+        // normally arrives with PermissionExtension. That one is type-hinted to
+        // the real Identity and reads the role matrix, neither of which exists
+        // for the stand-in this test renders with — so the function is stubbed
+        // to what the test actually varies: whether the viewer is an admin.
+        // Without it the whole sidebar raised "Unknown can_access function"
+        // and the five view assertions could not run at all.
+        $twig->addFunction(new \Twig\TwigFunction(
+            'can_access',
+            static fn (object $identity, string $route): bool => $identity->canAccessAdmin(),
+        ));
+
         return $twig;
     }
 
@@ -187,5 +199,45 @@ final class AdminCreateServiceLinkTest extends Unit
         assertNull(AdminServicesAction::preselectCategoryValues(0, $categories));
         assertNull(AdminServicesAction::preselectCategoryValues(-3, $categories));
         assertNull(AdminServicesAction::preselectCategoryValues(7, []));
+    }
+
+    /**
+     * The edit form posts no slug, so this is what every Bengali-named service
+     * got: an empty slug from its name, which failed validation and silently
+     * discarded the whole update — price included.
+     */
+    public function testAnEditWithoutAPostedSlugKeepsTheStoredOne(): void
+    {
+        $stored = ['id' => 1, 'name' => 'এনআইডি মেইক', 'slug' => 'nid-make'];
+
+        assertSame(
+            'nid-make',
+            AdminServicesAction::resolveSlug(['name' => 'এনআইডি মেইক', 'price' => '45'], $stored),
+        );
+    }
+
+    public function testAPostedSlugStillReplacesTheStoredOne(): void
+    {
+        $stored = ['id' => 1, 'slug' => 'nid-make'];
+
+        assertSame('nid-make-v2', AdminServicesAction::resolveSlug(['slug' => 'NID Make v2'], $stored));
+        assertSame('nid-make-v2', AdminServicesAction::resolveSlug(['slug' => ' nid make v2 '], $stored));
+    }
+
+    public function testACreateStillDerivesTheSlugFromTheName(): void
+    {
+        assertSame('tin-certificate', AdminServicesAction::resolveSlug(['name' => 'Tin Certificate']));
+
+        // Empty, and the caller reports it: a Bengali name has no ASCII to slugify,
+        // so a create has to ask for the slug instead of storing a blank one.
+        assertSame('', AdminServicesAction::resolveSlug(['name' => 'টিন সার্টিফিকেট']));
+    }
+
+    public function testAnUpdateWhoseStoredRowIsGoneFallsBackToTheName(): void
+    {
+        // No stored service to keep: the same rules as a create, so the admin
+        // gets the "give me a slug" error rather than an empty slug written.
+        assertSame('', AdminServicesAction::resolveSlug(['name' => 'টিন সার্টিফিকেট'], null));
+        assertSame('tin', AdminServicesAction::resolveSlug(['name' => 'Tin'], ['id' => 3, 'slug' => '']));
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Functional;
 
 use App\Auth\Identity;
+use App\Env;
 use App\Repository\SettingsRepository;
 use App\Repository\UserRepository;
 use App\Tests\Support\FunctionalTester;
@@ -277,7 +278,20 @@ final class AdminSettingsScopeCest
      */
     private function signIn(FunctionalTester $tester, string $username): array
     {
-        $form = $this->send($tester, new ServerRequest(uri: '/login'));
+        // A new visitor arrives with no session cookie and the server mints one.
+        // This harness cannot express that: the application's session object is
+        // reused across these in-process requests and re-applies the id it is
+        // holding, so a request without a cookie silently adopts the *previous*
+        // request's session — this account never became the signed-in identity
+        // and the assertions below read the wrong account's permissions. An id
+        // of its own says what the server would have done; strict mode replaces
+        // it regardless, because no session file exists under it yet.
+        $name = (string) Env::get('SESSION_NAME', 'ALIF_SESSION');
+
+        $form = $this->send($tester, new ServerRequest(
+            uri: '/login',
+            cookieParams: [$name => bin2hex(random_bytes(13))],
+        ));
         assertSame(200, $form->getStatusCode());
 
         $cookie = $this->sessionCookies($form->getHeaderLine('Set-Cookie'));
@@ -340,7 +354,8 @@ final class AdminSettingsScopeCest
     /**
      * Each sendRequest() boots a fresh application runner inside this same PHP
      * process, so the session has to be closed in between or the next request
-     * inherits the one still open here — carrying nothing, CSRF included.
+     * inherits the one still open here — carrying nothing, CSRF included, and
+     * with it whatever identity the previous request had.
      */
     private function send(FunctionalTester $tester, ServerRequest $request): ResponseInterface
     {
@@ -348,6 +363,11 @@ final class AdminSettingsScopeCest
 
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
+            // write_close() ends the session but leaves $_SESSION populated, so
+            // without this the next request starts out holding the previous
+            // one's identity. The cookie the test hands over is the only thing
+            // that should carry a request across.
+            $_SESSION = [];
         }
 
         return $response;

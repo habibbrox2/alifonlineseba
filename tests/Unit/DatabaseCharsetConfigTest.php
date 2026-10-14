@@ -125,18 +125,46 @@ final class DatabaseCharsetConfigTest extends Unit
         // The unit above compares strings; this proves the resulting DSN is one
         // PDO accepts, against a real server. Without it, a normalisation that
         // merely looks right could still fail at PDO::__construct.
-        $host = getenv('DB_HOST') ?: '127.0.0.1';
-        $name = getenv('DB_NAME') ?: 'th_tools';
-        $user = getenv('DB_USERNAME');
-        if ($user === false) {
-            $user = 'root';
-        }
+        //
+        // Host, database and credentials come from the app's own env rather than
+        // from getenv(): the DSN is the single source of truth, and re-deriving
+        // a host/name here is how this test came to be pinned to one machine's
+        // database name.
+        [$host, $name] = $this->hostAndDatabase();
 
         $dsn = $this->dsnFor(sprintf('mysql:host=%s;dbname=%s;charset=', $host, $name));
 
-        $pdo = new \PDO($dsn, $user, (string) (getenv('DB_PASSWORD') ?: ''));
+        $pdo = new \PDO($dsn, self::user(), self::password());
         $pdo->query('SELECT 1');
 
         assertSame(1, 1, 'connecting with the normalised DSN should succeed');
+    }
+
+    /**
+     * Host and database name taken apart from DB_DSN.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function hostAndDatabase(): array
+    {
+        $parameters = [];
+        foreach (explode(';', (string) \App\Env::get('DB_DSN')) as $parameter) {
+            $pair = explode('=', trim($parameter), 2);
+            if (count($pair) === 2) {
+                $parameters[strtolower($pair[0])] = $pair[1];
+            }
+        }
+
+        return [$parameters['host'] ?? '127.0.0.1', $parameters['dbname'] ?? 'th_tools'];
+    }
+
+    private static function user(): string
+    {
+        return (string) (\App\Env::get('DB_USERNAME') ?? 'root');
+    }
+
+    private static function password(): string
+    {
+        return (string) (\App\Env::get('DB_PASSWORD') ?? '');
     }
 }

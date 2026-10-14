@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Repository\AppReleaseRepository;
 use App\Service\AppReleaseService;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertFalse;
 use function PHPUnit\Framework\assertGreaterThan;
@@ -58,10 +57,7 @@ final class AppReleaseTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->releases = new AppReleaseRepository($this->db);
 
         // A throwaway directory, so the tests never read or delete the real

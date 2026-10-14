@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Auth\Identity;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
@@ -18,8 +19,6 @@ use App\ServiceProvider\ServiceResult;
 use App\Tests\Support\TestGraph;
 use Codeception\Test\Unit;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 use Nyholm\Psr7\UploadedFile;
 
 use function PHPUnit\Framework\assertArrayHasKey;
@@ -68,10 +67,7 @@ final class ServiceSubmissionTest extends Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
 
         $this->services = new ServiceRepository($this->db);
         $this->orders = new ServiceOrderRepository($this->db);

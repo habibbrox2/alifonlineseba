@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\Database;
 use App\Notification\MessageTemplates;
 use App\Notification\NotificationEvent;
 use App\Notification\NotificationManager;
@@ -14,8 +15,6 @@ use App\Repository\NotificationRepository;
 use App\Repository\SettingsRepository;
 use App\Repository\UserRepository;
 use Yiisoft\Db\Connection\ConnectionInterface;
-use Yiisoft\Di\Container;
-use Yiisoft\Di\ContainerConfig;
 
 use function PHPUnit\Framework\assertContains;
 use function PHPUnit\Framework\assertNotContains;
@@ -59,10 +58,7 @@ final class NotificationContactFanOutTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        $container = new Container(ContainerConfig::create()->withDefinitions(
-            require codecept_root_dir() . 'config/common/di/db.php',
-        ));
-        $this->db = $container->get(ConnectionInterface::class);
+        $this->db = Database::connection();
         $this->users = new UserRepository($this->db);
         $this->queue = new QueueRepository($this->db);
         $this->bots = new BotConnectionRepository($this->db);

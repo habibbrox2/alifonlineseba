@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Tests\Support\EnvOverride;
 use App\Service\TwaAssetLinks;
 use App\Web\Site\AssetLinksAction;
 use HttpSoft\Message\ResponseFactory;
@@ -49,20 +50,12 @@ final class AssetLinksTest extends \Codeception\Test\Unit
 
     protected function _before(): void
     {
-        foreach (['TWA_ORIGIN', 'TWA_FINGERPRINTS'] as $name) {
-            $this->previousEnv[$name] = $_ENV[$name] ?? null;
-        }
+        $this->previousEnv = EnvOverride::snapshot('TWA_ORIGIN', 'TWA_FINGERPRINTS');
     }
 
     protected function _after(): void
     {
-        foreach ($this->previousEnv as $name => $value) {
-            if ($value === null) {
-                unset($_ENV[$name]);
-            } else {
-                $_ENV[$name] = $value;
-            }
-        }
+        EnvOverride::restore($this->previousEnv);
     }
 
     /**
@@ -76,7 +69,7 @@ final class AssetLinksTest extends \Codeception\Test\Unit
         ];
 
         foreach ($merged as $name => $value) {
-            $_ENV[$name] = (string) $value;
+            EnvOverride::set((string) $name, (string) $value);
         }
 
         return TwaAssetLinks::fromEnv();
