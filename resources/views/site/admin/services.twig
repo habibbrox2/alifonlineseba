@@ -34,7 +34,11 @@
 {% set fvBadge = fv.badge|default(editService.badge|default('')) %}
 {% set fvDescription = fv.description|default(editService.description|default('')) %}
 {% set fvRules = fv.rules|default(editService.rules|default('')) %}
-{% set fvVariants = fv.variants|default([]) %}
+{# Variants come from AdminServicesAction::variantsForEditor(), not from `fv`:
+   `fv.variants` is never a key of the submitted values, so reading it here
+   shadowed the passed-in list with an empty one and the editor always opened
+   blank — an admin editing a priced service saw no rows to change. #}
+{% set fvVariants = fvVariants|default([]) %}
 {% set fvStatus = fv.status|default(editService.status|default('active')) %}
 {% set fvSortOrder = fv.sort_order|default(editService.sort_order|default(0)) %}
 {# Labels for ServiceBulkAction::ACTIONS, which the bar is drawn from so the two

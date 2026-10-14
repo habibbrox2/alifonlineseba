@@ -337,6 +337,37 @@ final readonly class AdminServicesAction
         return null;
     }
 
+    /**
+     * The slug an update should store: a slug actually posted wins, otherwise the
+     * stored one, and a create falls back to the name.
+     *
+     * Static and pure — like preselectCategoryValues() — because the case that
+     * matters is not reachable through the form: the edit template has no slug
+     * field, so an update posts none, and a Bengali name slugifies to nothing.
+     * Deriving the slug from that name rejected every edit of every Bengali-named
+     * service, price included. Slugs are URLs (OG images, TWA deep links, shared
+     * links), so an edit must keep the one it has.
+     *
+     * @param array<string, mixed> $input Parsed body: 'slug' and 'name'.
+     * @param array<string, mixed>|null $current The stored service on an update.
+     */
+    public static function resolveSlug(array $input, ?array $current = null): string
+    {
+        $posted = trim((string) ($input['slug'] ?? ''));
+        if ($posted === '' && $current !== null) {
+            $posted = trim((string) ($current['slug'] ?? ''));
+        }
+
+        return self::slugify($posted !== '' ? $posted : (string) ($input['name'] ?? ''));
+    }
+
+    private static function slugify(string $text): string
+    {
+        $text = strtolower(trim($text));
+        $text = preg_replace('/[^a-z0-9]+/', '-', $text) ?? '';
+        return trim($text, '-');
+    }
+
     /** Rules text for the editor: submitted value wins, else the stored one. */
     private function rulesForEditor(?array $formValues, ?array $editService): string
     {
@@ -475,7 +506,9 @@ final readonly class AdminServicesAction
             $errors[] = 'সার্ভিসের নাম সর্বোচ্চ ১৯০ অক্ষরের হতে হবে।';
         }
 
-        $slug = $this->slugify((string) ($input['slug'] ?? '') ?: $name);
+        // The edit form has no slug field, so an update usually posts none, and a
+        // Bengali name slugifies to nothing — see resolveSlug().
+        $slug = self::resolveSlug($input, $this->currentService($ignoreId));
         $slugLength = mb_strlen($slug);
         if ($slug === '') {
             $errors[] = 'স্লাগ দিন বা নাম থেকে স্লাগ তৈরি হোক।';
@@ -1064,10 +1097,9 @@ final readonly class AdminServicesAction
         $this->session->set(self::FORM_KEY, $form);
     }
 
-    private function slugify(string $text): string
+    /** The stored service an update targets, so resolveSlug() can keep its slug. */
+    private function currentService(?int $id): ?array
     {
-        $text = strtolower(trim($text));
-        $text = preg_replace('/[^a-z0-9]+/', '-', $text) ?? '';
-        return trim($text, '-');
+        return $id !== null && $id > 0 ? $this->services->findServiceById($id, true) : null;
     }
 }
