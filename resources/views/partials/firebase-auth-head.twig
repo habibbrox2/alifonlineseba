@@ -73,7 +73,8 @@
                 signInOptions: [
                     firebase.auth.GoogleAuthProvider.PROVIDER_ID,
                 ],
-                signInFlow: 'redirect',
+                signInFlow: 'popup',
+                credentialHelper: 'none',
                 callbacks: {
                     signInSuccessWithAuthResult: function(authResult) {
                         completeFirebaseSignIn(authResult);
