@@ -200,7 +200,9 @@ final class WebPushEncryptionTest extends Unit
     /** @return array{p256dh: string, auth: string, privatePem: string, point: string} */
     private function subscriberKeyPair(): array
     {
-        $pem = $this->runOpenssl(['openssl', 'ecparam', '-genkey', '-name', 'prime256v1'], null);
+        $openssl = $this->opensslBinary();
+
+        $pem = $this->runOpenssl([$openssl, 'ecparam', '-genkey', '-name', 'prime256v1'], null);
         Assert::assertNotNull($pem, 'openssl ecparam -genkey must succeed');
         Assert::assertStringContainsString('BEGIN', $pem);
 
@@ -210,7 +212,7 @@ final class WebPushEncryptionTest extends Unit
         // A browser does not expose its public key through an OpenSSL key
         // object either; it hands the site a base64url point. The binary's
         // SubjectPublicKeyInfo DER ends with exactly those 65 bytes.
-        $der = $this->runOpenssl(['openssl', 'ec', '-pubout', '-outform', 'DER'], $pem);
+        $der = $this->runOpenssl([$openssl, 'ec', '-pubout', '-outform', 'DER'], $pem);
         Assert::assertNotNull($der);
         $point = substr($der, -65);
         Assert::assertSame("\x04", $point[0]);
@@ -230,6 +232,65 @@ final class WebPushEncryptionTest extends Unit
 
     /** The subscriber's own public point, needed to redo the IKM derivation. */
     private string $subscriberPoint = '';
+
+    /** Resolved once: the openssl path, or false when there is none. */
+    private static string|false|null $opensslBinary = null;
+
+    /**
+     * The openssl command line binary, or a skipped test.
+     *
+     * The CLI is used only to mint the subscriber's key pair, so its absence is
+     * an environment gap rather than a defect in the code under test — the test
+     * should say so and stand down, not fail. Bare `openssl` only resolves when
+     * it is on PATH, which on a stock XAMPP it is not: the binary sits in
+     * apache/bin without being exported, so those locations are probed too.
+     */
+    private function opensslBinary(): string
+    {
+        if (self::$opensslBinary === null) {
+            $candidates = ['openssl'];
+            if (PHP_OS_FAMILY === 'Windows') {
+                $candidates[] = 'C:\\xampp\\apache\\bin\\openssl.exe';
+                $candidates[] = 'C:\\Program Files\\Git\\usr\\bin\\openssl.exe';
+                $candidates[] = 'C:\\Program Files\\OpenSSL-Win64\\bin\\openssl.exe';
+            }
+
+            self::$opensslBinary = false;
+            foreach ($candidates as $candidate) {
+                if ($this->canRun($candidate)) {
+                    self::$opensslBinary = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if (self::$opensslBinary === false) {
+            $this->markTestSkipped(
+                'the openssl command line binary was not found on PATH or in the '
+                . 'usual install locations; install OpenSSL to run these tests',
+            );
+        }
+
+        return self::$opensslBinary;
+    }
+
+    private function canRun(string $command): bool
+    {
+        $process = @proc_open(
+            [$command, 'version'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        if (!is_resource($process)) {
+            return false;
+        }
+        stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return proc_close($process) === 0;
+    }
 
     /**
      * Run an openssl subcommand and return its stdout, or null on failure.

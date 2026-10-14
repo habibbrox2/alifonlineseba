@@ -40,6 +40,12 @@ final class WebPushChannel
     /** P-256 is the only curve RFC 8291 defines, and the only one VAPID allows. */
     private const CURVE_NAME = 'prime256v1';
 
+    /**
+     * Resolved once per process. null = not looked up yet, '' = looked up and
+     * found nothing; a non-empty string is the binary that works here.
+     */
+    private static ?string $opensslBinary = null;
+
     public function __construct(
         private readonly PushSubscriptionRepository $subscriptions,
         private readonly UserRepository $users,
@@ -458,7 +464,12 @@ final class WebPushChannel
         if (!function_exists('proc_open')) {
             return null;
         }
-        $pem = self::runOpenssl(['openssl', 'ecparam', '-genkey', '-name', self::CURVE_NAME], null);
+        $openssl = self::opensslBinary();
+        if ($openssl === null) {
+            return null;
+        }
+
+        $pem = self::runOpenssl([$openssl, 'ecparam', '-genkey', '-name', self::CURVE_NAME], null);
         // A nonzero exit means the binary is missing or the curve is
         // unknown; either way there is nothing to send.
         if ($pem === null || !str_contains($pem, 'BEGIN')) {
@@ -473,7 +484,7 @@ final class WebPushChannel
         // The SubjectPublicKeyInfo DER is a fixed 91 bytes for P-256, and the
         // uncompressed point is the last 65 of them. Asking the binary for
         // DER rather than PEM means no base64 to trim.
-        $der = self::runOpenssl(['openssl', 'ec', '-pubout', '-outform', 'DER'], $pem);
+        $der = self::runOpenssl([$openssl, 'ec', '-pubout', '-outform', 'DER'], $pem);
         if ($der === null || strlen($der) < 65) {
             return null;
         }
@@ -483,6 +494,66 @@ final class WebPushChannel
         }
 
         return ['key' => $key, 'point' => $point];
+    }
+
+    /**
+     * The openssl command line binary, or null when there is none to find.
+     *
+     * Bare `openssl` resolves only when it is on PATH, and a shared host or a
+     * stock XAMPP install ships the binary without exporting it — apache/bin on
+     * XAMPP, for instance. That turned this whole fallback into a silent dead
+     * end: encrypt() returned null for every subscription and no browser was
+     * ever sent a push, with nothing in the logs beyond a missing file.
+     *
+     * PATH first, so a deliberately installed or newer binary still wins; the
+     * fallbacks are only there for the case that motivated them. Resolved once
+     * per process — the answer cannot change between two calls a millisecond
+     * apart, and each miss costs a failed process spawn.
+     */
+    private static function opensslBinary(): ?string
+    {
+        if (self::$opensslBinary !== null) {
+            return self::$opensslBinary === '' ? null : self::$opensslBinary;
+        }
+
+        $candidates = ['openssl'];
+        if (PHP_OS_FAMILY === 'Windows') {
+            $candidates[] = 'C:\\xampp\\apache\\bin\\openssl.exe';
+            $candidates[] = 'C:\\Program Files\\Git\\usr\\bin\\openssl.exe';
+            $candidates[] = 'C:\\Program Files\\OpenSSL-Win64\\bin\\openssl.exe';
+        }
+
+        self::$opensslBinary = '';
+        foreach ($candidates as $candidate) {
+            if (self::canRun($candidate)) {
+                self::$opensslBinary = $candidate;
+                break;
+            }
+        }
+
+        return self::$opensslBinary === '' ? null : self::$opensslBinary;
+    }
+
+    private static function canRun(string $command): bool
+    {
+        if (!function_exists('proc_open')) {
+            return false;
+        }
+
+        $process = @proc_open(
+            [$command, 'version'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        if (!is_resource($process)) {
+            return false;
+        }
+        stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return proc_close($process) === 0;
     }
 
     /**
