@@ -188,3 +188,6 @@ When reporting work, summarize:
 4. Any checks not run, known risks, required environment setup or follow-up work.
 
 Do not claim that code is deployed, a notification was delivered, a migration succeeded, a test passed or an Android package was signed unless that result was directly verified.
+
+
+AGENTS ALWAYS TRY USE MCP CPMMECTOPM RETRY AND USE.

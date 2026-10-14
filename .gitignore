@@ -78,6 +78,11 @@ __pycache__/
 # and every clone would carry 137 files that no build or deploy reads.
 /.agents/
 
+# The skills CLI also writes these when installing project-local packs. Same
+# rationale as /.agents/: third-party agent docs, not app source.
+/.claude/
+/skills-lock.json
+
 # Local editor temp metadata and crash files
 *.swp
 *.swo
