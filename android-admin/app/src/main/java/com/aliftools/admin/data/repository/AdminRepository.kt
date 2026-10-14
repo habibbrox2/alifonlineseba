@@ -176,6 +176,10 @@ class AdminRepository @Inject constructor(
 
     suspend fun staff(page: Int = 1, query: String? = null): Result<PagedResponse<User>> {
         return safeApiCall { adminApi.staff(page, query) }
+    }
+
+    suspend fun staffAction(action: String, id: Int): Result<ActionResponse> {
+        return safeApiCall { adminApi.staffAction(action = action, id = id) }
     }    // Settings — GET and POST both return the flat {key: value} map that
     // SettingsRepository::all() builds, not a list of rows.
     suspend fun settings(): Result<Map<String, String>> {
@@ -198,6 +202,10 @@ class AdminRepository @Inject constructor(
 
     suspend fun retryNotification(id: Int): Result<ActionResponse> {
         return safeApiCall { adminApi.retryNotification(id) }
+    }
+
+    suspend fun deleteNotification(id: Int): Result<ActionResponse> {
+        return safeApiCall { adminApi.deleteNotification(id) }
     }
 
     // Devices

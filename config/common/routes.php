@@ -221,6 +221,7 @@ return [
         Route::get('/logs')->action(AdminLogsApiAction::class)->name('api-admin-logs'),
         Route::get('/notifications')->action(AdminNotificationsApiAction::class)->name('api-admin-notifications'),
         Route::post('/notifications/{id}/retry')->action(AdminNotificationsApiAction::class)->name('api-admin-notification-retry'),
+        Route::post('/notifications/{id}/delete')->action(AdminNotificationsApiAction::class)->name('api-admin-notification-delete'),
     ),
 
     // Admin (admin/staff/superadmin)

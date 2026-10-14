@@ -145,6 +145,13 @@ interface AdminApiService {
         @Query("q") query: String? = null
     ): Response<ApiResponse<PagedResponse<User>>>
 
+    @FormUrlEncoded
+    @POST("api/admin/staff")
+    suspend fun staffAction(
+        @Field("do") action: String,
+        @Field("user_id") id: Int? = null,
+    ): Response<ApiResponse<ActionResponse>>
+
     @GET("api/admin/settings")
     suspend fun settings(): Response<ApiResponse<Map<String, String>>>
 
@@ -169,6 +176,9 @@ interface AdminApiService {
 
     @POST("api/admin/notifications/{id}/retry")
     suspend fun retryNotification(@Path("id") id: Int): Response<ApiResponse<ActionResponse>>
+
+    @POST("api/admin/notifications/{id}/delete")
+    suspend fun deleteNotification(@Path("id") id: Int): Response<ApiResponse<ActionResponse>>
 
     // DeviceApiAction reads `token` (not `device_token`) out of the JSON body.
     @POST("api/devices")

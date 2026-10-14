@@ -22,4 +22,9 @@ class NotificationsViewModel @Inject constructor(
         messageOf = { it.message ?: "অনুরোধটি আবার কিউতে পাঠানো হয়েছে" },
         block = { repository.retryNotification(row.id) },
     )
+
+    fun delete(row: AdminNotification) = runAction(
+        messageOf = { it.message ?: "নোটিফিকেশনটি মুছে ফেলা হয়েছে" },
+        block = { repository.deleteNotification(row.id) },
+    )
 }

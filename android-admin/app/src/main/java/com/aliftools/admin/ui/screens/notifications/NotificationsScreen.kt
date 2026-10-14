@@ -62,12 +62,13 @@ fun NotificationsScreen(
             row = row,
             busy = busy,
             onRetry = { viewModel.retry(row) },
+            onDelete = { viewModel.delete(row) },
         )
     }
 }
 
 @Composable
-private fun NotificationRow(row: AdminNotification, busy: Boolean, onRetry: () -> Unit) {
+private fun NotificationRow(row: AdminNotification, busy: Boolean, onRetry: () -> Unit, onDelete: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -106,6 +107,11 @@ private fun NotificationRow(row: AdminNotification, busy: Boolean, onRetry: () -
                 if (row.status == "dead") {
                     TextButton(onClick = onRetry, enabled = !busy) {
                         Text("আবার চালান", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                if (row.status == "sent" || row.status == "dead") {
+                    TextButton(onClick = onDelete, enabled = !busy) {
+                        Text("মুছে ফেলুন", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

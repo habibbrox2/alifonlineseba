@@ -54,7 +54,16 @@ data class AdminDashboard(
     @SerializedName("recentLogs") val recentLogs: List<ActivityLog> = emptyList(),
     @SerializedName("topupStats") val topupStats: TopupStats? = null,
     @SerializedName("unresolvedCount") val unresolvedCount: Int = 0,
-    @SerializedName("unresolvedAmount") val unresolvedAmount: String = "0.00"
+    @SerializedName("unresolvedAmount") val unresolvedAmount: String = "0.00",
+    @SerializedName("notifyStats") val notifyStats: NotifyStats? = null
+)
+
+data class NotifyStats(
+    val queued: Int = 0,
+    val processing: Int = 0,
+    val sent: Int = 0,
+    val dead: Int = 0,
+    val depth: Int = 0
 )
 
 /**

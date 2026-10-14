@@ -11,8 +11,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.data.model.User
@@ -33,6 +37,9 @@ fun StaffScreen(
     val state by viewModel.state.collectAsState()
     val busy by viewModel.busy.collectAsState()
     val snack by viewModel.snack.collectAsState()
+    val temporaryPassword by viewModel.temporaryPassword.collectAsState()
+
+    var selected by remember { mutableStateOf<User?>(null) }
 
     PagedListView(
         title = "স্টাফ",
@@ -48,13 +55,29 @@ fun StaffScreen(
         onSnackShown = viewModel::clearSnack,
         itemKey = { it.id },
     ) { member ->
-        StaffRow(member = member)
+        StaffRow(member = member, onClick = { selected = member })
+    }
+
+    selected?.let { user ->
+        StaffActionsDialog(
+            user = user,
+            busy = busy,
+            onDismiss = { selected = null },
+            onReset = { viewModel.resetPassword(user) },
+        )
+    }
+
+    temporaryPassword?.let { password ->
+        TemporaryPasswordDialog(
+            password = password,
+            onDismiss = viewModel::dismissTemporaryPassword,
+        )
     }
 }
 
 @Composable
-private fun StaffRow(member: User) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun StaffRow(member: User, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -96,4 +119,58 @@ private fun StaffRow(member: User) {
             }
         }
     }
+}
+
+@Composable
+private fun StaffActionsDialog(
+    user: User,
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onReset: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(user.username) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("ফোন: ${user.phone}", style = MaterialTheme.typography.bodyMedium)
+                Text("রোল: ${ROLE_LABELS[user.role] ?: user.role}", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "পাসওয়ার্ড রিসেট করলে ইউজারকে নতুন অস্থায়ী পাসওয়ার্ড দেওয়া হবে।",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = onReset, enabled = !busy) {
+                    Text("পাসওয়ার্ড রিসেট")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("বন্ধ") }
+        },
+    )
+}
+
+@Composable
+private fun TemporaryPasswordDialog(password: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("অস্থায়ী পাসওয়ার্ড") },
+        text = {
+            Column {
+                Text(
+                    text = "ইউজারকে এই পাসওয়ার্ডটি দিন — লগইনের পর পরিবর্তন করতে হবে।",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = password,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("ঠিক আছে") }
+        },
+    )
 }

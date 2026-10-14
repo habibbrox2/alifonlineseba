@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Api\Admin;
 
 use App\Auth\Identity;
+use App\Notification\QueueRepository;
 use App\Repository\ActivityLogRepository;
 use App\Repository\ServiceOrderRepository;
 use App\Repository\ServiceRepository;
@@ -24,6 +25,7 @@ final readonly class AdminDashboardApiAction
         private TransactionRepository $transactions,
         private ActivityLogRepository $logs,
         private TopupRepository $topups,
+        private QueueRepository $queue,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -46,6 +48,7 @@ final readonly class AdminDashboardApiAction
             'topupStats' => $stats,
             'unresolvedCount' => $stats['unresolved'],
             'unresolvedAmount' => $stats['unresolved_amount'],
+            'notifyStats' => $this->queue->stats(),
         ]);
     }
 }

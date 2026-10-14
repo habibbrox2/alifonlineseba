@@ -45,6 +45,12 @@ final class Env
         // --- Channels: present but disabled until credentials exist ---
         'TELEGRAM_BOT_TOKEN' => '',
         'TELEGRAM_WEBHOOK_SECRET' => '',
+        // WhatsApp Business Platform (Meta Cloud API). Both must be set for
+        // the channel to come online; see WhatsAppChannel.
+        'WHATSAPP_TOKEN' => '',
+        'WHATSAPP_PHONE_NUMBER_ID' => '',
+        'WHATSAPP_TEMPLATE' => '',
+        'WHATSAPP_TEMPLATE_LANGUAGE' => 'en',
         'FIREBASE_CREDENTIALS_PATH' => '',
         'FIREBASE_PROJECT_ID' => '',
 

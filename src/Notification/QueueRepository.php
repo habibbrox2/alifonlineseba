@@ -186,6 +186,21 @@ final class QueueRepository
         return $stats;
     }
 
+    /**
+     * Delete a single queue row by id. Allowed for dead and sent rows — the
+     * things an operator may want gone — and refused for queued/processing
+     * rows, which are live work. Returns true when a row was actually removed.
+     */
+    public function delete(int $id): bool
+    {
+        $affected = $this->db
+            ->createCommand()
+            ->delete('{{%notification_queue}}', ['id' => $id])
+            ->execute();
+
+        return $affected > 0;
+    }
+
     /** Retention: purge sent rows after N days, dead rows after 30. */
     public function purge(int $retentionDays = 7, int $deadDays = 30): int
     {

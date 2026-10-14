@@ -316,8 +316,8 @@ final class AdminApiTest extends \Codeception\Test\Unit
         if (preg_match('#^/api/admin/logs$#', $uri)) {
             return new AdminLogsApiAction($this->logs);
         }
-        if (preg_match('#^/api/admin/notifications(/\d+/retry)?$#', $uri)) {
-            return new AdminNotificationsApiAction($this->queue, $this->db);
+        if (preg_match('#^/api/admin/notifications(/\d+/(retry|delete))?$#', $uri)) {
+            return new AdminNotificationsApiAction($this->queue, $this->db, $this->permissions);
         }
 
         throw new \InvalidArgumentException("No action mapped for {$uri}");
@@ -1088,6 +1088,87 @@ final class AdminApiTest extends \Codeception\Test\Unit
         }
     }
 
+    public function testStaffPasswordResetRequiresPermission(): void
+    {
+        $admin = $this->makeUser('sprestaff', 'admin');
+        $target = $this->makeUser('spretarget', 'staff');
+
+        $response = $this->call($admin, 'POST', '/api/admin/staff', [], [
+            'do' => 'reset',
+            'user_id' => (string) $target->id,
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+    }
+
+    public function testStaffPasswordResetReturnsTemporaryPassword(): void
+    {
+        $sa = $this->makeUser('spreset', 'superadmin');
+        $target = $this->makeUser('sprettarget', 'staff');
+        $originalHash = $this->users->findById($target->id)['password_hash'];
+
+        $response = $this->call($sa, 'POST', '/api/admin/staff', [], [
+            'do' => 'reset',
+            'user_id' => (string) $target->id,
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertArrayHasKey('temporary_password', $payload['data']);
+        $this->assertNotEmpty($payload['data']['temporary_password']);
+
+        $row = $this->users->findById($target->id);
+        $this->assertNotSame($originalHash, $row['password_hash']);
+        $this->assertTrue(password_verify($payload['data']['temporary_password'], $row['password_hash']));
+    }
+
+    public function testStaffPasswordResetRefusesSelfReset(): void
+    {
+        $sa = $this->makeUser('spself', 'superadmin');
+
+        $response = $this->call($sa, 'POST', '/api/admin/staff', [], [
+            'do' => 'reset',
+            'user_id' => (string) $sa->id,
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+    }
+
+    public function testStaffPasswordResetRefusesNonStaffAccount(): void
+    {
+        $sa = $this->makeUser('spnonstaff', 'superadmin');
+        $target = $this->makeUser('spnonstafftarget', 'user');
+
+        $response = $this->call($sa, 'POST', '/api/admin/staff', [], [
+            'do' => 'reset',
+            'user_id' => (string) $target->id,
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+    }
+
+    public function testStaffPasswordResetRefusesLastSuperadmin(): void
+    {
+        $sa = $this->makeUser('spla', 'superadmin');
+        // No other superadmin exists in the test DB.
+
+        $response = $this->call($sa, 'POST', '/api/admin/staff', [], [
+            'do' => 'reset',
+            'user_id' => (string) $sa->id,
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+    }
+
     public function testAdminNotificationsRetryRequiresId(): void
     {
         $admin = $this->makeUser('nretry', 'admin');
@@ -1097,6 +1178,61 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $payload = $this->decode($response);
 
         $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+    }
+
+    public function testNotificationDeleteRemovesDeadRow(): void
+    {
+        $admin = $this->makeUser('ndel', 'admin');
+        $rowId = $this->queue->enqueue([
+            'event' => 'test.dead',
+            'user_id' => $admin->id,
+            'channel' => 'telegram',
+            'dedupe_key' => 'test-dead-' . $this->suffix,
+            'payload' => ['subject' => 'Test notification', 'body' => 'This is a dead notification'],
+        ]);
+        // Mark it dead so the delete guard allows removal.
+        $this->db->createCommand()->update('{{%notification_queue}}', [
+            'status' => 'dead',
+            'updated_at' => date('Y-m-d H:i:s'),
+        ], ['id' => $rowId])->execute();
+
+        $response = $this->call($admin, 'POST', '/api/admin/notifications/' . $rowId . '/delete', ['id' => (string) $rowId, 'action' => 'delete']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertSame('নোটিফিকেশনটি মুছে ফেলা হয়েছে।', $payload['data']['message']);
+        $this->assertNull($this->queue->findById($rowId));
+    }
+
+    public function testNotificationDeleteRefusesActiveRow(): void
+    {
+        $admin = $this->makeUser('ndelactive', 'admin');
+        $rowId = $this->queue->enqueue([
+            'event' => 'test.active',
+            'user_id' => $admin->id,
+            'channel' => 'telegram',
+            'dedupe_key' => 'test-active-' . $this->suffix,
+            'payload' => ['subject' => 'Active notification', 'body' => 'Still queued'],
+        ]);
+
+        $response = $this->call($admin, 'POST', '/api/admin/notifications/' . $rowId . '/delete', ['id' => (string) $rowId, 'action' => 'delete']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertNotNull($this->queue->findById($rowId));
+    }
+
+    public function testNotificationDeleteMissingReturnsNotFound(): void
+    {
+        $admin = $this->makeUser('ndelmissing', 'admin');
+
+        $response = $this->call($admin, 'POST', '/api/admin/notifications/999999999/delete', ['id' => '999999999', 'action' => 'delete']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(404, $response->getStatusCode());
         $this->assertFalse($payload['success']);
     }
 }
