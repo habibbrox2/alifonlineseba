@@ -58,7 +58,7 @@ final readonly class AdminStaffApiAction
 
         if ($action === 'reset') {
             if (!$this->permissions->canAccessRoute($identity, 'admin-staff-password-reset')) {
-                return Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।');
+                return Api::forbidden('আপনার এই অ্যাকশন করার অনুমতি নেই।');
             }
             return $this->resetPassword($input, $identity);
         }

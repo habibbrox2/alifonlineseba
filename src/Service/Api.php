@@ -37,8 +37,22 @@ final class Api
         return self::fail('Authentication required.', [], 401);
     }
 
-    public static function forbidden(): ResponseInterface
+    /**
+     * 403 for a permission denial.
+     *
+     * The message is optional but worth passing: the endpoints that check a
+     * granular permission rather than the role have something specific to say,
+     * and without this parameter they reached for fail() instead — which
+     * answers 400. A client cannot tell "you are not allowed to do this" from
+     * "your request was malformed", and the distinction is the whole point of
+     * separating the two.
+     */
+    public static function forbidden(string $message = ''): ResponseInterface
     {
-        return self::fail('You do not have permission to perform this action.', [], 403);
+        return self::fail(
+            $message !== '' ? $message : 'You do not have permission to perform this action.',
+            [],
+            403,
+        );
     }
 }

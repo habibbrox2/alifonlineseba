@@ -65,7 +65,7 @@ final readonly class AdminUsersApiAction
 
         if ($action === 'create') {
             if (!$this->permissions->canAccessRoute($identity, 'admin-user-create')) {
-                return Api::fail('আপনার ইউজার তৈরি করার অনুমতি নেই।');
+                return Api::forbidden('আপনার ইউজার তৈরি করার অনুমতি নেই।');
             }
             return $this->createUser($input, $identity);
         }
