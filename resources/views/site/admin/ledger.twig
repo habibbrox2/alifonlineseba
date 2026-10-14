@@ -232,8 +232,7 @@
                                placeholder="চাইলে কিছু লিখতে পারেন">
                     </div>
 
-                    <button type="submit" class="btn btn-primary w-full"
-                            onclick="return confirm('উত্তোলন অনুরোধ জমা দিবেন?\n\nএই পরিমাণ এখনই আপনার ব্যালেন্স থেকে কেটে রাখা হবে।');">
+                    <button type="submit" class="btn btn-primary w-full" data-withdraw-submit>
                         {{ icon('send', 'w-4 h-4') }} উত্তোলন অনুরোধ পাঠান
                     </button>
                 </form>
@@ -241,4 +240,51 @@
         </section>
     </div>
 </div>
+
+{# The withdrawal amount is typed into #aw_amount rather than held by the
+   template, so the dialog has to read it at submit time — a confirm that cannot
+   name the figure is the one case the native dialog was at least honest about.
+   Declared `data-withdraw-submit` rather than an inline handler so the form
+   still posts when this script does not run. #}
+<script>
+    (function () {
+        'use strict';
+        var button = document.querySelector('[data-withdraw-submit]');
+        var form = button && button.closest('form');
+        if (!form || typeof window.thConfirm !== 'function') {
+            return;
+        }
+        form.addEventListener('submit', function (event) {
+            if (form.dataset.confirmed === '1') {
+                return;
+            }
+            event.preventDefault();
+
+            var amount = document.getElementById('aw_amount');
+            var method = document.getElementById('aw_method');
+            var value = amount ? amount.value.trim() : '';
+            var typed = value === '' ? null : '৳ ' + Number(value).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+
+            window.thConfirm({
+                title: 'উত্তোলন অনুরোধ জমা দিবেন?',
+                tone: 'money',
+                amount: typed,
+                amountLabel: 'এই পরিমাণ আপনার ব্যালেন্স থেকে কেটে রাখা হবে',
+                message: (method ? method.options[method.selectedIndex].text + ' — ' : '')
+                    + 'অনুরোধটি সুপারঅ্যাডমিন অনুমোদনের জন্য যাবে।',
+                confirm: 'অনুরোধ পাঠান',
+            }).then(function (accepted) {
+                if (!accepted) {
+                    return;
+                }
+                form.dataset.confirmed = '1';
+                form.requestSubmit(button);
+                delete form.dataset.confirmed;
+            });
+        });
+    })();
+</script>
 {% endblock %}

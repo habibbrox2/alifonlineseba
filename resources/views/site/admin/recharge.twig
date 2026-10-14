@@ -200,7 +200,14 @@
 
                     <div class="flex flex-col gap-2 sm:flex-row">
                         <button type="submit" name="do" value="approve" class="btn btn-primary flex-1"
-                                onclick="return confirm('অনুরোধটি অনুমোদন করে {{ topup.amount|money }} ব্যালেন্সে যোগ করবেন?');">
+                                data-confirm="{{ {
+                                    title: 'রিচার্জ অনুরোধ অনুমোদন করবেন?',
+                                    tone: 'money',
+                                    amount: topup.amount|money,
+                                    amountLabel: 'ইজারের ব্যালেন্সে যোগ হবে',
+                                    message: 'অনুরোধটি একবার অনুমোদন হলে আর ফেরানো যাবে না।',
+                                    confirm: 'অনুমোদন করুন',
+                                }|json_encode }}">
                             {{ icon('check', 'w-4 h-4') }} অনুমোদন করুন
                         </button>
                         <button type="submit" name="do" value="reject" class="btn btn-ghost flex-1 text-danger-600">

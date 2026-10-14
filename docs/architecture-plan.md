@@ -92,6 +92,38 @@ Alpine.js drives: sidebar drawer, user/notification dropdowns, category filter, 
 modals, toasts, form loading states, collapsible sidebar groups. Vanilla JS module `app.js`:
 fetch wrapper with CSRF, debounce, money/date helpers. Lucide via inline SVG sprite (`lucide-sprite.svg`, `x-data`/`data-lucide` init) — no runtime icon JS.
 
+### 4.1 Confirmation dialog (no `window.confirm()`)
+
+Every money-moving or destructive action asks twice, and `window.confirm()` cannot carry what
+those actions need to state: a severity tone, an amount set apart from the sentence, or a list
+of consequences. So there is one dialog for the whole app.
+
+- `components/confirm-dialog.twig` — a `<template>` cloned on first use, included from
+  `layouts/base.twig`. A `<template>` rather than hidden markup keeps its buttons out of the
+  tab order and the accessibility tree until something actually asks to confirm.
+- `resources/js/confirm-dialog.js` — two entry points:
+
+  **Declarative.** `data-confirm` on a `<form>` or a submit button. The value is either a
+  message string or a JSON object `{title, message, tone, amount, amountLabel, bullets,
+  confirm, cancel}`. The submission is held until the answer arrives, then replayed with
+  `requestSubmit(submitter)` so `name`/`value` buttons (every `do=...` action) still post. A
+  button's own `data-confirm` wins over its form's.
+
+  **Programmatic.** `window.thConfirm(options)` returns a Promise<boolean>, for the cases the
+  page cannot know at render time: the bulk bars count their own checkboxes and sum the ticked
+  rows, and `admin/ledger.twig` reads the amount the admin just typed.
+
+- `tone` is the load-bearing field: `danger` (a delete), `money` (a ledger move), `warn`
+  (irreversible, but nothing destroyed), `neutral` (a routine state change).
+- No JavaScript, or a missing template, falls back to `window.confirm()` rather than silently
+  dropping a confirmation that guards money and deletions.
+- Keyboard: Escape cancels, focus lands on the confirm action, Tab is trapped, and focus
+  returns to the button that opened it.
+
+In Alpine expressions the dialog is a promise, so `$el` and `$event` must be captured into
+locals *before* the `.then()` callback: Alpine evaluates the expression in a scope that does
+not survive into the asynchronous continuation.
+
 ## 5. Implementation phases
 
 - **P1** Foundation: env config, DB DI, session/CSRF pipeline, Twig, Tailwind build, migrations,

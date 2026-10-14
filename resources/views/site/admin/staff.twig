@@ -42,7 +42,7 @@
         </a>
         <a href="/admin/staff?trashed=all" class="btn btn-sm {{ currentFilter == 'all' ? 'btn-primary' : 'btn-ghost' }}">সবাই দেখুন</a>
         {% if trashedCount|default(0) > 0 %}
-        <form method="post" action="/admin/staff" onsubmit="return confirm('ট্র্যাশের সব স্টাফ ফিরিয়ে আনবেন?')">
+        <form method="post" action="/admin/staff" data-confirm="{{ { title: 'ট্র্যাশের সব স্টাফ ফিরিয়ে আনবেন?', tone: 'neutral', message: 'ট্র্যাশে থাকা সব স্টাফ আবার সক্রিয় হবে।', confirm: 'সব ফিরিয়ে আনুন' }|json_encode }}">
             <input type="hidden" name="_csrf" value="{{ csrf }}">
             <input type="hidden" name="id" value="0">
             <input type="hidden" name="do" value="restore_all">

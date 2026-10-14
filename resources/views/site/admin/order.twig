@@ -189,7 +189,14 @@
                     </div>
 
                     <button type="submit" name="do" value="approve" class="btn btn-primary w-full"
-                            onclick="return confirm('অর্ডার #{{ order.id }} অনুমোদন করবেন?\n\nআপনার ব্যালেন্সে {{ order.amount|money }} যোগ হবে এবং ইউজারকে আর ফেরত দেওয়া যাবে না।');">
+                            data-confirm="{{ {
+                                title: 'অর্ডার #' ~ order.id ~ ' অনুমোদন করবেন?',
+                                tone: 'money',
+                                amount: order.amount|money,
+                                amountLabel: 'আপনার ব্যালেন্সে যোগ হবে',
+                                message: 'অর্ডারটি সম্পূর্ণ হিসেবে চিহ্নিত হবে এবং এই টাকা আর ফেরত দেওয়া যাবে না।',
+                                confirm: 'অনুমোদন করুন',
+                            }|json_encode }}">
                         {{ icon('check-check', 'w-4 h-4') }} অনুমোদন করুন — {{ order.amount|money }} আয়
                     </button>
                 </form>
@@ -221,7 +228,13 @@
                     </div>
 
                     <button type="submit" name="do" value="reject" class="btn btn-ghost w-full"
-                            onclick="return confirm('অর্ডারটি বদলাবেন? বাতিল/ব্যর্থ হলে {{ order.amount|money }} ইউজারের ব্যালেন্সে ফেরত যাবে।');">
+                            data-confirm="{{ {
+                                title: 'অর্ডারের অবস্থা বদলাবেন?',
+                                tone: 'warn',
+                                amount: order.amount|money,
+                                amountLabel: 'বাতিল বা ব্যর্থ হলে ইউজারের ব্যালেন্সে ফেরত যাবে',
+                                message: 'অবস্থা প্রয়োগ করার পর এটি আর ফেরানো যাবে না।',
+                            }|json_encode }}">
                         {{ icon('save', 'w-4 h-4') }} অবস্থা প্রয়োগ করুন
                     </button>
                 </form>
@@ -305,7 +318,12 @@
                 <form method="post" action="/admin/orders/{{ order.id }}" class="mt-3">
                     <input type="hidden" name="_csrf" value="{{ csrf }}">
                     <button type="submit" name="do" value="detach" class="btn btn-ghost w-full text-danger-600"
-                            onclick="return confirm('ফাইলটি স্থায়ীভাবে মুছে ফেলবেন? ইউজার আর ডাউনলোড করতে পারবে না।');">
+                            data-confirm="{{ {
+                                title: 'ডেলিভারি ফাইলটি মুছে ফেলবেন?',
+                                tone: 'danger',
+                                message: 'ফাইলটি স্থায়ীভাবে মুছে যাবে এবং ইউজার আর ডাউনলোড করতে পারবে না।',
+                                confirm: 'ফাইলটি মুছে ফেলুন',
+                            }|json_encode }}">
                         {{ icon('trash-2', 'w-4 h-4') }} ফাইলটি মুছে ফেলুন
                     </button>
                 </form>

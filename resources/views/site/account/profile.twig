@@ -468,14 +468,26 @@
         // `do=avatar` with no file, which the action reads as "delete my avatar".
         removeBtn.addEventListener('click', function () {
             // Confirm before destroying — the user may have clicked the X by
-            // accident on a touch screen.
-            if (!confirm('প্রোফাইল ছবি অপসারণ করবেন?')) {
-                return;
-            }
+            // accident on a touch screen. The dialog is asked for rather than
+            // confirm(): a bare alert on a photo cannot say what goes, and the
+            // avatar is one of the few things here a user cannot get back.
+            var ask = typeof window.thConfirm === 'function'
+                ? window.thConfirm({
+                    title: 'প্রোফাইল ছবি অপসারণ করবেন?',
+                    tone: 'warn',
+                    message: 'ছবিটি মুছে যাবে। এর বদলে নামের প্রথম অক্ষর দেখানো হবে।',
+                    confirm: 'ছবিটি মুছুন',
+                })
+                : Promise.resolve(window.confirm('প্রোফাইল ছবি অপসারণ করবেন?'));
 
-            // Submit the avatar form without a file — the action sees no file and
-            // removes the current avatar.
-            form.submit();
+            ask.then(function (accepted) {
+                if (!accepted) {
+                    return;
+                }
+                // Submit the avatar form without a file — the action sees no file
+                // and removes the current avatar.
+                form.requestSubmit();
+            });
         });
     })();
 </script>

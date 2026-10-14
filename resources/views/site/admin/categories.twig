@@ -138,7 +138,12 @@
                                                     {{ category.status == 'active' ? 'নিষ্ক্রিয়' : 'সক্রিয়' }}
                                                 </button>
                                             </form>
-                                            <form method="post" action="/admin/categories" onsubmit="return confirm('সত্যিই "{{ category.name }}" মুছে ফেলবেন?')">
+                                            <form method="post" action="/admin/categories" data-confirm="{{ {
+                                                title: 'ক্যাটাগরিটি মুছে ফেলবেন?',
+                                                tone: 'danger',
+                                                message: '"' ~ category.name ~ '" ক্যাটাগরিটি মুছে যাবে। এর সার্ভিসগুলো থেকে যাবে, কিন্তু ক্যাটাগরি আর ফেরানো যাবে না।',
+                                                confirm: 'মুছে ফেলুন',
+                                            }|json_encode }}">
                                                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                                                 <input type="hidden" name="do" value="delete">
                                                 <input type="hidden" name="id" value="{{ category.id }}">

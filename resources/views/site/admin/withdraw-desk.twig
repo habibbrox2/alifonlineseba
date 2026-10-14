@@ -149,7 +149,15 @@
                     <input type="hidden" name="_csrf" value="{{ csrf }}">
 
                     <button type="submit" name="do" value="approve" class="btn btn-primary w-full"
-                            onclick="return confirm('{{ row.amount|money }} অনুমোদন করবেন?\n\nঅ্যাকাউন্ট: {{ row.account_details }}\n\nঅনুমোদনের পর টাকাটি {{ admin.username }}-এর অ্যাকাউন্টে পাঠাতে হবে।');">
+                            data-confirm="{{ {
+                                title: 'উত্তোলন অনুরোধ অনুমোদন করবেন?',
+                                tone: 'money',
+                                amount: row.amount|money,
+                                amountLabel: 'এই অ্যাডমিনের ব্যালেন্স থেকে কেটে যাবে',
+                                message: 'অনুমোদনের পর টাকাটি ' ~ admin.username ~ '-এর অ্যাকাউন্টে পাঠাতে হবে।',
+                                bullets: ['অ্যাকাউন্ট: ' ~ row.account_details],
+                                confirm: 'অনুমোদন করুন',
+                            }|json_encode }}">
                         {{ icon('check-check', 'w-4 h-4') }} অনুমোদন করুন — {{ row.amount|money }}
                     </button>
                 </form>
@@ -167,7 +175,14 @@
                     </div>
 
                     <button type="submit" name="do" value="reject" class="btn btn-ghost w-full text-danger-600"
-                            onclick="return confirm('অনুরোধটি বাতিল করবেন?\n\n{{ row.amount|money }} অ্যাডমিনের ব্যালেন্সে ফিরে যাবে।');">
+                            data-confirm="{{ {
+                                title: 'অনুরোধটি বাতিল করবেন?',
+                                tone: 'warn',
+                                amount: row.amount|money,
+                                amountLabel: 'আপনার ব্যালেন্সে ফিরে যাবে',
+                                message: 'কারণটি ইউজার দেখতে পাবেন। অনুরোধটি আর এই ডেস্কে ফিরে আসবে না।',
+                                confirm: 'বাতিল করে টাকা ফেরত দিন',
+                            }|json_encode }}">
                         {{ icon('x-circle', 'w-4 h-4') }} বাতিল করে টাকা ফেরত দিন
                     </button>
                 </form>

@@ -98,6 +98,12 @@
         import { initDateFields } from '{{ asset('/assets/js/date-field.js') }}';
         initDateFields();
     </script>
+    {# Likewise site-wide: the confirmation dialog guards the admin desks and the
+       account pages, so it cannot live in either. It mounts its <template> on
+       load and only clones it when something actually asks to confirm. #}
+    <script type="module">
+        import '{{ asset('/assets/js/confirm-dialog.js') }}';
+    </script>
     {% block page_scripts %}{% endblock %}
     {% block scripts %}{% endblock %}
 </head>
@@ -108,6 +114,7 @@
        pages and the app page alike. #}
     {% include 'partials/app-install.twig' %}
     {% include 'partials/push-prompt.twig' %}
+    {% include 'components/confirm-dialog.twig' %}
 
     {# Alpine boots LAST, at the very end of <body>, and that position is load-
        bearing — do not move this back into <head>.

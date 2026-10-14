@@ -1,0 +1,59 @@
+{#
+    Confirmation dialog — one instance per page, cloned out of this <template>
+    by resources/js/confirm-dialog.js on the first confirmation.
+
+    Why a component and not window.confirm(): the native dialog cannot carry a
+    tone, cannot set an amount apart from the sentence around it, and cannot
+    list the consequences of the action. Those are exactly the things an admin
+    needs when releasing money or deleting a record, so the API takes all three
+    (`tone`, `amount`, `bullets`) and this markup draws them.
+
+    It is a <template> rather than hidden markup so the dialog's contents never
+    exist in the accessibility tree or the tab order until something asks for
+    them — a permanently-rendered confirm box is a focus trap waiting to be
+    noticed by a screen reader.
+
+    `role="alertdialog"` rather than `dialog`: the dialog interrupts the user
+    mid-decision, which is what alertdialog describes. The two buttons are the
+    only tab stops and the focus lands on the confirm action (see the JS),
+    because a destructive action must never be one stray Enter away.
+#}
+<template id="th-confirm-template">
+  <div class="th-confirm-backdrop" data-confirm-backdrop data-tone="danger" hidden>
+    <div class="th-confirm"
+         role="alertdialog"
+         aria-modal="true"
+         aria-labelledby="th-confirm-title"
+         aria-describedby="th-confirm-message">
+
+      <div class="th-confirm-icon" aria-hidden="true">
+        <svg class="th-confirm-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          {# The sprite is generated at build time (scripts/generate-sprite.php);
+             `href` is rewritten per tone by the controller. #}
+          <use data-confirm-glyph href="/assets/icons/lucide-sprite.svg#alert-triangle"></use>
+        </svg>
+      </div>
+
+      <h2 class="th-confirm-title" id="th-confirm-title" data-confirm-title></h2>
+
+      {# The figure the decision turns on, when there is one. #}
+      <div class="th-confirm-amount" data-confirm-amount-box hidden>
+        <span class="th-confirm-amount-value" data-confirm-amount></span>
+        <span class="th-confirm-amount-label" data-confirm-amount-label></span>
+      </div>
+
+      <p class="th-confirm-message" id="th-confirm-message" data-confirm-message></p>
+
+      {# What the action actually does, one consequence per line. #}
+      <ul class="th-confirm-bullets" data-confirm-bullets hidden></ul>
+
+      {# Cancel first in the DOM so it is the first tab stop; the confirm button
+         takes focus on open (see resources/js/confirm-dialog.js). #}
+      <div class="th-confirm-actions">
+        <button type="button" class="btn btn-ghost" data-confirm-cancel></button>
+        <button type="button" class="btn btn-confirm" data-confirm-accept></button>
+      </div>
+    </div>
+  </div>
+</template>

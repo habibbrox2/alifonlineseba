@@ -20,6 +20,52 @@
 {# Deferred, and ahead of Alpine at the end of <body> — the same ordering
    icon-picker relies on. See the comment on Alpine's tag in base.twig. #}
 <script defer src="{{ asset('/assets/js/field-sorter.js') }}"></script>
+
+{# Bulk service actions. Only the destructive ones ask — `activate` goes
+   through untouched, because a prompt on a harmless action is what trains an
+   admin to click through the one that matters. The count in the dialog is the
+   number of rows the *action* will touch (the filter total under `filtered`,
+   the ticked count otherwise), not what the bar happens to be showing. #}
+<script defer>
+    window.bulkServiceAsk = function (action, count) {
+        if (!action) {
+            return Promise.resolve(true);
+        }
+        var bn = String(count).split('').map(function (c) {
+            return '০১২৩৪৫৬৭৮৯'[Number(c)] || c;
+        }).join('');
+
+        var copy = {
+            deactivate: {
+                title: bn + ' টি সার্ভিস নিষ্ক্রিয় করবেন?',
+                tone: 'warn',
+                message: 'ইজারতে ওগুলো আর দেখা যাবে না। পরে যেকোনো সময় আবার সক্রিয় করা যাবে।',
+                confirm: 'নিষ্ক্রিয় করুন',
+            },
+            trash: {
+                title: bn + ' টি সার্ভিস ট্র্যাশে পাঠাবেন?',
+                tone: 'warn',
+                bullets: ['ইজারতে আর দেখা যাবে না', 'পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে', 'পরে রিস্টোর করা যাবে'],
+                confirm: 'ট্র্যাশে পাঠান',
+            },
+            purge: {
+                title: bn + ' টি সার্ভিস স্থায়ীভাবে মুছে ফেলবেন?',
+                tone: 'danger',
+                message: 'সার্ভিসগুলো স্থায়ীভাবে মুছে যাবে। পুরনো লেনদেন রেকর্ড অক্ষত থাকবে, কিন্তু সার্ভিস আর ফেরানো যাবে না।',
+                confirm: 'স্থায়ীভাবে মুছুন',
+            },
+        };
+
+        var options = copy[action];
+        if (!options) {
+            return Promise.resolve(true);
+        }
+        if (typeof window.thConfirm !== 'function') {
+            return Promise.resolve(window.confirm(options.title));
+        }
+        return window.thConfirm(options);
+    };
+</script>
 {% endblock %}
 
 {% block dashboard_content %}
@@ -431,7 +477,7 @@
 
                 {% if not usingFieldDefaults|default(true) %}
                     <form method="post" action="/admin/services" class="mt-3"
-                          onsubmit="return confirm('সব ফর্ম ফিল্ড কনফিগারেশন ডিফল্টে ফেরাবেন? সব কাস্টম ফিল্ড মুছে যাবে।')">
+                          data-confirm="{{ { title: 'ফর্ম ফিল্ড ডিফল্টে ফেরাবেন?', tone: 'warn', message: 'সব কাস্টম ফিল্ড মুছে গিয়ে সার্ভিসের ডিফল্ট ফর্ম ফিরে আসবে। এরপর আর ফেরানো যাবে না।', confirm: 'ডিফল্টে ফেরান' }|json_encode }}">
                         <input type="hidden" name="_csrf" value="{{ csrf }}">
                         <input type="hidden" name="do" value="fields_reset">
                         <input type="hidden" name="id" value="{{ editService.id }}">
@@ -461,11 +507,10 @@
                        all: false, target: '', scope: 'selected',
                        boxes() { return document.getElementById('services-rows').querySelectorAll('input[type=checkbox]'); },
                        up() { return this.count > 0 || this.filtered; },
-                       confirm(action, n) {
-                           if (action === 'deactivate') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস নিষ্ক্রিয় করবেন? ইজারতে ওগুলো আর দেখা যাবে না।');
-                           if (action === 'trash') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস ট্র্যাশে পাঠাবেন? পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে এবং চাইলে রিস্টোর করা যাবে।');
-                           if (action === 'purge') return confirm('নির্বাচিত ' + n + ' টি সার্ভিস স্থায়ীভাবে মুছে ফেলবেন? এটি আর ফেরানো যাবে না।');
-                           return true;
+                       ask(action, n) {
+                           const scope = this.scope === 'filtered' ? this.matched : n;
+                           if (!action) { return Promise.resolve(true); }
+                           return window.bulkServiceAsk(action, scope);
                        },
                        clear() {
                            this.boxes().forEach(row => row.checked = false);
@@ -481,7 +526,7 @@
                         {{ icon('alert-triangle', 'w-4 h-4 inline-block align-text-bottom') }}
                         ট্র্যাশে <strong>{{ trashedCount }}</strong>টি সার্ভিস আছে — ওগুলো সাইটে দেখা যাচ্ছে না, লেনদেন রেকর্ড অক্ষত আছে।
                     </p>
-                    <form method="post" action="/admin/services" onsubmit="return confirm('ট্র্যাশের সব সার্ভিস ফিরিয়ে আনবেন?')">
+                    <form method="post" action="/admin/services" data-confirm="{{ { title: 'ট্র্যাশের সব সার্ভিস ফিরিয়ে আনবেন?', tone: 'neutral', message: 'ট্র্যাশে থাকা সব সার্ভিস আবার সাইটে দেখা যাবে।', confirm: 'সব ফিরিয়ে আনুন' }|json_encode }}">
                         <input type="hidden" name="_csrf" value="{{ csrf }}">
                         <input type="hidden" name="do" value="restore_all">
                         <button type="submit" class="btn btn-sm">
@@ -574,7 +619,7 @@
                                                     {{ icon('history', 'w-4 h-4') }} রিস্টোর
                                                 </button>
                                             </form>
-                                            <form method="post" action="/admin/services" onsubmit="return confirm('&quot;{{ service.name }}&quot; স্থায়ীভাবে মুছে ফেলবেন? এটি আর ফেরানো যাবে না।')">
+                                            <form method="post" action="/admin/services" data-confirm="{{ { title: ('"' ~ service.name ~ '"' ~ ' স্থায়ীভাবে মুছে ফেলবেন?'), tone: 'danger', message: 'সার্ভিসটি স্থায়ীভাবে মুছে যাবে। পুরনো লেনদেন রেকর্ড অক্ষত থাকবে, কিন্তু সার্ভিসটি আর ফেরানো যাবে না।', confirm: 'স্থায়ীভাবে মুছুন' }|json_encode }}">
                                                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                                                 <input type="hidden" name="do" value="purge">
                                                 <input type="hidden" name="id" value="{{ service.id }}">
@@ -590,7 +635,7 @@
                                                     {{ service.status == 'active' ? 'নিষ্ক্রিয়' : 'সক্রিয়' }}
                                                 </button>
                                             </form>
-                                            <form method="post" action="/admin/services" onsubmit="return confirm('&quot;{{ service.name }}&quot; ট্র্যাশে পাঠাবেন? পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে এবং চাইলে রিস্টোর করা যাবে।')">
+                                            <form method="post" action="/admin/services" data-confirm="{{ { title: ('"' ~ service.name ~ '"' ~ ' ট্র্যাশে পাঠাবেন?'), tone: 'warn', bullets: ['ইজারতে আর দেখা যাবে না', 'পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে', 'পরে রিস্টোর করা যাবে'], confirm: 'ট্র্যাশে পাঠান' }|json_encode }}">
                                                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                                                 <input type="hidden" name="do" value="delete">
                                                 <input type="hidden" name="id" value="{{ service.id }}">
@@ -626,7 +671,9 @@
                themselves: a prompt on "সক্রিয় করুন" would train admins to click
                through the one that matters. #}
             <form id="services-bulk" method="post" action="/admin/services"
-                  @submit="if (!confirm(target, scope === 'filtered' ? matched : count)) $event.preventDefault()">
+                  @submit="const btn = $event.submitter, form = $el;
+                            $event.preventDefault();
+                            ask(target, count).then(ok => { if (ok) { form.dataset.confirmed = '1'; form.requestSubmit(btn); delete form.dataset.confirmed; } });">
                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                 <input type="hidden" name="do" value="bulk">
                 {# Where the batch ran from, so the redirect after it — and the

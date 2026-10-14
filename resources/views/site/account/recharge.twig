@@ -162,7 +162,7 @@
                                 {% endif %}
                                 {% if t.status == 'pending' %}
                                     <form method="post" action="/recharge/cancel" class="ml-auto"
-                                          onsubmit="return confirm('সত্যিই অনুরোধটি বাতিল করবেন?');">
+                                          data-confirm="{{ { title: 'রিচার্জ অনুরোধটি বাতিল করবেন?', tone: 'warn', amount: t.amount|money, amountLabel: 'এই অনুরোধের পরিমাণ', message: 'বাতিল করলে এই অনুরোধ আর ব্যালেন্সে যোগ হবে না।', confirm: 'বাতিল করুন' }|json_encode }}">
                                         <input type="hidden" name="_csrf" value="{{ csrf }}">
                                         <input type="hidden" name="id" value="{{ t.id }}">
                                         <button type="submit" class="btn btn-ghost btn-sm text-danger-600">

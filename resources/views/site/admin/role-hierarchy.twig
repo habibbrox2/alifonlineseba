@@ -85,7 +85,12 @@
             </button>
 
             <button type="submit" name="do" value="reset" class="btn btn-ghost"
-                    onclick="return confirm('ডিফল্ট র‍্যাঙ্কে ফিরিয়ে আনবেন?')">
+                    data-confirm="{{ {
+                        title: 'ডিফল্ট র‍্যাঙ্কে ফিরিয়ে আনবেন?',
+                        tone: 'warn',
+                        message: 'সব ভূমিকার বর্তমান র‍্যাঙ্ক মুছে গিয়ে ডিফল্ট মান বসানো হবে।',
+                        confirm: 'ডিফল্টে ফেরান',
+                    }|json_encode }}">
                 {{ icon('rotate-ccw', 'w-4 h-4') }} ডিফল্টে ফিরিয়ে আনুন
             </button>
         </div>

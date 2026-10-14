@@ -164,7 +164,14 @@
                                        conditional UPDATE stops a double payout. #}
                                     {% if r.status == 'pending' %}
                                         <form method="post" action="/admin/referrals"
-                                              onsubmit="return confirm('{{ r.referee_name }} এর রেফারেল বোনাস {{ r.referrer_amount|money }} + {{ r.referee_amount|money }} এখনই পরিশোধ করবেন?');">
+                                              data-confirm="{{ {
+                                                  title: (r.referee_name ~ ' এর রেফারেল বোনাস পরিশোধ করবেন?'),
+                                                  tone: 'money',
+                                                  amount: (r.referrer_amount|money) ~ ' + ' ~ (r.referee_amount|money),
+                                                  amountLabel: 'রেফারার ও রেফারির ব্যালেন্সে যোগ হবে',
+                                                  message: 'বোনাস একবার পরিশোধ হলে আর ফেরানো যাবে না।',
+                                                  confirm: 'পরিশোধ করুন',
+                                              }|json_encode }}">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="pay">
                                             <input type="hidden" name="referral_id" value="{{ r.id }}">
@@ -194,7 +201,12 @@
                                         </form>
                                     {% elseif r.status == 'rejected' %}
                                         <form method="post" action="/admin/referrals"
-                                              onsubmit="return confirm('বাতিলকৃত রেফারেলটি অপেক্ষমাণ অবস্থায় ফেরাবেন? কোনো টাকা দেওয়া হবে না।');">
+                                              data-confirm="{{ {
+                                                  title: 'রেফারেলটি অপেক্ষমাণ অবস্থায় ফেরাবেন?',
+                                                  tone: 'neutral',
+                                                  message: 'রেফারেলটি আবার পর্যালোচনার তালিকায় ফিরে যাবে। কোনো টাকা দেওয়া হবে না।',
+                                                  confirm: 'অপেক্ষমাণে ফেরান',
+                                              }|json_encode }}">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="reset">
                                             <input type="hidden" name="referral_id" value="{{ r.id }}">

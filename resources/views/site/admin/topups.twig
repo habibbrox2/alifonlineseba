@@ -69,8 +69,7 @@
 {# Bulk approve: for payments the operator has already verified out of band.
    The form wraps the table so per-row ids[] checkboxes post with it. Every row
    is re-checked by TopupService, so a stale selection is a no-op. #}
-<form method="post" action="/admin/topups" id="topup-bulk-form"
-      onsubmit="return bulkConfirm(this);">
+<form method="post" action="/admin/topups" id="topup-bulk-form" data-bulk-approve>
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <input type="hidden" name="do" value="bulk-approve">
 
@@ -141,6 +140,7 @@
                             {% if t.status == 'pending' %}
                                 <input type="checkbox" name="ids[]" value="{{ t.id }}"
                                        data-role="row-check"
+                                       data-amount="{{ t.amount }}"
                                        aria-label="{{ t.username ?? 'ইউজার' }} এর অনুরোধ নির্বাচন করুন"
                                        class="rounded border-neutral-300 text-primary-600 focus:ring-primary-500">
                             {% endif %}
@@ -238,13 +238,48 @@
         });
     }
 
-    window.bulkConfirm = function () {
+    /* Bulk approval credits real balances, so the dialog names the count and
+       sums the ticked rows — an admin should read the figure before agreeing,
+       not after. Falls back to the native confirm if the dialog is missing. */
+    var BN_TAKA = { symbol: '৳' };
+    function sumPicked() {
+        var total = 0;
+        checks.forEach(function (c) {
+            if (c.checked) { total += Number(c.dataset.amount || 0); }
+        });
+        return total;
+    }
+    function askBulkApproval() {
         var picked = checks.filter(function (c) { return c.checked; }).length;
-        if (picked === 0) { return false; }
-        return window.confirm(
-            'নির্বাচিত ' + toBn(picked) + 'টি অনুরোধ অনুমোদন করবেন? এতে ইউজারদের ব্যালেন্স যোগ হবে।'
-        );
-    };
+        if (picked === 0) { return Promise.resolve(false); }
+        var message = 'নির্বাচিত ' + toBn(picked) + 'টি অনুরোধ অনুমোদন করলে ইউজারদের ব্যালেন্সে টাকা যোগ হবে।';
+        if (typeof window.thConfirm !== 'function') {
+            return Promise.resolve(window.confirm(message));
+        }
+        return window.thConfirm({
+            title: toBn(picked) + 'টি রিচার্জ অনুরোধ অনুমোদন করবেন?',
+            tone: 'money',
+            amount: BN_TAKA.symbol + ' ' + sumPicked().toLocaleString('en-US', {
+                minimumFractionDigits: 2, maximumFractionDigits: 2,
+            }),
+            amountLabel: 'একসাথে ইউজারদের ব্যালেন্সে যোগ হবে',
+            message: message + ' অনুমোদনের পর এগুলো আর ফেরানো যাবে না।',
+            confirm: 'সবগুলো অনুমোদন করুন',
+        });
+    }
+
+    /* The handler is attached rather than written into an onsubmit attribute:
+       the answer is a promise, and an attribute can only return a boolean. */
+    form.addEventListener('submit', function (event) {
+        if (form.dataset.confirmed === '1') { return; }
+        event.preventDefault();
+        askBulkApproval().then(function (accepted) {
+            if (!accepted) { return; }
+            form.dataset.confirmed = '1';
+            form.requestSubmit(submit || undefined);
+            delete form.dataset.confirmed;
+        });
+    });
 
     sync();
 })();

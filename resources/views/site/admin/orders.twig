@@ -135,9 +135,10 @@
           @change="count = $el.querySelectorAll('tbody input[type=checkbox]:checked').length;
                    all = count > 0 && count === total"
           @submit="const btn = $event.submitter;
-                   if (btn && btn.value === 'bulk_status' && target !== ''
-                       && !confirm('নির্বাচিত ' + count + ' টি অর্ডার হালনাগাদ করবেন?\n\nসম্পন্ন করলে প্রতিটির টাকা আপনার ব্যালেন্সে যোগ হবে; বাতিল/ব্যর্থ করলে ইউজারের ব্যালেন্সে ফেরত যাবে।'))
-                       $event.preventDefault()">
+                   if (btn && btn.value === 'bulk_status' && target !== '') {
+                       $event.preventDefault();
+                       bulkStatusAsk(count).then(ok => { if (ok) { $el.dataset.confirmed = '1'; $el.requestSubmit(btn); delete $el.dataset.confirmed; } });
+                   }">
         <input type="hidden" name="_csrf" value="{{ csrf }}">
         {# The view this bar was drawn in, so the redirect puts the operator back
            on the same filtered page — their next move is nearly always the next
@@ -311,4 +312,29 @@
         </div>
     </form>
 {% endif %}
+
+{# Bulk completion moves real money: every ticked order is credited to the
+   admin and, if it is later cancelled, refunded to the user. The native dialog
+   could only state that in one run-on line, so the tone is money and the
+   count is named up front. Declared as a plain global rather than inline in the
+   Alpine expression because it is long, and Alpine evaluates the expression on
+   every render. #}
+<script>
+    window.bulkStatusAsk = function (count) {
+        var message = 'নির্বাচিত ' + count + ' টি অর্ডার হালনাগাদ করলে প্রতিটির টাকা আপনার ব্যালেন্সে যোগ হবে।';
+        if (typeof window.thConfirm !== 'function') {
+            return Promise.resolve(window.confirm(message));
+        }
+        return window.thConfirm({
+            title: 'নির্বাচিত ' + count + ' টি অর্ডার হালনাগাদ করবেন?',
+            tone: 'money',
+            bullets: [
+                'প্রতিটি অর্ডারের টাকা আপনার ব্যালেন্সে যোগ হবে',
+                'বাতিল বা ব্যর্থ হলে টাকাটি ইউজারের ব্যালেন্সে ফেরত যাবে',
+            ],
+            message: 'সম্পন্ন করার পর আর ফেরানো যাবে না।',
+            confirm: 'সবগুলো হালনাগাদ করুন',
+        });
+    };
+</script>
 {% endblock %}

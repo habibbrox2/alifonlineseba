@@ -380,6 +380,152 @@
   .alert[hidden] {
     display: none;
   }
+
+  /* ============================================================
+   * Confirmation dialog — the replacement for window.confirm().
+   *
+   * Every destructive or money-moving action on the admin desks asks twice, and
+   * the native dialog cannot say anything the page wants to say: no tone, no
+   * amount set apart from the running prose, no way to state what the decision
+   * actually does. So the four tones below are the point of the component, not
+   * decoration — `danger` for a delete, `money` for a ledger move, `warn` for
+   * irreversible-but-not-destructive, `neutral` for routine state changes.
+   *
+   * The amount band is the other half of it. An admin deciding whether to
+   * release ৳ 18,400 should read the figure before the sentence, not find it
+   * inside one.
+   * ============================================================ */
+
+  .th-confirm-backdrop {
+    @apply fixed inset-0 z-[100] flex items-center justify-center p-4;
+    background-color: rgb(8 63 49 / 0.5);
+    backdrop-filter: blur(3px);
+  }
+  /* Same reason as `.alert[hidden]` above: this rule sets `display:flex`, which
+     would beat the `hidden` attribute, and the dialog ships hidden. */
+  .th-confirm-backdrop[hidden] {
+    display: none;
+  }
+
+  .th-confirm {
+    @apply relative w-full max-w-md rounded-2xl bg-white px-6 py-6 text-center shadow-lg;
+    animation: th-confirm-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* The tone medallion. Sized and placed as the one loud element so the eye
+     lands on the severity before it reads the sentence. */
+  .th-confirm-icon {
+    @apply mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full;
+    @apply bg-danger-50 text-danger-600;
+  }
+  .th-confirm-glyph {
+    @apply h-6 w-6;
+  }
+
+  .th-confirm-title {
+    @apply text-lg font-extrabold text-neutral-900;
+  }
+
+  /* Read before the prose, so the figure is never scrolled past. */
+  .th-confirm-amount {
+    @apply mx-auto mb-3 flex flex-col gap-0.5 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3;
+  }
+  .th-confirm-amount[hidden] {
+    display: none;
+  }
+  .th-confirm-amount-value {
+    @apply text-2xl font-extrabold tabular-nums text-primary-800;
+  }
+  .th-confirm-amount-label {
+    @apply text-xs font-medium text-primary-700;
+  }
+
+  .th-confirm-message {
+    @apply mt-1 text-sm leading-relaxed text-neutral-600;
+  }
+
+  /* The consequences, one per line — a single sentence cannot make a list
+     scannable, and this is where "what exactly will happen" belongs. */
+  .th-confirm-bullets {
+    @apply mt-3 flex list-none flex-col gap-1.5 text-start;
+  }
+  .th-confirm-bullets[hidden] {
+    display: none;
+  }
+  .th-confirm-bullets li {
+    @apply relative ps-5 text-sm text-neutral-600;
+  }
+  .th-confirm-bullets li::before {
+    content: '';
+    @apply absolute start-[7px] top-[0.6em] h-1.5 w-1.5 rounded-full bg-primary-500;
+  }
+
+  .th-confirm-actions {
+    @apply mt-5 flex flex-col-reverse gap-2 sm:flex-row;
+  }
+  /* Stacked full-width on a phone, side by side above it. The confirm button
+     carries the verb, so it is the wider of the two on small screens.
+
+     `flex-1` on both would split the row evenly and wrap a long confirm label
+     ("অনুমোদন করুন — ৳ 1,250.00 আয়") onto a second line, which reads as a
+     different button. So only the cancel takes the free space: the confirm
+     label is then never narrower than it needs to be. */
+  .th-confirm-actions .btn {
+    @apply whitespace-nowrap;
+  }
+  .th-confirm-actions [data-confirm-cancel] {
+    @apply flex-1;
+  }
+
+  .th-confirm .btn-confirm {
+    @apply bg-danger-600 text-white hover:bg-danger-700;
+  }
+
+  /* ---- Tone variants: one rule each, everything else is inherited ---- */
+  .th-confirm-backdrop[data-tone='money'] .th-confirm-icon {
+    @apply bg-primary-50 text-primary-600;
+  }
+  .th-confirm-backdrop[data-tone='money'] .btn-confirm {
+    @apply bg-primary-600 hover:bg-primary-700;
+  }
+
+  .th-confirm-backdrop[data-tone='warn'] .th-confirm-icon {
+    @apply bg-warning-50 text-warning-600;
+  }
+  .th-confirm-backdrop[data-tone='warn'] .btn-confirm {
+    @apply bg-warning-600 hover:bg-warning-700;
+  }
+
+  .th-confirm-backdrop[data-tone='neutral'] .th-confirm-icon {
+    @apply bg-info-50 text-info-600;
+  }
+  .th-confirm-backdrop[data-tone='neutral'] .btn-confirm {
+    @apply bg-info-600 hover:bg-info-700;
+  }
+  .th-confirm-backdrop[data-tone='neutral'] .th-confirm-amount {
+    @apply border-info-200 bg-info-50;
+  }
+  .th-confirm-backdrop[data-tone='neutral'] .th-confirm-amount-value {
+    @apply text-info-700;
+  }
+  .th-confirm-backdrop[data-tone='neutral'] .th-confirm-amount-label {
+    @apply text-info-600;
+  }
+}
+
+/* Opened from JS on every call, so the keyframe is declared outside @layer for
+   the same reason `.badge-spin` is: Tailwind scans for class names, never for
+   animation names, and a referenced keyframe inside a layer is not guaranteed
+   to survive the purge. */
+@keyframes th-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* In-flight status spinner (`.badge-loading`, above).
@@ -575,6 +721,7 @@
 .dark .pay-rocket { --pay: #c472ca; --pay-soft: #241126; --pay-line: #5c2a60; --pay-ink: #ccc5cc; --pay-on: #2f1431; }
 .dark .pay-default { --pay: #51ebbd; --pay-soft: #08241b; --pay-line: #125b45; --pay-ink: #abbdb8; --pay-on: #082f23; }
 /* <<< generated — rerun `php scripts/generate-pay-palette.php` <<< */
+
 
 
 

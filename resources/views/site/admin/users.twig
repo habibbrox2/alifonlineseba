@@ -18,7 +18,7 @@
     </a>
     <a href="/admin/users?trashed=all" class="btn btn-sm {{ currentFilter == 'all' ? 'btn-primary' : 'btn-ghost' }}">সবাই দেখুন</a>
     {% if trashedCount|default(0) > 0 %}
-        <form method="post" action="/admin/users" class="ml-auto" onsubmit="return confirm('ট্র্যাশের সব ইউজার ফিরিয়ে আনবেন?')">
+        <form method="post" action="/admin/users" class="ml-auto" data-confirm="{{ { title: 'ট্র্যাশের সব ইউজার ফিরিয়ে আনবেন?', tone: 'neutral', message: 'ট্র্যাশে থাকা সব ইউজার আবার সক্রিয় হবে।', confirm: 'সব ফিরিয়ে আনুন' }|json_encode }}">
             <input type="hidden" name="_csrf" value="{{ csrf }}">
             <input type="hidden" name="do" value="restore_all">
             <button type="submit" class="btn btn-sm">
@@ -149,7 +149,7 @@
                                         {# Quick promote buttons for regular users #}
                                         {% if user.role == 'user' %}
                                         <div class="flex flex-col gap-1">
-                                            <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে এডমিন বানাবেন?')">
+                                            <form method="post" action="/admin/users" class="flex items-center gap-1" data-confirm="{{ { title: (user.username ~ ' কে এডমিন বানাবেন?'), tone: 'warn', message: 'এই ইউজার অ্যাডমিন প্যানেল, স্টাফ ব্যবস্থাপনা ও উত্তোলন অনুরোধ দেখতে পাবে।', confirm: 'এডমিন বানান' }|json_encode }}">
                                                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                                                 <input type="hidden" name="do" value="role">
                                                 <input type="hidden" name="user_id" value="{{ user.id }}">
@@ -158,7 +158,7 @@
                                                     {{ icon('shield-check', 'w-3.5 h-3.5') }} এডমিন
                                                 </button>
                                             </form>
-                                            <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে স্টাফ বানাবেন?')">
+                                            <form method="post" action="/admin/users" class="flex items-center gap-1" data-confirm="{{ { title: (user.username ~ ' কে স্টাফ বানাবেন?'), tone: 'warn', message: 'স্টাফ এডমিন প্যানেল দেখতে পাবে, কিন্তু উত্তোলন বা প্ল্যাটফর্ম লেজার নয়।', confirm: 'স্টাফ বানান' }|json_encode }}">
                                                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                                                 <input type="hidden" name="do" value="role">
                                                 <input type="hidden" name="user_id" value="{{ user.id }}">
@@ -170,7 +170,7 @@
                                         </div>
                                         {% elseif user.role == 'staff' and identity.isSuperAdmin() %}
                                         {# Superadmin can promote staff to admin #}
-                                        <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে এডমিন বানাবেন?')">
+                                        <form method="post" action="/admin/users" class="flex items-center gap-1" data-confirm="{{ { title: (user.username ~ ' কে এডমিন বানাবেন?'), tone: 'warn', message: 'এই ইউজার অ্যাডমিন প্যানেল, স্টাফ ব্যবস্থাপনা ও উত্তোলন অনুরোধ দেখতে পাবে।', confirm: 'এডমিন বানান' }|json_encode }}">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="role">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
@@ -181,7 +181,7 @@
                                         </form>
                                         {% elseif user.role == 'admin' and identity.isSuperAdmin() %}
                                         {# Superadmin can demote admin to staff #}
-                                        <form method="post" action="/admin/users" class="flex items-center gap-1" onsubmit="return confirm('{{ user.username }} কে স্টাফ করবেন?')">
+                                        <form method="post" action="/admin/users" class="flex items-center gap-1" data-confirm="{{ { title: (user.username ~ ' কে স্টাফ করবেন?'), tone: 'warn', message: 'এডমিনের অ্যাক্সেস চলে যাবে।', confirm: 'স্টাফ করান' }|json_encode }}">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="role">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
@@ -246,7 +246,7 @@
                                         </form>
                                         {% endif %}
                                         {% if can_access(identity, 'admin-users-password-reset') %}
-                                        <form method="post" action="/admin/users" onsubmit="return confirm('পাসওয়ার্ড রিসেট করবেন? একটি নতুন এলোমেলো পাসওয়ার্ড তৈরি হবে এবং একবারই দেখানো হবে।')">
+                                        <form method="post" action="/admin/users" data-confirm="{{ { title: (user.username ~ ' এর পাসওয়ার্ড রিসেট করবেন?'), tone: 'warn', bullets: ['একটি নতুন এলোমেলো পাসওয়ার্ড তৈরি হবে', 'পাসওয়ার্ডটি একবারই দেখানো হবে', 'পুরনো পাসওয়ার্ড আর কাজ করবে না'], confirm: 'রিসেট করুন' }|json_encode }}">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="reset">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
@@ -255,7 +255,7 @@
                                         {% endif %}
                                         {% if user.id != identity.id and user.role != 'admin' %}
                                         {% if can_access(identity, 'admin-users-delete') %}
-                                        <form method="post" action="/admin/users" onsubmit="return confirm('"{{ user.username }}" ট্র্যাশে পাঠাবেন? ইউজার লগইন করতে পারবে না, তবে চাইলে রিস্টোর করা যাবে।')">
+                                        <form method="post" action="/admin/users" data-confirm="{{ { title: (user.username ~ ' ট্র্যাশে পাঠাবেন?'), tone: 'danger', bullets: ['ইউজার আর লগইন করতে পারবে না', 'চাইলে পরে রিস্টোর করা যাবে'], confirm: 'ট্র্যাশে পাঠান' }|json_encode }}">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="delete">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
