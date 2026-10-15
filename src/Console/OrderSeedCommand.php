@@ -110,6 +110,41 @@ final class OrderSeedCommand extends Command
             ['tin_number' => '987654321098'],
             ['tin_number' => '456789123047'],
         ],
+        'mock-teletalk-payment' => [
+            ['user_id' => 'MZDTP2XB', 'contact_mobile' => '01318129911', 'post_name' => 'ব্যাংক কেসার (৪৯তম বিসিএস)'],
+            ['user_id' => 'QW4RT8ZP', 'contact_mobile' => '01712345678', 'post_name' => 'অফিস সহকারী (৪৯তম বিসিএস)'],
+            ['user_id' => 'BN7YH3KM', 'contact_mobile' => '01898765432', 'post_name' => 'সহকারী শিক্ষক (৯৬তম বিসিএস)'],
+        ],
+        'mock-digital-file' => [
+            ['file_request' => 'বাংলা লেটারহেড নমুনা (AI)', 'contact_mobile' => '01712345678'],
+            ['file_request' => 'লোগো নমুনা ফাইল (AI)', 'contact_mobile' => '01898765432'],
+            ['file_request' => 'চিঠির নমুনা (DOCX), বাংলা ফন্ট প্যাক', 'contact_mobile' => '01318129911'],
+        ],
+        'mock-bangla-converter' => [
+            ['source_text' => 'আমার সোনার বাংলা, আমি তোমায় ভালোবাসি', 'direction' => 'Unicode → Sutonny'],
+            ['source_text' => 'gj-revbN brmy, ‡i Kvi mvBavi', 'direction' => 'Sutonny → Unicode'],
+            ['source_text' => 'চাকরির আবেদন জমা দেওয়ার সময়সীমা ৩০ নভেম্বর', 'direction' => 'Unicode → Sutonny'],
+        ],
+        'mock-local-gov' => [
+            [
+                'applicant_name' => 'মোঃ রহিম উদ্দিন',
+                'nid_number' => '1990123456789',
+                'contact_mobile' => '01712345678',
+                'details' => 'রহিম ট্রেডার্স — খুচরা বিক্রয়ের ট্রেড লাইসেন্স',
+            ],
+            [
+                'applicant_name' => 'করিম মিয়া',
+                'nid_number' => '1976123456780',
+                'contact_mobile' => '01898765432',
+                'details' => 'চারিত্রিক সনদ — চাকরির আবেদনের জন্য',
+            ],
+            [
+                'applicant_name' => 'আয়েশা বেগম',
+                'nid_number' => '1987543210987',
+                'contact_mobile' => '01318129911',
+                'details' => 'বাসা ভাড়ার সনদ — ভাড়াটের নামে',
+            ],
+        ],
     ];
 
     private const ADMIN_NOTE = 'ডেমো অর্ডার — app:seed-orders';
@@ -381,6 +416,9 @@ final class OrderSeedCommand extends Command
         $userId = (int) $step['user_id'];
         $price = (float) $step['price'];
         $reference = $this->reference();
+        // The ledger entries below quote the order, and a charge or refund whose
+        // description cannot name the order it belongs to is unauditable.
+        $step['reference'] = $reference;
 
         $topupId = $price > 0 && (float) $this->balanceOf($userId) < $price
             ? $this->topUp($userId, $price)

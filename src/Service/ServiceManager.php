@@ -14,8 +14,12 @@ use App\Repository\ServiceRepository;
 use App\Repository\ServiceSubmissionRepository;
 use App\Repository\TransactionRepository;
 use App\Repository\UserRepository;
+use App\ServiceProvider\MockBanglaConverterService;
+use App\ServiceProvider\MockDigitalFileService;
+use App\ServiceProvider\MockLocalGovService;
 use App\ServiceProvider\MockNidMakeService;
 use App\ServiceProvider\MockNidService;
+use App\ServiceProvider\MockTeletalkPaymentService;
 use App\ServiceProvider\MockTinService;
 use App\ServiceProvider\MockVoterService;
 use App\ServiceProvider\ServiceField;
@@ -104,6 +108,10 @@ final class ServiceManager
             new MockNidMakeService(),
             new MockVoterService(),
             new MockTinService(),
+            new MockTeletalkPaymentService(),
+            new MockDigitalFileService(),
+            new MockBanglaConverterService(),
+            new MockLocalGovService(),
         ];
         $this->providers = [];
         foreach ($mocks as $provider) {
@@ -139,6 +147,23 @@ final class ServiceManager
         }
         if (str_contains($slug, 'tin')) {
             return $this->providers['mock-tin'];
+        }
+        if (str_contains($slug, 'teletalk')) {
+            return $this->providers['mock-teletalk-payment'];
+        }
+        // The digital-file and local-government slugs are matched on tokens no
+        // other seeded slug contains (`sample`, `font`, `converter`,
+        // `pourashava`, `union`, `trade-license`), so they cannot be swallowed
+        // by an earlier check — and none of them trips `nid`/`voter`/`tin`,
+        // so no earlier check can swallow them either.
+        if (str_contains($slug, 'converter')) {
+            return $this->providers['mock-bangla-converter'];
+        }
+        if (str_contains($slug, 'sample') || str_contains($slug, 'font')) {
+            return $this->providers['mock-digital-file'];
+        }
+        if (str_contains($slug, 'trade-license') || str_contains($slug, 'pourashava') || str_contains($slug, 'union')) {
+            return $this->providers['mock-local-gov'];
         }
         return $this->providers['mock-nid'];
     }

@@ -18,7 +18,7 @@ final class SeedCommand extends Command
 {
     /**
      * Categories from the first placeholder seed pass, superseded by the
-     * 8-category taxonomy above. They are deactivated rather than deleted so
+     * 11-category taxonomy above. They are deactivated rather than deleted so
      * services and transactions that still point at them keep their FKs.
      *
      * A named list, not "whatever is not in the taxonomy": a category an admin
@@ -53,7 +53,29 @@ final class SeedCommand extends Command
             ['label' => 'সাধারণ কপি', 'price' => 280],
             ['label' => 'কালার হাই-রেজুলিউশন কপি', 'price' => 340],
         ],
+        'teletalk-payment' => [
+            ['label' => 'আবেদন ফি ৳১০০', 'price' => 100],
+            ['label' => 'আবেদন ফি ৳২০০', 'price' => 200],
+            ['label' => 'আবেদন ফি ৳৩০০', 'price' => 300],
+            ['label' => 'আবেদন ফি ৳৪০০', 'price' => 400],
+            ['label' => 'আবেদন ফি ৳৫০০', 'price' => 500],
+        ],
     ];
+
+    /**
+     * Ordering rules shared by the file/font services: they take no personal
+     * data, so what the operator needs from the customer is only *which* file.
+     */
+    private const RULES_DIGITAL_FILE = "কোন ফাইল বা ফন্ট প্যাক দরকার তা অর্ডার ফরমে লিখুন — ডেলিভারি হবে অর্ডারের ফলাফলে সংযুক্ত ফাইলে।\nঅর্ডার দেওয়ার পর ফাইল পাঠানোর আগে অপারেটর মোবাইলে যোগাযোগ করতে পারেন।\nডেমো সার্ভিস: কোনো বাস্তব ফাইল বা পেমেন্ট বিনিময় হয় না।";
+
+    /** The converter is free, so its rules have to say so before the customer orders. */
+    private const RULES_CONVERTER = "রূপান্তরের দিক লিখুন — Sutonny → Unicode অথবা Unicode → Sutonny; না দিলে Sutonny → Unicode ধরা হয়।\nযে লেখা দরকার সেটি পুরোটাই একবারে দিন — একটি অর্ডারে একটি লেখা।\nএই সেবা সম্পূর্ণ ফ্রি — ব্যালেন্স থেকে কোনো টাকা কাটা হয় না।\nডেমো সার্ভিস: রূপান্তর অপারেটর সম্পন্ন করবেন এবং ফলাফল ডেমো হিসেবে ডেলিভারি হবে।";
+
+    /**
+     * Trade licence and certificate orders carry the same identity facts, so
+     * one rule block serves all four local-government services.
+     */
+    private const RULES_LOCAL_GOV = "আবেদনকারীর পূর্ণ নাম, সঠিক এনআইডি/জন্মনিবন্ধন নম্বর ও চলমান মোবাইল নম্বর দিন — ভুল তথ্যের জন্য টাকা ফেরতযোগ্য নয়।\nপ্রতিষ্ঠানের নাম ও ব্যবসার ধরন, অথবা সনদের প্রয়োজনের বিষয় আবেদনের বিস্তারিত ঘরে লিখুন।\nপ্রয়োজনীয় কাগজপত্র ও অফিসি ফি, যদি থাকে, অর্ডার দেওয়ার পর অপারেটর জানাবেন।\nডেমো সার্ভিস: কোনো প্রকৃত আবেদন জমা হয় না।";
 
     /**
      * Ordering rules per slug, rendered as the rules card on the order page.
@@ -63,6 +85,19 @@ final class SeedCommand extends Command
     private const SEED_RULES = [
         'official-server-copy' => "সঠিক ১৭ ডিজিটের NID নম্বর দিন — ভুল নম্বরের জন্য টাকা ফেরতযোগ্য নয়।\nএকটি অর্ডারে একজনের তথ্য প্রদান করুন।\nডেমো সার্ভিস: ফলাফল সম্পূর্ণ কাল্পনিক এবং কয়েক সেকেন্ডে ডেলিভারি হয়।",
         'nid-copy' => "ভোটার নম্বর, ফর্ম নম্বর, স্লিপ বা NID — যেকোনো একটি দিলেই চলবে।\nস্মার্ট কার্ড ইস্যু হওয়ার পরেই কপি পাওয়া যাবে।",
+        'teletalk-payment' => "অর্ডার দেওয়ার সময় আবেদনের কনফার্মেশন স্লিপের টেলিটক User ID ও সঠিক মোবাইল নম্বর দিন — ভুল তথ্যের জন্য টাকা ফেরতযোগ্য নয়।\nআমাদের টেলিটক প্রিপেইড সিম থেকে ১ম এসএমএস: DLS <User ID> → ১৬২২২, এরপর ২য় এসএমএস: DLS YES <PIN> → ১৬২২২।\nপেমেন্টের নির্ধারিত সময়সীমার মধ্যে অর্ডার সম্পন্ন করতে হবে; সময় শেষ হওয়ার আগেই দিন।\nসফল পেমেন্টের পর আবেদনকারীর User ID ও পাসওয়ার্ড ডেলিভারি হবে, যা দিয়ে অ্যাডমিট কার্ড / Applicant's Copy ডাউনলোড করা যাবে।\nডেমো সার্ভিস: কোনো প্রকৃত এসএমএস বা পেমেন্ট পাঠানো হয় না।",
+
+        // ডিজিটাল ফাইল ও টুলস
+        'sample-illustrator-file' => self::RULES_DIGITAL_FILE,
+        'sample-word-file' => self::RULES_DIGITAL_FILE,
+        'necessary-fonts' => self::RULES_DIGITAL_FILE,
+        'bangla-text-converter' => self::RULES_CONVERTER,
+
+        // স্থানীয় সরকারি সেবা
+        'pourashava-trade-license' => self::RULES_LOCAL_GOV,
+        'union-trade-license' => self::RULES_LOCAL_GOV,
+        'pourashava-certificate' => self::RULES_LOCAL_GOV,
+        'union-certificate' => self::RULES_LOCAL_GOV,
     ];
 
     public function __construct(
@@ -90,14 +125,14 @@ final class SeedCommand extends Command
                 'phone' => '01700000000',
                 'email' => 'admin@demo.local',
                 'password_hash' => password_hash('Admin1234!', PASSWORD_DEFAULT),
-                'role' => 'admin',
+                'role' => 'superadmin',
                 'balance' => 5000,
             ]);
             $this->users->create([
-                'username' => 'rahim.demo',
-                'full_name' => 'রহিম উদ্দিন',
+                'username' => 'demo',
+                'full_name' => 'ডেমো উদ্দিন',
                 'phone' => '01712345678',
-                'email' => 'rahim@demo.local',
+                'email' => 'demo@demo.local',
                 'password_hash' => password_hash('Demo1234!', PASSWORD_DEFAULT),
                 'role' => 'user',
                 'balance' => 250,
@@ -118,7 +153,10 @@ final class SeedCommand extends Command
             $existingCategorySlugs[(string) $row['slug']] = true;
         }
 
-        // ---- Categories — the reference site's 9-chip taxonomy ----------------
+        // ---- Categories — the seed taxonomy. The reference site lists the
+        // page-two services (files/tools and local-government work) as loose
+        // services with no chip of their own; each group becomes one chip here
+        // so those eight services have somewhere to live. --------------------
         $categories = [
             ['NID ও ভোটার', 'nid-voter', 'credit-card', 'এনআইডি, ভোটার ও সার্ভার কপি সেবা', 1],
             ['টিন সার্টিফিকেট', 'tin-certificate', 'receipt', 'TIN তৈরি, উত্তোলন ও রিটার্ণ', 2],
@@ -128,6 +166,9 @@ final class SeedCommand extends Command
             ['কল লিস্ট (CDR)', 'call-list-cdr', 'phone-call', 'কল ও এসএমএস রেকর্ড', 6],
             ['জন্ম নিবন্ধন', 'birth-registration', 'file-check', 'জন্মনিবন্ধন সনদ সেবা', 7],
             ['পাসপোর্ট ও BMET', 'passport-bmet', 'plane', 'পাসপোর্ট ও বিএমইটি সেবা', 8],
+            ['চাকরি ও আবেদন', 'job-application', 'briefcase', 'সরকারি চাকরির আবেদন ও ফি পেমেন্ট', 9],
+            ['ডিজিটাল ফাইল ও টুলস', 'digital-files', 'folder-down', 'নমুনা ফাইল, ফন্ট ও বাংলা লেখার টুলস', 10],
+            ['স্থানীয় সরকারি সেবা', 'local-government', 'landmark', 'পৌরসভা ও ইউনিয়নের ট্রেড লাইসেন্স ও সনদপত্র', 11],
         ];
         $catIds = [];
         foreach ($categories as [$name, $slug, $icon, $desc, $sort]) {
@@ -147,7 +188,7 @@ final class SeedCommand extends Command
             ]);
         }
 
-        // ---- Services — the reference site's 18-service catalog (all mock) -----
+        // ---- Services — the reference site's catalog (all mock) ----------------
         $created = 0;
         $services = [
             // NID ও ভোটার
@@ -184,6 +225,21 @@ final class SeedCommand extends Command
             // পাসপোর্ট ও BMET
             ['passport-bmet', 'MRP পাসপোর্ট ও ই-পাসপোর্ট SB Copy', 'mrp-epassport-sb-copy', 1000, 'plane', 'SB Copy', 'MRP ও ই-পাসপোর্টের অফিসিয়াল SB কপি এবং NID To পাসপোর্ট ইনফরমেশন।'],
             ['passport-bmet', 'BMET সার্ভিস (অনুমোদন, সংশোধন ও আপডেট)', 'bmet-service', 250, 'plane-takeoff', 'BMET 2026', '৭৮% পেন্ডিং অনুমোদন, BMET সংশোধন ও পুরাতন রেকর্ড ২০২৬ সালে আপডেট।'],
+
+            // চাকরি ও আবেদন
+            ['job-application', 'টেলিটক পেমেন্ট', 'teletalk-payment', 100, 'send', 'টেলিটক SMS', 'আপনি যদি সরকারি কোন চাকরির আবেদন করতে চান তাহলে আবেদন ফি পেমেন্ট করার জন্য টেলিটক সিম দরকার নেই। এই সেবার মাধ্যমে আপনার সরকারি চাকরির আবেদন ফি পেমেন্ট করতে পারবেন।'],
+
+            // ডিজিটাল ফাইল ও টুলস
+            ['digital-files', 'নমুনা ইলাস্ট্রেটর ফাইল', 'sample-illustrator-file', 6, 'file-image', 'ফাইল ডাউনলোড', 'এই সেবার মাধ্যমে আপনি বিভিন্ন ধরণের Adobe Illustrator ফাইলের নমুনা ক্রয় করতে পারবেন।'],
+            ['digital-files', 'নমুনা ওয়ার্ড ফাইল', 'sample-word-file', 6, 'file-text', 'ফাইল ডাউনলোড', 'এই সেবার মাধ্যমে আপনি বিভিন্ন ধরণের MS Word ফাইলের নমুনা ক্রয় করতে পারবেন।'],
+            ['digital-files', 'প্রয়োজনীয় ফন্ট ডাউনলোড', 'necessary-fonts', 6, 'type', 'ফন্ট প্যাক', 'এই সেবার মাধ্যমে আপনি বাংলা, ইংরেজি ও আরবি এই তিন ভাষার প্রয়োজনীয় ফন্ট ডাউনলোড করতে পারবেন।'],
+            ['digital-files', 'বাংলা লেখা কনভার্টার', 'bangla-text-converter', 0, 'languages', 'ফ্রি টুল', 'আপনার বিজয় বাংলা (SutonnyMJ) লেখাকে ইউনিকোড (Nikosh) লেখায় অথবা ইউনিকোড (Nikosh) লেখাকে বিজয় বাংলা (SutonnyMJ) লেখায় রুপান্তর করুন একদম ফ্রি।'],
+
+            // স্থানীয় সরকারি সেবা
+            ['local-government', 'পৌরসভা ট্রেড লাইসেন্স', 'pourashava-trade-license', 200, 'building-2', 'ট্রেড লাইসেন্স', 'পৌরসভায় ব্যবসার ট্রেড লাইসেন্সের নতুন আবেদন, নবায়ন ও সংশোধনের কাজ এই সেবার মাধ্যমে করতে পারবেন।'],
+            ['local-government', 'ইউনিয়ন ট্রেড লাইসেন্স', 'union-trade-license', 150, 'store', 'ট্রেড লাইসেন্স', 'ইউনিয়ন পরিষদের মাধ্যমে ট্রেড লাইসেন্সের আবেদন, নবায়ন ও সংশোধনের কাজ সম্পন্ন করতে পারবেন।'],
+            ['local-government', 'পৌরসভা সনদ', 'pourashava-certificate', 100, 'scroll-text', 'সনদপত্র', 'পৌরসভার যেকোন সনদপত্র বা প্রত্যয়ন পেতে চাইলে এই সেবার মাধ্যমে আবেদন করতে হবে।'],
+            ['local-government', 'ইউনিয়ন সনদ', 'union-certificate', 80, 'stamp', 'সনদপত্র', 'ইউনিয়ন পরিষদের যেকোন সনদপত্র বা প্রত্যয়ন পেতে চাইলে এই সেবার মাধ্যমে আবেদন করতে হবে।'],
         ];
         foreach ($services as $i => [$cat, $name, $slug, $price, $icon, $badge, $desc]) {
             if (isset($existingSlugs[$slug])) {

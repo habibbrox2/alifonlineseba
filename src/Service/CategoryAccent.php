@@ -138,6 +138,12 @@ final class CategoryAccent
         'trade' => 'orange',
         'ট্রেডে' => 'orange',
 
+        // Files, tools & local government
+        'file' => 'fuchsia',
+        'ফাইল' => 'fuchsia',
+        'government' => 'indigo',
+        'সরকারি' => 'indigo',
+
         // Property, misc
         'land' => 'lime',
         'জমি' => 'lime',

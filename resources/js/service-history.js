@@ -94,7 +94,7 @@ window.thServiceRequest = function thServiceRequest(raw) {
     /** The streaming endpoint for this row's deliverable. */
     get fileUrl() {
       return `/service-requests/${this.id}/file`;
-    }
+    },
 
     /**
      * When this row last changed, as a sentence rather than a database stamp.
