@@ -32,7 +32,8 @@ The app holds no secrets that would let an attacker re-derive authority. If the 
 
 ## 3. Authorization controls
 
-- **Server-side, existing:** `AdminMiddleware` admits only role ∈ {admin, staff, superadmin}; `AdminWithdrawsApiAction`, `AdminStaffApiAction`, `AdminSettingsApiAction` each re-check `isSuperAdmin()` → 403. The Android UI hides superadmin screens for non-superadmins purely as UX; forcing the call still returns 403.
+- **Server-side, existing:** `AdminMiddleware` admits only role ∈ {admin, staff, superadmin}; `AdminWithdrawsApiAction` and `AdminSettingsApiAction` each re-check `isSuperAdmin()` → 403, while `AdminStaffApiAction` gates on `PermissionService::canAccessRoute('admin-staff'/'admin-staff-password-reset')` (which admin/staff/superadmin with `staff.read` pass). The Android UI hides superadmin screens for non-superadmins purely as UX; forcing the call still returns 403.
+
 - **Superadmin creation is CLI-only** (`php yii app:super-admin`) — no API path exists or will be added.
 - **Self-approval of withdrawals** is refused inside `AdminWithdrawService::approve()` (reviewer id === admin id) — enforced server-side regardless of client.
 - **Idempotency gates** prevent double-pay: `markReviewed` requires `reviewed_by IS NULL AND status IN (pending,review)`; order settle credits are written once inside guarded UPDATEs (`approved_by` marker).
