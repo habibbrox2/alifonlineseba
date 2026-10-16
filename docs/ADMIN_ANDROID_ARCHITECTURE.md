@@ -327,6 +327,7 @@ Phases 3 and 4 are independent and can run in parallel; everything else is seque
 ## Open decisions (flagged, not blocking)
 
 1. APK vs AAB distribution for the admin app (AAB requires Play Store; APK allows direct install — recommend APK + `app_release` row, matching the existing `/app/apk` flow).
+2. Biometric unlock deferred for this launch (user decision; no on-device biometric gate in 2026); EncryptedSharedPreferences migration is likewise deferred. Re-open as a focused mini-task if later needed.
 2. **Resolved (Phase 1):** admin and TWA releases coexist by channel (`app_release.channel`, default `twa`) — see T1.6/T1.7 and `php yii app:release:publish --file=<apk> --channel=admin`. Admin rows never use channel=twa; rollback = republish previous APK.
 3. API versioning (§2.4 — keep unversioned for now).
 4. Step-up server challenge for biometric re-auth (client-side gate for v1).
