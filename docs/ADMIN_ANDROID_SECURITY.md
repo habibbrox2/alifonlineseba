@@ -91,3 +91,11 @@ Every privileged flow already writes `activity_log` via `ActivityLogRepository::
 1. **30-day access tokens** are long-lived by design (`API_TOKEN_TTL_DAYS`); compensating controls: revocation, live-row validation, refresh rotation, encrypted storage. Shortening the TTL is a one-line env change if operations requires it.
 2. **Biometric re-auth is client-side** for v1; a server-issued step-up challenge (e.g. re-enter password for withdraw approval) is a possible future backend addition â€” flagged as an open decision.
 3. **Staff role breadth:** staff can view users/logs by design (the queue desk role). If a narrower "operator" role is ever needed, that is a backend role-model change â€” out of scope, and the spec forbids inventing roles.
+
+
+## Post-launch (deferred) security work
+
+- Encrypted token storage and on-device Biometric gating are intentionally deferred from this launch. Until they ship, access/refresh tokens rest in Android DataStore (protobuf-free Preferences), which is **plaintext on disk** — not password-protected. Treat device theft as equivalent to token theft until the patch lands.
+- **Mitigations in effect today:** tokens live only inside that app's DataStore; server-side revocation works through the live-row check in ApiTokenRepository::resolve(); password reset disables tokens. Behaviour is documented as an open exclusion in docs/ADMIN_ANDROID_ARCHITECTURE.md (Open Decisions / §3.1.3 threats).
+- **Patch plan:** EncryptedSharedPreferences (AndroidX Security Crypto) + MasterKey in the Android Keystore, a one-shot plaintext-to-ciphertext migration on first launch, and a one-time logout on upgrade (cutover note in docs/ADMIN_ANDROID_DEPLOYMENT.md). This is a separate security follow-up — not part of the v1 contract.
+
