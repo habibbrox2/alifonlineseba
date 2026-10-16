@@ -1,0 +1,43 @@
+name: Admin Android release
+
+on:
+  push:
+    tags: ["admin-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: set up JDK 17
+        uses: actions/setup-jdk@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: set up Android SDK
+        uses: android-actions/setup-android@v4
+      - name: decode keystore
+        if: ${{ secrets.ADMIN_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "$ADMIN_KEYSTORE_BASE64" | base64 --decode > android-admin/keystore.jks
+        env:
+          ADMIN_KEYSTORE_BASE64: ${{ secrets.ADMIN_KEYSTORE_BASE64 }}
+      - name: write keystore.properties
+        if: ${{ secrets.ADMIN_KEYSTORE_BASE64 != '' }}
+        run: |
+          cat > android-admin/keystore.properties <<EOF
+          storeFile=keystore.jks
+          storePassword=${{ secrets.ADMIN_STORE_PASSWORD }}
+          keyAlias=${{ secrets.ADMIN_KEY_ALIAS }}
+          keyPassword=${{ secrets.ADMIN_KEY_PASSWORD }}
+          EOF
+      - name: build admin release
+        working-directory: android-admin
+        env:
+          ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon

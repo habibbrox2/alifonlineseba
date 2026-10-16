@@ -187,3 +187,6 @@ vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8099-�
 ## লাইসেন্স
 
 Alif Tools — সর্বস্বত্ব সংরক্ষিত।
+
+## Android Admin (native)
+Setup: docs/ADMIN_ANDROID_SETUP.md. Deployment: docs/ADMIN_ANDROID_DEPLOYMENT.md. API contract: docs/ADMIN_ANDROID_API.md.

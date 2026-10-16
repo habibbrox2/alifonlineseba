@@ -107,6 +107,15 @@ __pycache__/
 /android-admin/app/build/
 /android-admin/gradle-*
 /android-admin/local.properties
+/android-admin/keystore.properties
+/android-admin/*.jks
+/android-admin/*.keystore
+/android-admin/*.p12
+/android-admin/*.pfx
+/twa/keystore.properties
+/twa/*.jks
+/twa/*.keystore
+/twa/*.p12
 
 # SQLite databases the test suite creates under tests/Support/Data/ at runtime,
 # plus SQLite's sidecar files (-wal/-shm/-journal), which can be non-empty even
