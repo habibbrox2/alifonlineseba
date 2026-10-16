@@ -139,6 +139,46 @@ final class ServiceRepository
     }
 
     /**
+     * How many services a visitor can actually order right now.
+     *
+     * The home page states this number as a live fact, so trashed and disabled
+     * services must not inflate it.
+     */
+    public function countActiveServices(): int
+    {
+        return (int) $this->db->createCommand(
+            "SELECT COUNT(*) FROM {{%service}} WHERE [[status]] = 'active' AND [[deleted_at]] IS NULL",
+        )->queryScalar();
+    }
+
+    /**
+     * The busiest active services, for the home page shelf.
+     *
+     * Ordered by how often customers actually ordered them rather than by
+     * sort_order, so "জনপ্রিয়" means what it says. The LEFT JOIN keeps a
+     * brand-new service listable before its first order. Same light column
+     * set as gridServices() for the same page-size reason.
+     *
+     * @return list<array{category_id: int|string, name: string, slug: string,
+     *                   description: string|null, price: string, badge: string|null,
+     *                   icon: string|null, order_count: int}>
+     */
+    public function popularServices(int $limit = 6): array
+    {
+        $limit = max(1, $limit);
+
+        return $this->db->createCommand(
+            'SELECT s.[[category_id]], s.[[name]], s.[[slug]], s.[[description]], s.[[price]], s.[[badge]], s.[[icon]], COUNT(o.[[id]]) AS [[order_count]]'
+            . ' FROM {{%service}} s'
+            . ' LEFT JOIN {{%service_order}} o ON o.[[service_id]] = s.[[id]]'
+            . " WHERE s.[[status]] = 'active' AND s.[[deleted_at]] IS NULL"
+            . ' GROUP BY s.[[id]]'
+            . ' ORDER BY [[order_count]] DESC, s.[[sort_order]] ASC, s.[[id]] ASC'
+            . " LIMIT {$limit}"
+        )->queryAll();
+    }
+
+    /**
      * Every service regardless of status, trashed ones included — for the admin
      * list, which shows both so deleted rows can be restored.
      */

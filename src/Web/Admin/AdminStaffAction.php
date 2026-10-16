@@ -68,10 +68,22 @@ final readonly class AdminStaffAction
 
         if ($request->getMethod() === 'POST') {
             $input = (array) $request->getParsedBody();
-            [$ok, $message] = $this->apply((string) ($input['do'] ?? ''), $input, $identity);
+            $do = (string) ($input['do'] ?? '');
+
+            // The bulk bar posts many ids; the single-row path posts one. Both
+            // answer with the same [ok, message] contract, so the redirect and
+            // the flash below stay identical.
+            [$ok, $message] = $do === 'bulk_status'
+                ? $this->bulkStatus($input, $identity)
+                : $this->apply($do, $input, $identity);
             $this->session->set($ok ? 'flash_success' : 'flash_error', $message);
 
-            return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('admin-staff')]);
+            // A bulk run must not dump the operator back on page 1 with the
+            // search gone: the batch was picked *within* a filtered view.
+            $location = $this->url->generate('admin-staff')
+                . ($do === 'bulk_status' ? $this->bulkReturnQuery($input) : '');
+
+            return new \Nyholm\Psr7\Response(302, ['Location' => $location]);
         }
 
         $query = $request->getQueryParams();
@@ -197,6 +209,122 @@ final readonly class AdminStaffAction
             (string) $subject['username'],
             UserRepository::ROLE_LABELS[$role] ?? $role,
         )];
+    }
+
+    /**
+     * Suspend or reactivate a batch of roster rows from the bulk bar.
+     *
+     * The checkbox column only offers rows this actor may touch, but the POST
+     * body is attacker-controlled: each id is re-checked here with the same
+     * guards as the single-row path — roster scope, self, rank, trash state,
+     * no-op status and the last-superadmin rule — and counted rather than
+     * trusted.
+     *
+     * @param array<string, mixed> $input
+     * @return array{0: bool, 1: string}
+     */
+    private function bulkStatus(array $input, Identity $identity): array
+    {
+        if (!$this->checkPermission($identity, 'admin-staff-status-update')) {
+            return [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'];
+        }
+
+        $status = ((string) ($input['status'] ?? '')) === 'active' ? 'active' : 'suspended';
+        $label = $status === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়';
+
+        $ids = [];
+        foreach ((array) ($input['ids'] ?? []) as $raw) {
+            $id = (int) $raw;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        $ids = array_keys($ids);
+
+        if ($ids === []) {
+            return [false, 'কোনো স্টাফ নির্বাচন করা হয়নি।'];
+        }
+
+        $changed = 0;
+        $skipped = 0;
+        $touched = [];
+
+        foreach ($ids as $id) {
+            $subject = $this->users->findById($id, true);
+
+            $refused = $subject === null
+                || $subject['deleted_at'] !== null
+                || !in_array((string) $subject['role'], ['admin', 'staff', 'superadmin'], true)
+                || !$this->canModify($identity, $subject)
+                || (string) $subject['status'] === $status
+                || !$this->guardedAgainstLastSuperAdmin(
+                    $subject,
+                    (string) $subject['role'],
+                    (string) $subject['role'],
+                    $status,
+                );
+
+            if ($refused) {
+                $skipped++;
+                continue;
+            }
+
+            $this->users->update($id, ['status' => $status]);
+            $changed++;
+            $touched[] = $id;
+
+            $this->log(
+                $identity,
+                $id,
+                'admin.status_changed',
+                sprintf('Status %s -> %s for %s (bulk)', (string) $subject['status'], $status, (string) $subject['username']),
+            );
+        }
+
+        $message = "নির্বাচিত স্টাফদের মধ্যে {$changed} জনের অবস্থা {$label} হয়েছে।";
+        if ($skipped > 0) {
+            $message .= " {$skipped} জন বাদ পড়েছে — নিজের অ্যাকাউন্ট, উচ্চতর ভূমিকা বা ইতিমধ্যে একই অবস্থা।";
+        }
+
+        return [$changed > 0, $message];
+    }
+
+    /**
+     * The filter state a bulk run was picked within, as a query string, so
+     * the redirect lands back on the same page of the same search.
+     *
+     * @param array<string, mixed> $input
+     */
+    private function bulkReturnQuery(array $input): string
+    {
+        $query = [];
+
+        $q = trim((string) ($input['return_q'] ?? ''));
+        if ($q !== '') {
+            $query['q'] = $q;
+        }
+
+        $trashed = (string) ($input['return_trashed'] ?? '');
+        if (in_array($trashed, [UserRepository::DELETED_ONLY, UserRepository::DELETED_ALL], true)) {
+            $query['trashed'] = $trashed;
+        }
+
+        $page = (int) ($input['return_page'] ?? 0);
+        if ($page > 1) {
+            $query['page'] = (string) $page;
+        }
+
+        $sort = (string) ($input['return_sort'] ?? '');
+        if (in_array($sort, ['username', 'email', 'role', 'status', 'last_login_at'], true)) {
+            $query['sort'] = $sort;
+        }
+
+        $dir = strtolower((string) ($input['return_dir'] ?? ''));
+        if (in_array($dir, ['asc', 'desc'], true)) {
+            $query['dir'] = $dir;
+        }
+
+        return $query === [] ? '' : '?' . http_build_query($query);
     }
 
     /**

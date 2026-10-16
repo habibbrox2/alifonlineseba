@@ -19,16 +19,19 @@
 
 {% block content %}
 <!-- Hero -->
-<section class="relative overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 to-primary-600 pb-24 pt-16 text-center text-white sm:pb-28 sm:pt-24">
+<section class="relative overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 pb-24 pt-16 text-center text-white sm:pb-28 sm:pt-24">
+    {# A faint dot grid under the gradient gives the hero a surface instead of a
+       flat wash; the two accent blobs stay as the colour breathing room. #}
+    <div class="pointer-events-none absolute inset-0 opacity-20" style="background-image: radial-gradient(rgba(255,255,255,0.35) 1px, transparent 1px); background-size: 24px 24px;"></div>
     <div class="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-accent-500/10"></div>
     <div class="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-accent-500/10"></div>
 
     <div class="container-app relative">
-        <p class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wide">
+        <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wide">
             {{ icon('sparkles', 'w-4 h-4') }} allseba.online প্ল্যাটফর্ম ২০২৬
         </p>
         <h1 class="mx-auto max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
-            ডিজিটাল সেবা এক ক্লিকে!
+            ডিজিটাল সেবা <span class="text-accent-300">এক ক্লিকে!</span>
         </h1>
         <p class="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
             All Seba প্ল্যাটফর্মে পাবেন সকল ধরনের ডিজিটাল ও অফিশিয়াল সেবা —
@@ -68,15 +71,106 @@
     </div>
 </section>
 
-<!-- About / CTA -->
-<section class="container-app py-14">
-    <div class="card mx-auto max-w-3xl p-8 text-center sm:p-10">
-        <h2 class="text-2xl font-extrabold text-neutral-900">এটি কীভাবে কাজ করে?</h2>
-        <p class="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-neutral-500">
-            নিবন্ধন করুন → সার্ভিস বাছাই করুন → ফর্ম পূরণ করুন → ফলাফল পান।
-            ব্যালেন্স দিয়ে অর্ডার করুন, ফলাফল দ্রুততম সময়ে হাতে পান।
+<!-- Live stat band — the two numbers are counted from the catalog on every
+     render, so the page can promise what it can actually show. -->
+<section class="container-app pb-6">
+    <div class="card grid grid-cols-2 divide-y divide-neutral-100 p-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+        {% set statsBand = [
+            { value: stats.services ~ '+', label: 'চালু সেবা', icon: 'layout-grid' },
+            { value: stats.categories ~ '+', label: 'ক্যাটাগরি', icon: 'list-checks' },
+            { value: 'ইনস্ট্যান্ট', label: 'ডেলিভারি', icon: 'zap' },
+            { value: '২৪/৭', label: 'সাপোর্ট', icon: 'headphones' },
+        ] %}
+        {% for item in statsBand %}
+            <div class="px-5 py-6 text-center">
+                <span class="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                    {{ icon(item.icon, 'w-5 h-5') }}
+                </span>
+                <p class="text-2xl font-extrabold text-neutral-900">{{ item.value }}</p>
+                <p class="mt-0.5 text-xs font-medium tracking-wide text-neutral-500">{{ item.label }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Popular services — ordered by real order counts, not by the catalog's own
+     sort, so "জনপ্রিয়" is a claim the database backs. -->
+{% if popular is not empty %}
+<section class="container-app py-12">
+    <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-extrabold text-neutral-900 sm:text-3xl">জনপ্রিয় সেবাসমূহ</h2>
+            <p class="mt-2 max-w-xl text-sm leading-relaxed text-neutral-500">
+                গ্রাহকরা যেসব সেবা সবচেয়ে বেশি অর্ডার করেন — সবগুলোই এখন এক ক্লিকে অর্ডার করা যায়।
+            </p>
+        </div>
+        <a href="/services" class="btn btn-ghost">
+            সব সেবা দেখুন
+            <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#arrow-right"></use></svg>
+        </a>
+    </div>
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {% for service in popular %}
+            {% include 'components/service-card.twig' with { service: service } %}
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<!-- Category chips -->
+{% if categories is not empty %}
+<section class="container-app pb-4">
+    <div class="flex flex-wrap items-center justify-center gap-2.5">
+        <span class="text-sm font-semibold text-neutral-500">{{ icon('layout-grid', 'w-4 h-4 inline-block align-text-bottom') }} ক্যাটাগরি:</span>
+        {% for category in categories %}
+            <a href="/services/category/{{ category.slug }}"
+               class="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
+                {% if category.icon %}{{ icon(category.icon, 'w-4 h-4') }}{% endif %}
+                {{ category.name }}
+            </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<!-- How it works -->
+<section class="container-app py-12">
+    <div class="mx-auto max-w-2xl text-center">
+        <h2 class="text-2xl font-extrabold text-neutral-900 sm:text-3xl">কীভাবে কাজ করে?</h2>
+        <p class="mt-2 text-sm leading-relaxed text-neutral-500">নিবন্ধন থেকে ফলাফল হাতে পাওয়া — চারটি সহজ ধাপ।</p>
+    </div>
+    <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {% set steps = [
+            { no: '১', icon: 'user-plus', title: 'নিবন্ধন করুন', desc: 'মোবাইলনম্বর দিয়ে দ্রুত অ্যাকাউন্ট খুলুন।' },
+            { no: '২', icon: 'wallet', title: 'ব্যালেন্স যোগ করুন', desc: 'রিচার্জ করে অ্যাকাউন্টে ব্যালেন্স নিশ্চিত করুন।' },
+            { no: '৩', icon: 'shopping-cart', title: 'সেবা অর্ডার করুন', desc: 'প্রয়োজনীয় সেবা বেছে ফর্ম পূরণ করুন।' },
+            { no: '৪', icon: 'file-check', title: 'ফলাফল পান', desc: 'ড্যাশবোর্ড থেকে ফলাফল ডাউনলোড করুন।' },
+        ] %}
+        {% for step in steps %}
+            <div class="card relative p-6">
+                <span class="absolute -top-3 left-6 flex h-7 w-7 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white">{{ step.no }}</span>
+                <span class="accent-tile mb-4 mt-1 h-11 w-11">
+                    {{ icon(step.icon, 'w-5 h-5') }}
+                </span>
+                <h3 class="text-base font-bold text-neutral-800">{{ step.title }}</h3>
+                <p class="mt-1.5 text-sm leading-relaxed text-neutral-500">{{ step.desc }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Closing CTA -->
+<section class="container-app pb-16">
+    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 px-6 py-12 text-center text-white sm:px-12">
+        <div class="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-accent-500/10"></div>
+        <h2 class="relative text-2xl font-extrabold sm:text-3xl">এখনই শুরু করুন</h2>
+        <p class="relative mx-auto mt-3 max-w-xl text-sm leading-relaxed text-white/80">
+            নিবন্ধন করুন, ব্যালেন্স যোগ করুন আর পছন্দের ডিজিটাল সেবা এক ক্লিকে অর্ডার করুন।
         </p>
-        <a href="/register" class="btn btn-primary mt-6 px-8 py-3">এখনই শুরু করুন</a>
+        <div class="relative mt-7 flex flex-wrap items-center justify-center gap-3">
+            <a href="/register" class="btn btn-accent px-7 py-3 text-base">{{ icon('user-plus', 'w-5 h-5') }} নিবন্ধন করুন</a>
+            <a href="/services" class="btn btn-ghost-dark px-7 py-3 text-base">সেবাসমূহ দেখুন</a>
+        </div>
     </div>
 </section>
 {% endblock %}

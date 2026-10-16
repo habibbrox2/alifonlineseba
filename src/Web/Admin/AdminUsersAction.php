@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Web\Admin;
 
+use App\Auth\Identity;
 use App\Repository\ActivityLogRepository;
 use App\Repository\UserRepository;
+use App\Service\PermissionService;
 use App\Service\UserFields;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -22,6 +24,7 @@ final readonly class AdminUsersAction
         private WebViewRenderer $view,
         private UserRepository $users,
         private ActivityLogRepository $logs,
+        private PermissionService $permissions,
         private SessionInterface $session,
         private UrlGeneratorInterface $url,
     ) {}
@@ -31,12 +34,32 @@ final readonly class AdminUsersAction
         $identity = $request->getAttribute('identity');
         $adminId = $identity !== null ? (int) $identity->id : null;
 
-        // POST actions: create, trash, restore, toggle status, change role, reset password
+        // POST actions: create, trash, restore, toggle status, change role,
+        // reset password, and the bulk status bar.
         if ($request->getMethod() === 'POST') {
             $input = (array) $request->getParsedBody();
             $action = (string) ($input['do'] ?? '');
 
-            if ($action === 'create') {
+            // The template only renders a control the actor may use, but a POST
+            // body is attacker-controlled: every action re-checks its granular
+            // permission here, so a hand-made request cannot skip the gate.
+            $permission = [
+                'create' => 'admin-users-create',
+                'delete' => 'admin-users-delete',
+                'restore' => 'admin-users-restore',
+                'restore_all' => 'admin-users-restore',
+                'toggle' => 'admin-users-status-update',
+                'role' => 'admin-users-role-update',
+                'reset' => 'admin-users-password-reset',
+                'bulk_status' => 'admin-users-status-update',
+            ][$action] ?? null;
+
+            if ($permission !== null && (!$identity instanceof Identity
+                || !$this->permissions->canAccessRoute($identity, $permission))) {
+                $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
+            } elseif ($action === 'bulk_status') {
+                $this->bulkStatus($input, $identity, $adminId);
+            } elseif ($action === 'create') {
                 $this->createUser($input, $adminId);
             } elseif ($action === 'delete') {
                 $this->trashUser((int) ($input['user_id'] ?? 0), $adminId);
@@ -46,32 +69,38 @@ final readonly class AdminUsersAction
                 $this->restoreAllUsers($adminId);
             } else {
                 $userId = (int) ($input['user_id'] ?? 0);
-                $row = $this->users->findById($userId);
+                $row = $userId > 0 ? $this->users->findById($userId) : null;
 
                 if ($row !== null) {
                     $temporaryPassword = null;
+                    $updated = true;
 
                     match ($action) {
-                        'toggle' => $this->users->update($userId, [
-                            'status' => $row['status'] === 'active' ? 'disabled' : 'active',
-                        ]),
-                        'role' => $this->users->update($userId, [
-                            'role' => $this->getAllowedRoles($identity, $input['role'] ?? ''),
-                        ]),
+                        'toggle' => $updated = $this->toggleStatus($identity, $userId, $row, $adminId),
+                        'role' => $updated = $this->changeRole($identity, $userId, $row, (string) ($input['role'] ?? '')),
                         'reset' => $temporaryPassword = $this->resetPassword($userId),
                         default => null,
                     };
 
-                    $this->session->set(
-                        'flash_success',
-                        $temporaryPassword === null
-                            ? 'ইউজার আপডেট হয়েছে।'
-                            : "পাসওয়ার্ড রিসেট হয়েছে। নতুন পাসওয়ার্ড: {$temporaryPassword} — এটি একবারই দেখানো হবে, তাই এখনই কপি করে ব্যবহারকারীকে জানান।"
-                    );
+                    if (!$updated) {
+                        // The guard already set the refusal flash.
+                    } elseif ($temporaryPassword === null) {
+                        $this->session->set('flash_success', 'ইউজার আপডেট হয়েছে।');
+                    } else {
+                        $this->session->set(
+                            'flash_success',
+                            "পাসওয়ার্ড রিসেট হয়েছে। নতুন পাসওয়ার্ড: {$temporaryPassword} — এটি একবারই দেখানো হবে, তাই এখনই কপি করে ব্যবহারকারীকে জানান।"
+                        );
+                    }
                 }
             }
 
-            return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('admin-users')]);
+            // A bulk run must not dump the operator back on page 1 with the
+            // search gone: the batch was picked *within* a filtered view.
+            $location = $this->url->generate('admin-users')
+                . ($action === 'bulk_status' ? $this->bulkReturnQuery($input) : '');
+
+            return new \Nyholm\Psr7\Response(302, ['Location' => $location]);
         }
 
         $page = max(1, (int) ($request->getQueryParams()['page'] ?? '1'));
@@ -101,10 +130,157 @@ final readonly class AdminUsersAction
     private function getAllowedRoles(object $identity, string $requestedRole): string
     {
         $allowedRoles = ['user', 'staff', 'admin'];
-        if ($identity instanceof \App\Auth\Identity && $identity->isSuperAdmin()) {
+        if ($identity instanceof Identity && $identity->isSuperAdmin()) {
             $allowedRoles[] = 'superadmin';
         }
         return in_array($requestedRole, $allowedRoles, true) ? $requestedRole : 'user';
+    }
+
+    /**
+     * Flip one account's status. The bulk bar repeats these guards per row,
+     * so both paths must agree: never yourself, never a rank you cannot
+     * manage, never the last active superadmin.
+     */
+    private function toggleStatus(object $identity, int $userId, array $row, ?int $adminId): bool
+    {
+        $target = ($row['status'] ?? '') === 'active' ? 'disabled' : 'active';
+
+        $refused = $userId === (int) $adminId
+            || !($identity instanceof Identity && $identity->canManageRole((string) $row['role']))
+            || ($row['role'] === 'superadmin' && $target !== 'active' && !$this->users->hasOtherSuperAdmin($userId));
+
+        if ($refused) {
+            $this->session->set('flash_error', 'এই অ্যাকাউন্টের স্ট্যাটাস পরিবর্তন করা যাবে না।');
+            return false;
+        }
+
+        $this->users->update($userId, ['status' => $target]);
+        return true;
+    }
+
+    /**
+     * Apply a role to one account. The requested role is already clamped by
+     * {@see getAllowedRoles()}; this adds the rank guard so an admin cannot
+     * demote a row above their own rank.
+     */
+    private function changeRole(object $identity, int $userId, array $row, string $requestedRole): bool
+    {
+        if (!($identity instanceof Identity) || !$identity->canManageRole((string) $row['role'])) {
+            $this->session->set('flash_error', 'এই অ্যাকাউন্টের রোল পরিবর্তন করা যাবে না।');
+            return false;
+        }
+
+        $this->users->update($userId, ['role' => $this->getAllowedRoles($identity, $requestedRole)]);
+        return true;
+    }
+
+    /**
+     * Suspend or reactivate a batch of accounts from the bulk bar.
+     *
+     * The checkbox column only offers rows this actor may touch, but the POST
+     * body is attacker-controlled: every id is re-checked here against the
+     * same guards as the single-row path — self, rank, trash state, the
+     * last-superadmin rule — and counted rather than trusted.
+     */
+    private function bulkStatus(array $input, ?Identity $identity, ?int $adminId): void
+    {
+        if (!$identity instanceof Identity) {
+            $this->session->set('flash_error', 'অনুমতি নেই।');
+            return;
+        }
+
+        $target = ((string) ($input['status'] ?? '')) === 'active' ? 'active' : 'disabled';
+        $label = $target === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়';
+
+        $ids = [];
+        foreach ((array) ($input['ids'] ?? []) as $raw) {
+            $id = (int) $raw;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        $ids = array_keys($ids);
+
+        if ($ids === []) {
+            $this->session->set('flash_error', 'কোনো ইউজার নির্বাচন করা হয়নি।');
+            return;
+        }
+
+        $changed = 0;
+        $skipped = 0;
+        $touched = [];
+
+        foreach ($ids as $id) {
+            $row = $this->users->findById($id);
+
+            $refused = $row === null
+                || $row['deleted_at'] !== null
+                || $id === (int) $identity->id
+                || !$identity->canManageRole((string) $row['role'])
+                || (string) $row['status'] === $target
+                || ($row['role'] === 'superadmin' && $target !== 'active' && !$this->users->hasOtherSuperAdmin($id));
+
+            if ($refused) {
+                $skipped++;
+                continue;
+            }
+
+            $this->users->update($id, ['status' => $target]);
+            $changed++;
+            $touched[] = $id;
+        }
+
+        if ($changed > 0) {
+            $this->logs->create([
+                'user_id' => $adminId,
+                'action' => 'admin.user.bulk_status',
+                'description' => "Bulk status change to '{$target}': {$changed} user(s)",
+                'metadata' => ['user_ids' => $touched, 'status' => $target],
+            ]);
+        }
+
+        $message = "নির্বাচিত ইউজারদের মধ্যে {$changed} জনের স্ট্যাটাস {$label} হয়েছে।";
+        if ($skipped > 0) {
+            $message .= " {$skipped} জন বাদ পড়েছে — নিজের অ্যাকাউন্ট, উচ্চতর ভূমিকা বা ইতিমধ্যে একই অবস্থা।";
+        }
+
+        $this->session->set($changed > 0 ? 'flash_success' : 'flash_error', $message);
+    }
+
+    /**
+     * The filter state a bulk run was picked within, as a query string, so
+     * the redirect lands back on the same page of the same search.
+     */
+    private function bulkReturnQuery(array $input): string
+    {
+        $query = [];
+
+        $q = trim((string) ($input['return_q'] ?? ''));
+        if ($q !== '') {
+            $query['q'] = $q;
+        }
+
+        $trashed = self::deletedFilter((string) ($input['return_trashed'] ?? ''));
+        if ($trashed !== UserRepository::DELETED_EXCLUDE) {
+            $query['trashed'] = $trashed;
+        }
+
+        $page = (int) ($input['return_page'] ?? 0);
+        if ($page > 1) {
+            $query['page'] = (string) $page;
+        }
+
+        $sort = (string) ($input['return_sort'] ?? '');
+        if (in_array($sort, UserRepository::SORTABLE, true)) {
+            $query['sort'] = $sort;
+        }
+
+        $dir = strtolower((string) ($input['return_dir'] ?? ''));
+        if (in_array($dir, ['asc', 'desc'], true)) {
+            $query['dir'] = $dir;
+        }
+
+        return $query === [] ? '' : '?' . http_build_query($query);
     }
 
     /**
