@@ -30,11 +30,13 @@ use Yiisoft\Di\ContainerConfig;
  * development database rather than a fixture set, and a settle moves money. The
  * export is the safe half by construction — it only reads the selection and
  * writes a file into the response — so pressing it is what lets the POST path
- * itself be covered here rather than only its markup. The other thing this file
- * writes is a throwaway row in the bulk-job queue, marked as its own and purged
- * either side of every test — inert by construction, since nothing in the test
- * run ever executes the worker, and the only way to see the progress panel is to
- * give it a job.
+ * itself be covered here rather than only its markup. The other things this
+ * file writes are throwaway rows it marks as its own — a bulk-job queue
+ * entry, and a pending top-up request so the top-up tab is populated whatever
+ * the shared database holds — each purged either side of every test: inert by
+ * construction, since nothing in the test run ever executes the worker or
+ * approves a recharge, and the only way to see the progress panel is to give
+ * it a job.
  */
 final class AdminOrderQueueBulkCest
 {
@@ -53,6 +55,15 @@ final class AdminOrderQueueBulkCest
      */
     private const REQUESTER_MARKER = 'admin [bulk-cest]';
 
+    /**
+     * The reference every top-up row this file plants carries.
+     *
+     * Same job as REQUESTER_MARKER: the cleanup key, and a string no real
+     * recharge can ever submit, so the delete is an identity check that cannot
+     * reach a request a human is waiting on.
+     */
+    private const TOPUP_MARKER = 'bulktest_topup_preview';
+
     private ?ConnectionInterface $db = null;
     private int $jobId = 0;
 
@@ -65,6 +76,9 @@ final class AdminOrderQueueBulkCest
         // its own cleanup, which is the only way a leaked row could have
         // survived the hook below.
         $this->purgeSeededJobs();
+        // The top-up plant is keyed the same way: a run killed between plant
+        // and cleanup must not leave a row for the next one to trip over.
+        $this->purgeSeededTopups();
     }
 
     /**
@@ -81,6 +95,7 @@ final class AdminOrderQueueBulkCest
     public function _after(WebTester $I): void
     {
         $this->purgeSeededJobs();
+        $this->purgeSeededTopups();
     }
 
     public function theQueueWrapsTheSelectionInOnePostForm(WebTester $I): void
@@ -425,18 +440,24 @@ final class AdminOrderQueueBulkCest
     public function theTopUpTabCarriesItsOwnApproveBarAndNoStatusBar(WebTester $I): void
     {
         $I->wantTo('find the tab’s own bulk-approve bar here, and none of the shared status bar.');
+        $this->seedTopupRow();
         $this->signIn($I);
         $I->amOnPage('/admin/topups');
 
         $source = $this->flat($I->grabPageSource());
 
-        // This page is populated (the dev database carries a seeded request),
-        // so the absence below is a decision rather than an accident of an
-        // empty list.
+        // The row above is planted by this test, so the page is populated no
+        // matter what the shared development database holds — the absence
+        // below is a decision rather than an accident of an empty list.
         Assert::assertGreaterThan(
             0,
             preg_match_all('/<tr/', $source),
             'The top-up tab must actually have rows, or this test proves nothing.',
+        );
+        Assert::assertStringContainsString(
+            self::TOPUP_MARKER,
+            $source,
+            'The row this test planted must be the one it is looking at.',
         );
         Assert::assertStringNotContainsString(
             'bulk_status',
@@ -538,6 +559,52 @@ final class AdminOrderQueueBulkCest
             ->execute();
 
         $this->jobId = 0;
+    }
+
+    /**
+     * A pending top-up request for the queue to draw.
+     *
+     * The tab must be populated or its absence assertions prove nothing — but
+     * this file cannot lean on whatever happens to be in the shared
+     * development database: a fresh install has an empty queue, which is
+     * exactly how this test failed for a reason unrelated to its subject.
+     * Owned by the admin (whose row every run guarantees), planted by marker,
+     * and never approved or touched by any POST this file makes.
+     */
+    private function seedTopupRow(): void
+    {
+        $db = $this->db();
+        $adminId = (int) $db
+            ->createCommand('SELECT [[id]] FROM {{%user}} WHERE [[username]] = :u LIMIT 1')
+            ->bindValue(':u', self::ADMIN_USER)
+            ->queryScalar();
+
+        $now = date('Y-m-d H:i:s');
+        $db->createCommand()->insert('{{%topup_request}}', [
+            'user_id' => $adminId,
+            'amount' => '250.00',
+            'method' => 'bkash',
+            'sender_number' => '01700000000',
+            'reference' => self::TOPUP_MARKER,
+            'status' => 'pending',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->execute();
+    }
+
+    /**
+     * Remove every top-up row this file ever planted, in one statement.
+     *
+     * Keyed on the marker rather than the insert id for the same reason
+     * purgeSeededJobs() is: the cleanup still works when the test failed
+     * before the id could be recorded, or when a previous run died midway.
+     */
+    private function purgeSeededTopups(): void
+    {
+        $this->db()
+            ->createCommand()
+            ->delete('{{%topup_request}}', ['reference' => self::TOPUP_MARKER])
+            ->execute();
     }
 
     private function db(): ConnectionInterface
