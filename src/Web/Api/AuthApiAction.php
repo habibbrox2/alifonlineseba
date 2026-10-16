@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Web\Api;
 
 use App\Auth\ApiTokenRepository;
+use App\Auth\AuthThrottle;
 use App\Auth\FirebaseAuthService;
 use App\Auth\FirebaseIdTokenVerifier;
 use App\Auth\IdentityRepository;
@@ -40,6 +41,7 @@ final readonly class AuthApiAction
         private UserRepository $users,
         private FirebaseIdTokenVerifier $firebaseVerifier,
         private FirebaseAuthService $firebaseAccounts,
+        private AuthThrottle $throttle,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
@@ -80,10 +82,18 @@ final readonly class AuthApiAction
         $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '-');
         $ua = mb_substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512);
 
+        $throttleKey = $identifier . '|' . $ip;
+        if ($this->throttle->tooManyAttempts($throttleKey)) {
+            return Api::fail('অনেকবার ভুল চেষ্টা হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।', [], 429);
+        }
+
         $error = $this->identities->login($identifier, $password, $ip, $ua, remember: false);
         if ($error !== null) {
+            $this->throttle->hit($throttleKey);
             return Api::fail('ভুল ইউজারনেম বা পাসওয়ার্ড।', [], 401);
         }
+
+        $this->throttle->clear($throttleKey);
 
         // login() does not hand back the row; re-resolve by identifier for the
         // response payload (status was checked inside login()).
