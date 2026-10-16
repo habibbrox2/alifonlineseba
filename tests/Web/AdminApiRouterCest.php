@@ -169,6 +169,51 @@ final class AdminApiRouterCest
      * state the delete guard allows and the state a requeue would accept,
      * which is what makes the retry-vs-delete fall-through observable.
      */
+    public function appVersionUnknownChannelIs400ThroughRouter(WebTester $I): void
+    {
+        $I->wantTo('see an unknown app-release channel rejected with 400 at the real router.');
+        $I->sendAjaxGetRequest('/api/app/version?channel=ios-typo');
+
+        $I->seeResponseCodeIs(400);
+        $payload = $this->decode($I);
+        Assert::assertFalse($payload['success'] ?? true);
+        Assert::assertSame('Unknown release channel.', $payload['message'] ?? null);
+    }
+
+    public function appVersionAdminChannelIs200(WebTester $I): void
+    {
+        $I->wantTo('see the admin app-release channel answer on the version endpoint.');
+        $I->sendAjaxGetRequest('/api/app/version?version_code=0&platform=android&channel=admin');
+
+        $I->seeResponseCodeIs(200);
+        $payload = $this->decode($I);
+        Assert::assertTrue($payload['success'] ?? false);
+        Assert::assertArrayHasKey('data', $payload);
+        // null download_url when nothing published in this channel is honest.
+        Assert::assertTrue(
+            $payload['data']['download_url'] === null || is_string($payload['data']['download_url']),
+        );
+    }
+
+    public function appApkUnknownChannelIs400(WebTester $I): void
+    {
+        $I->wantTo('see an unknown app-release channel rejected on the APK stream.');
+        $I->sendAjaxGetRequest('/app/apk?channel=ios-typo');
+
+        $I->seeResponseCodeIs(400);
+    }
+
+    public function appApkAdminChannelDoesNotFallBackToTwa(WebTester $I): void
+    {
+        $I->wantTo('see the admin channel consulted on the APK stream (200 if published, 404 otherwise).');
+        $I->sendAjaxGetRequest('/app/apk?channel=admin');
+
+        // No admin release exists on this machine, so today's answer is 404.
+        // If one is ever published on this dev DB, 200 remains acceptable and
+        // still proves the channel argument reached the service.
+        $I->seeResponseCodeIs(404);
+    }
+
     private function plantDeadQueueRow(): int
     {
         $db = $this->db();
