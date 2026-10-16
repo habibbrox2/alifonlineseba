@@ -96,7 +96,7 @@ final readonly class AdminOrdersApiAction
             'scope' => in_array($scope, [self::SCOPE_ALL, self::SCOPE_MINE, self::SCOPE_TAKEN], true)
                 ? $scope
                 : self::SCOPE_ALL,
-            'sort' => isset(ServiceOrderRepository::SORTABLE[$sort]) ? $sort : 'id',
+            'sort' => in_array($sort, ServiceOrderRepository::SORTABLE, true) ? $sort : 'id',
             'dir' => $dir === 'asc' ? 'asc' : 'desc',
         ];
     }

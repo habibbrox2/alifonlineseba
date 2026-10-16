@@ -594,6 +594,32 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $this->assertArrayHasKey('message', $payload['data']);
     }
 
+    public function testOrdersSortIsEchoedWhenWhitelisted(): void
+    {
+        $admin = $this->makeUser('osort', 'admin');
+        $this->makeOrder($admin->id, 'pending');
+
+        $response = $this->call($admin, 'GET', '/api/admin/orders', [], null, ['sort' => 'amount', 'dir' => 'desc']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertSame('amount', $payload['data']['sort']);
+    }
+
+    public function testOrdersSortFallsBackToIdWhenUnknown(): void
+    {
+        $admin = $this->makeUser('osortbad', 'admin');
+        $this->makeOrder($admin->id, 'pending');
+
+        $response = $this->call($admin, 'GET', '/api/admin/orders', [], null, ['sort' => 'password']);
+        $payload = $this->decode($response);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertTrue($payload['success']);
+        $this->assertSame('id', $payload['data']['sort']);
+    }
+
     // ---- Topups list ----------------------------------------------------
 
     public function testTopupsListReturnsRowsForAdmin(): void
