@@ -1,5 +1,6 @@
 package com.aliftools.admin.data.api
 
+import com.aliftools.admin.BuildConfig
 import com.aliftools.admin.data.model.*
 import com.google.gson.annotations.SerializedName
 import retrofit2.Response
@@ -193,14 +194,20 @@ interface AdminApiService {
     suspend fun deleteDevice(@Path("id") id: Int): Response<ApiResponse<Unit>>
 
     @GET("api/app/version")
-    suspend fun appVersion(): Response<ApiResponse<AppVersion>>
+    suspend fun appVersion(
+        @Query("version_code") versionCode: Int = BuildConfig.VERSION_CODE,
+        @Query("platform") platform: String = "android",
+        @Query("channel") channel: String = "admin"
+    ): Response<ApiResponse<AppVersion>>
 }
+
 
 data class AppVersion(
     @SerializedName("version_code") val versionCode: Int,
     @SerializedName("version_name") val versionName: String,
     @SerializedName("min_version_code") val minVersionCode: Int,
-    @SerializedName("release_notes") val releaseNotes: String?
+    @SerializedName("release_notes") val releaseNotes: String?,
+    @SerializedName("download_url") val downloadUrl: String? = null
 )
 
 /** Generic `{message}` / `{temporary_password}` body of a mutating admin action. */

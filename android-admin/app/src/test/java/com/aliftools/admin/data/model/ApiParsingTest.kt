@@ -1,6 +1,7 @@
 package com.aliftools.admin.data.model
 
 import com.aliftools.admin.data.api.ActionResponse
+import com.aliftools.admin.data.api.AppVersion
 import com.aliftools.admin.data.api.TopupEnvelope
 import com.aliftools.admin.data.api.WithdrawEnvelope
 import com.google.gson.GsonBuilder
@@ -163,5 +164,20 @@ class ApiParsingTest {
         val envelope = parse<WithdrawEnvelope>(json).data!!
         assertEquals("approved", envelope.withdraw.status)
         assertEquals("৳250.00 উত্তোলন অনুমোদিত হয়েছে।", envelope.message)
+    }
+
+    @Test
+    fun `app version payload carries the download url`() {
+        val json = """
+            {"success":true,"message":"","data":{
+              "version_code":42,"version_name":"1.4.0","min_version_code":30,
+              "release_notes":"notes","sha256":"abc","published_at":"2026-10-17 00:00:00",
+              "size_bytes":1024,"download_url":"/app/apk?channel=admin"
+            },"errors":[]}
+        """.trimIndent()
+
+        val version = parse<AppVersion>(json).data!!
+        org.junit.Assert.assertEquals(42, version.versionCode)
+        org.junit.Assert.assertEquals("/app/apk?channel=admin", version.downloadUrl)
     }
 }

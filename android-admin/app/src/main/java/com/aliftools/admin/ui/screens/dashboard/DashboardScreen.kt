@@ -19,16 +19,22 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.content.Intent
+import android.net.Uri
 import com.aliftools.admin.ui.components.AdminScaffold
 import com.aliftools.admin.ui.viewmodel.DashboardUiState
 import com.aliftools.admin.ui.viewmodel.DashboardViewModel
@@ -51,6 +57,9 @@ fun DashboardScreen(
     val snack by viewModel.snack.collectAsState()
     val loggedOut by viewModel.loggedOut.collectAsState()
     val role by viewModel.role.collectAsState(initial = null)
+    val update by viewModel.update.collectAsState()
+    val updateRequired by viewModel.updateRequired.collectAsState()
+    val context = LocalContext.current
 
     // Logout finished: leave the authed part of the graph behind entirely,
     // so the back button cannot walk into a cleared session.
@@ -104,6 +113,37 @@ fun DashboardScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    update?.let { av ->
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.large,
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text(
+                                        text = "একটি নতুন আপডেট উপলব্ধ: ${av.versionName}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    if (!av.releaseNotes.isNullOrBlank()) {
+                                        Text(
+                                            text = av.releaseNotes,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 6.dp),
+                                        )
+                                    }
+                                    Button(
+                                        onClick = {
+                                            val url = av.downloadUrl ?: "https://your-domain.com/app/apk"
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                        },
+                                        modifier = Modifier.padding(top = 8.dp),
+                                    ) { Text("আপডেট করুন") }
+                                }
+                            }
+                        }
+                    }
                     item {
                         MetricGrid(
                             userCount = data.userCount,
@@ -111,6 +151,23 @@ fun DashboardScreen(
                             unresolvedCount = data.unresolvedCount,
                             unresolvedAmount = data.unresolvedAmount,
                         )
+                    }
+                    if (updateRequired && update != null) {
+                        item {
+                            val av = update!!
+                            AlertDialog(
+                                onDismissRequest = {},
+                                title = { Text("আপডেট প্রয়োজন") },
+                                text = { Text(av.releaseNotes ?: "") },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val url = av.downloadUrl ?: "https://your-domain.com/app/apk"
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    }) { Text("ডাউনলোড করুন") }
+                                },
+                                dismissButton = { TextButton(onClick = {}) { Text("পরে") } }
+                            )
+                        }
                     }
                     item {
                         QuickActions(

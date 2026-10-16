@@ -1,7 +1,9 @@
 package com.aliftools.admin.ui.viewmodel
 
+import com.aliftools.admin.BuildConfig
 import androidx.lifecycle.viewModelScope
 import com.aliftools.admin.data.model.AdminDashboard
+import com.aliftools.admin.data.api.AppVersion
 import com.aliftools.admin.data.repository.AdminRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,8 +33,29 @@ class DashboardViewModel @Inject constructor(
     private val _loggedOut = MutableStateFlow(false)
     val loggedOut: StateFlow<Boolean> = _loggedOut.asStateFlow()
 
+    /** App version offer from the admin update channel (default admin). */
+    private val _update = MutableStateFlow<AppVersion?>(null)
+    val update: StateFlow<AppVersion?> = _update.asStateFlow()
+
+    /** True when min_version_code > BuildConfig.VERSION_CODE. */
+    private val _updateRequired = MutableStateFlow(false)
+    val updateRequired: StateFlow<Boolean> = _updateRequired.asStateFlow()
+
     init {
         load()
+        checkUpdate()
+    }
+
+    /** ... update logic doc ... */
+    private fun checkUpdate() {
+        viewModelScope.launch {
+            repository.appVersion()
+                .onSuccess { av ->
+                    _update.value = av.takeIf { it.versionCode > BuildConfig.VERSION_CODE }
+                    _updateRequired.value = av.minVersionCode > BuildConfig.VERSION_CODE
+                }
+                .onFailure { /* leave null — an update check must never break the dashboard */ }
+        }
     }
 
     /**
