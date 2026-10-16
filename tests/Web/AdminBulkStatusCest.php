@@ -361,7 +361,37 @@ final class AdminBulkStatusCest
         Assert::assertSame(
             'staff',
             $this->roleOf($id),
-            'The single-row path clamps unknown roles to "user"; a batch must be rejected instead, or a hand-made POST demotes by typo.',
+            'Reject-not-clamp is the contract on both paths: a clamp fallback would have demoted this row to "user".',
+        );
+    }
+
+    public function theSingleRowRoleEditRejectsAnUnknownRoleInsteadOfClamping(WebTester $I): void
+    {
+        $I->wantTo('accept a valid role on the row dropdown and reject a bogus one instead of clamping it.');
+        $id = $this->plantUser('user', 'active');
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/users');
+        $csrf = $I->grabAttributeFrom('#user-bulk-form input[name="_csrf"]', 'value');
+
+        $I->sendAjaxPostRequest('/admin/users', [
+            '_csrf' => $csrf,
+            'do' => 'role',
+            'user_id' => $id,
+            'role' => 'staff',
+        ]);
+        Assert::assertSame('staff', $this->roleOf($id), 'A valid role must still apply — rejecting must not break the ordinary edit.');
+
+        $I->sendAjaxPostRequest('/admin/users', [
+            '_csrf' => $csrf,
+            'do' => 'role',
+            'user_id' => $id,
+            'role' => 'wizard',
+        ]);
+        Assert::assertSame(
+            'staff',
+            $this->roleOf($id),
+            'The old clamp fallback would have demoted the row to "user" on a typo.',
         );
     }
 

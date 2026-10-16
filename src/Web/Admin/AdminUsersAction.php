@@ -131,16 +131,17 @@ final readonly class AdminUsersAction
     }
 
     /**
-     * Get allowed roles based on current user's permissions.
-     * Superadmin can assign superadmin role; others can assign user, staff, admin.
+     * The roles this actor may assign: the three ordinary ones for everyone,
+     * plus superadmin only for a superadmin. Shared by the single-row edit and
+     * the bulk bar so both refuse the same set.
+     *
+     * @return list<string>
      */
-    private function getAllowedRoles(object $identity, string $requestedRole): string
+    private function allowedRoles(object $identity): array
     {
-        $allowedRoles = ['user', 'staff', 'admin'];
-        if ($identity instanceof Identity && $identity->isSuperAdmin()) {
-            $allowedRoles[] = 'superadmin';
-        }
-        return in_array($requestedRole, $allowedRoles, true) ? $requestedRole : 'user';
+        return $identity instanceof Identity && $identity->isSuperAdmin()
+            ? ['user', 'staff', 'admin', 'superadmin']
+            : ['user', 'staff', 'admin'];
     }
 
     /**
@@ -166,9 +167,10 @@ final readonly class AdminUsersAction
     }
 
     /**
-     * Apply a role to one account. The requested role is already clamped by
-     * {@see getAllowedRoles()}; this adds the rank guard so an admin cannot
-     * demote a row above their own rank.
+     * Apply a role to one account. The target must be one this actor may
+     * assign — rejected outright rather than clamped, because a typo must be
+     * an error, never a silent demotion to 'user' — and then the rank guard
+     * applies, so an admin cannot demote a row above their own rank.
      */
     private function changeRole(object $identity, int $userId, array $row, string $requestedRole): bool
     {
@@ -177,7 +179,12 @@ final readonly class AdminUsersAction
             return false;
         }
 
-        $this->users->update($userId, ['role' => $this->getAllowedRoles($identity, $requestedRole)]);
+        if (!in_array($requestedRole, $this->allowedRoles($identity), true)) {
+            $this->session->set('flash_error', 'ভূমিকা বেছে নিন।');
+            return false;
+        }
+
+        $this->users->update($userId, ['role' => $requestedRole]);
         return true;
     }
 
@@ -204,17 +211,12 @@ final readonly class AdminUsersAction
 
         $targetStatus = ((string) ($input['status'] ?? '')) === 'active' ? 'active' : 'disabled';
         $targetRole = (string) ($input['role'] ?? '');
-        if ($do === 'bulk_role') {
-            // Rejected rather than clamped: a hand-made POST with a bogus role
-            // must not quietly demote the batch to 'user' the way a single-row
-            // edit's getAllowedRoles() fallback would.
-            $allowed = $identity->isSuperAdmin()
-                ? ['user', 'staff', 'admin', 'superadmin']
-                : ['user', 'staff', 'admin'];
-            if (!in_array($targetRole, $allowed, true)) {
-                $this->session->set('flash_error', 'ভূমিকা বেছে নিন।');
-                return;
-            }
+        if ($do === 'bulk_role' && !in_array($targetRole, $this->allowedRoles($identity), true)) {
+            // Rejected rather than clamped, exactly as the single-row path is:
+            // a hand-made POST with a bogus role must never become a silent
+            // demotion of the batch to 'user'.
+            $this->session->set('flash_error', 'ভূমিকা বেছে নিন।');
+            return;
         }
 
         $ids = [];
