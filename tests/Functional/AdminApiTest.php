@@ -559,6 +559,44 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $this->assertNull($row['deleted_at']);
     }
 
+    public function testUsersRoleChangeDeniedWhenCallerCannotManageTargetRole(): void
+    {
+        // Staff opens the desk (users.read is granted) but rank 25 cannot
+        // manage rank 50, so the target-role gate is what refuses the call —
+        // before any per-action permission is even consulted.
+        $staff = $this->makeUser('urolegated', 'staff');
+        $target = $this->makeUser('urolegatedtarget', 'admin');
+
+        $response = $this->call($staff, 'POST', '/api/admin/users', [], [
+            'do' => 'toggle',
+            'user_id' => (string) $target->id,
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('এই ভূমিকার অ্যাকাউন্ট পরিবর্তন করার অনুমতি নেই।', $payload['message']);
+    }
+
+    public function testUsersActionDeniedWhenCallerLacksActionPermission(): void
+    {
+        // Staff outranks the user target (role gate passes) but the matrix
+        // grants staff no users.update, so admin-user-status-update is what
+        // refuses the call.
+        $staff = $this->makeUser('uactiongated', 'staff');
+        $target = $this->makeUser('uactiongatedtarget', 'user');
+
+        $response = $this->call($staff, 'POST', '/api/admin/users', [], [
+            'do' => 'toggle',
+            'user_id' => (string) $target->id,
+        ]);
+        $payload = $this->decode($response);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertFalse($payload['success']);
+        $this->assertSame('আপনার এই অ্যাকশন করার অনুমতি নেই।', $payload['message']);
+    }
+
     // ---- Orders list and bulk --------------------------------------------
 
     public function testOrdersListReturnsRowsForAdmin(): void

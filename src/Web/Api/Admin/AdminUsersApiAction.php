@@ -82,28 +82,28 @@ final readonly class AdminUsersApiAction
 
         // RBAC: check if current user can manage the target user
         if (!$identity->canManageRole((string) $row['role'])) {
-            return Api::fail('এই ভূমিকার অ্যাকাউন্ট পরিবর্তন করার অনুমতি নেই।');
+            return Api::forbidden('এই ভূমিকার অ্যাকাউন্ট পরিবর্তন করার অনুমতি নেই।');
         }
 
         return match ($action) {
             'toggle' => $this->checkPermission($identity, 'admin-user-status-update')
                 ? $this->toggleUser($userId, $row)
-                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+                : Api::forbidden('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
             'role' => $this->checkPermission($identity, 'admin-user-role-update')
                 ? $this->changeRole($userId, $input, $identity)
-                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+                : Api::forbidden('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
             'reset' => $this->checkPermission($identity, 'admin-user-password-reset')
                 ? $this->resetPassword($userId)
-                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+                : Api::forbidden('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
             'delete' => $this->checkPermission($identity, 'admin-user-delete')
                 ? $this->deleteUser($userId, $row, $identity)
-                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+                : Api::forbidden('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
             'restore' => $this->checkPermission($identity, 'admin-user-restore')
                 ? $this->restoreUser($userId, $row, $identity)
-                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+                : Api::forbidden('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
             'restore_all' => $this->checkPermission($identity, 'admin-user-restore')
                 ? $this->restoreAllUsers($identity)
-                : Api::fail('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
+                : Api::forbidden('আপনার এই অ্যাকশন করার অনুমতি নেই।'),
             default => Api::fail('অজানা অ্যাকশন।'),
         };
     }
