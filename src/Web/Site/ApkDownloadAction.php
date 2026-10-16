@@ -51,13 +51,18 @@ final readonly class ApkDownloadAction
         private StreamFactoryInterface $streamFactory,
     ) {}
 
-    public function __invoke(): ResponseInterface
+    public function __invoke(ServerRequestInterface $request): ResponseInterface
     {
+        $channel = (string) ($request->getQueryParams()['channel'] ?? 'twa');
+        if (!in_array($channel, ['twa', 'admin'], true)) {
+            return $this->textResponse(400, 'Unknown release channel.');
+        }
+
         if (!$this->app->downloadsEnabled()) {
             return $this->textResponse(404, 'The Android app is not available for download right now.');
         }
 
-        $release = $this->app->current();
+        $release = $this->app->current($channel);
         if ($release === null) {
             return $this->textResponse(404, 'No Android release is published right now.');
         }

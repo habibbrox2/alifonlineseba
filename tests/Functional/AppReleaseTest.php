@@ -320,8 +320,73 @@ final class AppReleaseTest extends \Codeception\Test\Unit
     }
 
     // ---------------------------------------------------------------------
+    // Channel isolation (the native admin app gets its own release stream).
+    // ---------------------------------------------------------------------
+
+    public function testPublishedRespectsChannel(): void
+    {
+        file_put_contents($this->releaseDir . '/app-twa.apk', 'PK' . str_repeat('t', 128));
+        file_put_contents($this->releaseDir . '/app-admin.apk', 'PK' . str_repeat('a', 128));
+        $this->releases->publish(array_replace($this->releaseData(5, '1.0.0'), ['apk_path' => 'app-twa.apk', 'channel' => 'twa']));
+        $this->releases->publish(array_replace($this->releaseData(7, '1.2.0'), ['apk_path' => 'app-admin.apk', 'channel' => 'admin']));
+
+        $twa = $this->releases->published('twa');
+        assertNotNull($twa);
+        assertSame(5, (int) $twa['version_code']);
+        assertSame('twa', $twa['channel']);
+
+        $admin = $this->releases->published('admin');
+        assertNotNull($admin);
+        assertSame(7, (int) $admin['version_code']);
+        assertSame('admin', $admin['channel']);
+    }
+
+    public function testPublishSameVersionCodeAllowedAcrossChannels(): void
+    {
+        file_put_contents($this->releaseDir . '/app-twa.apk', 'PK');
+        file_put_contents($this->releaseDir . '/app-admin.apk', 'PK');
+
+        $this->releases->publish(array_replace($this->releaseData(5, '1.0.0'), ['apk_path' => 'app-twa.apk', 'channel' => 'twa']));
+        $this->releases->publish(array_replace($this->releaseData(5, '1.0.0-admin'), ['apk_path' => 'app-admin.apk', 'channel' => 'admin']));
+
+        $count = (int) $this->db->createCommand(
+            'SELECT COUNT(*) FROM {{%app_release}} WHERE [[version_code]] = 5 AND [[is_published]] = 1'
+        )->queryScalar();
+        assertSame(2, $count, 'One row per channel may share a version code now.');
+    }
+
+    public function testCurrentRespectsChannel(): void
+    {
+        file_put_contents($this->releaseDir . '/app-admin.apk', 'PK' . str_repeat('a', 256));
+        $this->releases->publish(array_replace($this->releaseData(6, '1.1.0'), ['apk_path' => 'app-admin.apk', 'channel' => 'admin', 'min_version_code' => 5]));
+
+        assertNull($this->service->current());
+        assertNotNull($this->service->current('admin'));
+    }
+
+    public function testVersionPayloadDefaultsToTwaAndKeepsOldDownloadUrl(): void
+    {
+        file_put_contents($this->releaseDir . '/app-1.1.0.apk', 'PK' . str_repeat('d', 256));
+        $this->releases->publish(array_replace($this->releaseData(6, '1.1.0'), ['min_version_code' => 5]));
+
+        assertSame('/app/apk', $this->service->versionPayload(5)['download_url']);
+    }
+
+    public function testVersionPayloadForAdminChannelCarriesChannelUrl(): void
+    {
+        file_put_contents($this->releaseDir . '/app-admin.apk', 'PK' . str_repeat('a', 256));
+        $this->releases->publish(array_replace($this->releaseData(6, '1.1.0'), ['apk_path' => 'app-admin.apk', 'channel' => 'admin', 'min_version_code' => 5]));
+
+        $payload = $this->service->versionPayload(5, null, 'admin');
+        assertSame('/app/apk?channel=admin', $payload['download_url']);
+    }
+
+    // ---------------------------------------------------------------------
     // absolutePath() — the traversal guard on operator input.
     // ---------------------------------------------------------------------
+
+
+
 
     public function testAbsolutePathResolvesInsideTheDirectory(): void
     {

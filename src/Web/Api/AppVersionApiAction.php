@@ -45,6 +45,11 @@ final readonly class AppVersionApiAction
         $platform = trim((string) ($query['platform'] ?? ''));
         $platform = $platform === '' ? null : mb_substr($platform, 0, 32);
 
-        return Api::ok($this->app->versionPayload($clientCode, $platform));
+        $channel = (string) ($query['channel'] ?? 'twa');
+        if (!in_array($channel, ['twa', 'admin'], true)) {
+            return Api::fail('Unknown release channel.', [], 400);
+        }
+
+        return Api::ok($this->app->versionPayload($clientCode, $platform, $channel));
     }
 }

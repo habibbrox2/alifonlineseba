@@ -35,7 +35,7 @@ use Yiisoft\Db\Connection\ConnectionInterface;
  */
 final class AppReleaseRepository
 {
-    private const COLUMNS = '[[id]], [[version_code]], [[version_name]], [[apk_path]], [[apk_size]],'
+    private const COLUMNS = '[[id]], [[channel]], [[version_code]], [[version_name]], [[apk_path]], [[apk_size]],'
         . ' [[sha256]], [[min_version_code]], [[release_notes]], [[is_published]], [[published_at]]';
 
     public function __construct(private readonly ConnectionInterface $db) {}
@@ -45,13 +45,14 @@ final class AppReleaseRepository
      *
      * @return array<string, mixed>|null
      */
-    public function published(): ?array
+    public function published(string $channel = 'twa'): ?array
     {
         $row = $this->db
             ->createCommand(
-                'SELECT ' . self::COLUMNS . ' FROM {{%app_release}} WHERE [[is_published]] = 1'
+                'SELECT ' . self::COLUMNS . ' FROM {{%app_release}} WHERE [[channel]] = :ch AND [[is_published]] = 1'
                 . ' ORDER BY [[version_code]] DESC LIMIT 1'
             )
+            ->bindValue(':ch', $channel)
             ->queryOne();
 
         return $row === null ? null : (array) $row;
@@ -95,11 +96,12 @@ final class AppReleaseRepository
      * to the app — an unpublished release must not brick an installed app that
      * happens to be old.
      */
-    public function minVersionCode(): int
+    public function minVersionCode(string $channel = 'twa'): int
     {
         $row = $this->db
-            ->createCommand('SELECT [[min_version_code]] FROM {{%app_release}} WHERE [[is_published]] = 1'
+            ->createCommand('SELECT [[min_version_code]] FROM {{%app_release}} WHERE [[channel]] = :ch AND [[is_published]] = 1'
                 . ' ORDER BY [[version_code]] DESC LIMIT 1')
+            ->bindValue(':ch', $channel)
             ->queryOne();
 
         return $row === null ? 0 : (int) $row['min_version_code'];
@@ -118,19 +120,22 @@ final class AppReleaseRepository
     public function publish(array $data): int
     {
         $versionCode = (int) $data['version_code'];
+        $channel = (string) ($data['channel'] ?? 'twa');
         $now = date('Y-m-d H:i:s');
 
-        return (int) $this->db->transaction(function () use ($data, $versionCode, $now): int {
+        return (int) $this->db->transaction(function () use ($data, $versionCode, $channel, $now): int {
             $this->db->createCommand(
-                'UPDATE {{%app_release}} SET [[is_published]] = 0, [[updated_at]] = :now WHERE [[is_published]] = 1'
-            )->bindValue(':now', $now)->execute();
+                'UPDATE {{%app_release}} SET [[is_published]] = 0, [[updated_at]] = :now WHERE [[is_published]] = 1 AND [[channel]] = :ch'
+            )->bindValue(':now', $now)->bindValue(':ch', $channel)->execute();
 
             $existing = $this->db
-                ->createCommand('SELECT [[id]] FROM {{%app_release}} WHERE [[version_code]] = :v LIMIT 1')
+                ->createCommand('SELECT [[id]] FROM {{%app_release}} WHERE [[version_code]] = :v AND [[channel]] = :ch LIMIT 1')
                 ->bindValue(':v', $versionCode)
+                ->bindValue(':ch', $channel)
                 ->queryOne();
 
             $row = [
+                'channel' => $channel,
                 'version_code' => $versionCode,
                 'version_name' => (string) $data['version_name'],
                 'apk_path' => (string) $data['apk_path'],

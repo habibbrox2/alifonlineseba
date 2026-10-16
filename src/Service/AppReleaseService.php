@@ -79,9 +79,9 @@ final readonly class AppReleaseService
      *
      * @return array<string, mixed>|null
      */
-    public function current(): ?array
+    public function current(string $channel = 'twa'): ?array
     {
-        $release = $this->releases->published();
+        $release = $this->releases->published($channel);
         if ($release === null) {
             return null;
         }
@@ -174,10 +174,10 @@ final readonly class AppReleaseService
      *
      * @return array<string, mixed>
      */
-    public function versionPayload(int $clientVersionCode, ?string $platform = null): array
+    public function versionPayload(int $clientVersionCode, ?string $platform = null, string $channel = 'twa'): array
     {
-        $release = $this->current();
-        $minVersion = $this->releases->minVersionCode();
+        $release = $this->current($channel);
+        $minVersion = $this->releases->minVersionCode($channel);
 
         if ($release === null) {
             return [
@@ -209,7 +209,7 @@ final readonly class AppReleaseService
             // whatever a redirect served.
             'sha256' => (string) $release['sha256'],
             'release_notes' => $release['release_notes'] !== null ? (string) $release['release_notes'] : null,
-            'download_url' => '/app/apk',
+            'download_url' => $this->downloadUrl($channel),
             'published_at' => $release['published_at'] !== null ? (string) $release['published_at'] : null,
         ];
     }
@@ -231,6 +231,15 @@ final readonly class AppReleaseService
         $hash = @hash_file('sha256', $absolute);
 
         return is_string($hash) ? $hash : '';
+    }
+
+    private function downloadUrl(string $channel): ?string
+    {
+        if ($channel === 'twa') {
+            return '/app/apk';
+        }
+
+        return '/app/apk?channel=' . rawurlencode($channel);
     }
 
     /** Whether downloads are enabled at all (an operator switch). */
