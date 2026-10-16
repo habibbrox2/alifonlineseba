@@ -73,15 +73,15 @@ final readonly class AdminStaffAction
             // The bulk bar posts many ids; the single-row path posts one. Both
             // answer with the same [ok, message] contract, so the redirect and
             // the flash below stay identical.
-            [$ok, $message] = $do === 'bulk_status'
-                ? $this->bulkStatus($input, $identity)
+            [$ok, $message] = str_starts_with($do, 'bulk_')
+                ? $this->bulkApply($do, $input, $identity)
                 : $this->apply($do, $input, $identity);
             $this->session->set($ok ? 'flash_success' : 'flash_error', $message);
 
             // A bulk run must not dump the operator back on page 1 with the
             // search gone: the batch was picked *within* a filtered view.
             $location = $this->url->generate('admin-staff')
-                . ($do === 'bulk_status' ? $this->bulkReturnQuery($input) : '');
+                . (str_starts_with($do, 'bulk_') ? $this->bulkReturnQuery($input) : '');
 
             return new \Nyholm\Psr7\Response(302, ['Location' => $location]);
         }
@@ -168,6 +168,9 @@ final readonly class AdminStaffAction
             'password' => $this->checkPermission($identity, 'admin-staff-password-reset')
                 ? $this->resetPassword($input, $subject)
                 : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
+            'restore' => $this->checkPermission($identity, 'admin-users-restore')
+                ? $this->restoreStaff($subject, $identity)
+                : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
             'restore_all' => $this->checkPermission($identity, 'admin-users-restore')
                 ? $this->restoreAllStaff($identity)
                 : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
@@ -185,6 +188,14 @@ final readonly class AdminStaffAction
         $role = (string) ($input['role'] ?? '');
         if (!in_array($role, self::ASSIGNABLE, true)) {
             return [false, 'ভূমিকা বেছে নিন।'];
+        }
+
+        // The single-row dropdown sits inside staff.update, which admins also
+        // hold — only manage_superadmin (superadmin-only) may mint another
+        // superadmin, or an admin could quietly hand themselves a peer.
+        if ($role === Identity::ROLE_SUPERADMIN
+            && !$this->checkPermission($identity, 'admin-staff-manage-superadmin')) {
+            return [false, 'সুপারএডমিন ভূমিকা দেওয়ার অনুমতি নেই।'];
         }
 
         $from = (string) $subject['role'];
@@ -212,25 +223,49 @@ final readonly class AdminStaffAction
     }
 
     /**
-     * Suspend or reactivate a batch of roster rows from the bulk bar.
+     * Run one bulk bar action — status, role, trash or restore — over the
+     * selected roster rows.
      *
      * The checkbox column only offers rows this actor may touch, but the POST
      * body is attacker-controlled: each id is re-checked here with the same
-     * guards as the single-row path — roster scope, self, rank, trash state,
-     * no-op status and the last-superadmin rule — and counted rather than
+     * guards as the single-row paths — roster scope, self, rank, trash state,
+     * no-op result and the last-superadmin rule — and counted rather than
      * trusted.
      *
      * @param array<string, mixed> $input
      * @return array{0: bool, 1: string}
      */
-    private function bulkStatus(array $input, Identity $identity): array
+    private function bulkApply(string $do, array $input, Identity $identity): array
     {
-        if (!$this->checkPermission($identity, 'admin-staff-status-update')) {
+        $permission = [
+            'bulk_status' => 'admin-staff-status-update',
+            'bulk_role' => 'admin-staff-role-update',
+            'bulk_trash' => 'admin-staff-delete',
+            'bulk_restore' => 'admin-users-restore',
+        ][$do] ?? null;
+
+        if ($permission === null) {
+            return [false, 'অজানা অ্যাকশন।'];
+        }
+
+        if (!$this->checkPermission($identity, $permission)) {
             return [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'];
         }
 
         $status = ((string) ($input['status'] ?? '')) === 'active' ? 'active' : 'suspended';
-        $label = $status === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়';
+        $role = (string) ($input['role'] ?? '');
+        if ($do === 'bulk_role') {
+            if (!in_array($role, self::ASSIGNABLE, true)) {
+                return [false, 'ভূমিকা বেছে নিন।'];
+            }
+
+            // Same superadmin gate as setRole(): bulk must not open a door
+            // the single-row path keeps shut.
+            if ($role === Identity::ROLE_SUPERADMIN
+                && !$this->checkPermission($identity, 'admin-staff-manage-superadmin')) {
+                return [false, 'সুপারএডমিন ভূমিকা দেওয়ার অনুমতি নেই।'];
+            }
+        }
 
         $ids = [];
         foreach ((array) ($input['ids'] ?? []) as $raw) {
@@ -251,42 +286,130 @@ final readonly class AdminStaffAction
 
         foreach ($ids as $id) {
             $subject = $this->users->findById($id, true);
+            $trashed = $subject !== null && $subject['deleted_at'] !== null;
 
             $refused = $subject === null
-                || $subject['deleted_at'] !== null
                 || !in_array((string) $subject['role'], ['admin', 'staff', 'superadmin'], true)
                 || !$this->canModify($identity, $subject)
-                || (string) $subject['status'] === $status
-                || !$this->guardedAgainstLastSuperAdmin(
-                    $subject,
-                    (string) $subject['role'],
-                    (string) $subject['role'],
-                    $status,
-                );
+                || ($do === 'bulk_restore' ? !$trashed : $trashed);
+
+            if (!$refused) {
+                $refused = match ($do) {
+                    'bulk_status' => (string) $subject['status'] === $status
+                        || !$this->guardedAgainstLastSuperAdmin(
+                            $subject,
+                            (string) $subject['role'],
+                            (string) $subject['role'],
+                            $status,
+                        ),
+                    'bulk_role' => (string) $subject['role'] === $role
+                        || !$this->guardedAgainstLastSuperAdmin(
+                            $subject,
+                            (string) $subject['role'],
+                            $role,
+                            (string) $subject['status'],
+                        ),
+                    // Trashing a lone superadmin removes the platform's last
+                    // authority just as surely as demoting or suspending one,
+                    // so the same rule answers here.
+                    'bulk_trash' => !$this->guardedAgainstLastSuperAdmin(
+                        $subject,
+                        (string) $subject['role'],
+                        (string) $subject['role'],
+                        'suspended',
+                    ),
+                    default => false,
+                };
+            }
 
             if ($refused) {
                 $skipped++;
                 continue;
             }
 
-            $this->users->update($id, ['status' => $status]);
+            if ($do === 'bulk_status') {
+                $this->users->update($id, ['status' => $status]);
+                $ok = true;
+                $logAction = 'admin.status_changed';
+                $logDescription = sprintf(
+                    'Status %s -> %s for %s (bulk)',
+                    (string) $subject['status'],
+                    $status,
+                    (string) $subject['username'],
+                );
+            } elseif ($do === 'bulk_role') {
+                $this->users->setRole($id, $role, (string) $subject['status']);
+                $ok = true;
+                $logAction = 'admin.role_changed';
+                $logDescription = sprintf(
+                    'Role %s -> %s for %s (bulk)',
+                    (string) $subject['role'],
+                    $role,
+                    (string) $subject['username'],
+                );
+            } elseif ($do === 'bulk_trash') {
+                $ok = $this->users->softDelete($id);
+                $logAction = 'admin.staff.trashed';
+                $logDescription = sprintf('%s moved to trash (bulk)', (string) $subject['username']);
+            } else {
+                $ok = $this->users->restore($id);
+                $logAction = 'admin.staff.restored';
+                $logDescription = sprintf('%s restored from trash (bulk)', (string) $subject['username']);
+            }
+
+            if (!$ok) {
+                $skipped++;
+                continue;
+            }
+
             $changed++;
             $touched[] = $id;
-
-            $this->log(
-                $identity,
-                $id,
-                'admin.status_changed',
-                sprintf('Status %s -> %s for %s (bulk)', (string) $subject['status'], $status, (string) $subject['username']),
-            );
+            $this->log($identity, $id, $logAction, $logDescription);
         }
 
-        $message = "নির্বাচিত স্টাফদের মধ্যে {$changed} জনের অবস্থা {$label} হয়েছে।";
+        $message = match ($do) {
+            'bulk_status' => sprintf(
+                'নির্বাচিত স্টাফদের মধ্যে %d জনের অবস্থা %s হয়েছে।',
+                $changed,
+                $status === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+            ),
+            'bulk_role' => sprintf(
+                'নির্বাচিত স্টাফদের মধ্যে %d জনের ভূমিকা হয়েছে %s।',
+                $changed,
+                UserRepository::ROLE_LABELS[$role] ?? $role,
+            ),
+            'bulk_trash' => sprintf('নির্বাচিত স্টাফদের মধ্যে %d জন ট্র্যাশে পাঠানো হয়েছে।', $changed),
+            default => sprintf('নির্বাচিত স্টাফদের মধ্যে %d জন ফিরিয়ে আনা হয়েছে।', $changed),
+        };
         if ($skipped > 0) {
-            $message .= " {$skipped} জন বাদ পড়েছে — নিজের অ্যাকাউন্ট, উচ্চতর ভূমিকা বা ইতিমধ্যে একই অবস্থা।";
+            $message .= " {$skipped} জন বাদ পড়েছে — নিজের অ্যাকাউন্ট, উচ্চতর ভূমিকা, অনুপযুক্ত অবস্থা বা ইতিমধ্যে একই ফলাফল।";
         }
 
         return [$changed > 0, $message];
+    }
+
+    /**
+     * Bring one trashed roster row back. The single-row form posts
+     * `do=restore`; the permission and rank gates already ran in apply().
+     *
+     * @param array<string, mixed> $subject
+     * @return array{0: bool, 1: string}
+     */
+    private function restoreStaff(array $subject, Identity $identity): array
+    {
+        if ($subject['deleted_at'] === null) {
+            return [false, 'এই অ্যাকাউন্ট ট্র্যাশে নেই।'];
+        }
+
+        $this->users->restore((int) $subject['id']);
+        $this->log(
+            $identity,
+            (int) $subject['id'],
+            'admin.staff.restored',
+            sprintf('%s restored from trash', (string) $subject['username']),
+        );
+
+        return [true, sprintf('%s ফিরিয়ে আনা হয়েছে।', (string) $subject['username'])];
     }
 
     /**

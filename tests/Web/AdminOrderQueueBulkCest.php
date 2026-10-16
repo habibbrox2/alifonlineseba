@@ -422,16 +422,17 @@ final class AdminOrderQueueBulkCest
         );
     }
 
-    public function theTopUpTabOffersNoBulkAffordanceAtAll(WebTester $I): void
+    public function theTopUpTabCarriesItsOwnApproveBarAndNoStatusBar(WebTester $I): void
     {
-        $I->wantTo('find no bulk bar on the top-up tab, where a status change is meaningless.');
+        $I->wantTo('find the tab’s own bulk-approve bar here, and none of the shared status bar.');
         $this->signIn($I);
         $I->amOnPage('/admin/topups');
 
         $source = $this->flat($I->grabPageSource());
 
-        // This page is populated, so the absence is a decision rather than an
-        // accident of an empty list.
+        // This page is populated (the dev database carries a seeded request),
+        // so the absence below is a decision rather than an accident of an
+        // empty list.
         Assert::assertGreaterThan(
             0,
             preg_match_all('/<tr/', $source),
@@ -440,17 +441,17 @@ final class AdminOrderQueueBulkCest
         Assert::assertStringNotContainsString(
             'bulk_status',
             $source,
-            'A top-up has no service to attach and no status to settle; the bar must not be drawn here.',
+            'The shared status bar of the user and staff lists must not be drawn here.',
         );
-        Assert::assertStringNotContainsString(
-            'name="ids[]"',
+        Assert::assertMatchesRegularExpression(
+            '/<input type="hidden" name="do" value="bulk-approve">/',
             $source,
-            'No row checkboxes on a tab where ticking one could not mean anything.',
+            'The tab carries its own deliberate bar — bulk approval, settled behind the money dialog.',
         );
         Assert::assertStringNotContainsString(
             'clear($el.form)',
             $source,
-            'No bar, no handler.',
+            'The shared bar’s handler must not appear on a tab whose bar is not that bar.',
         );
     }
 

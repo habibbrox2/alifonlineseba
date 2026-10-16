@@ -20,10 +20,10 @@ final class HomePageCest
 
         assertSame(200, $response->getStatusCode());
         $body = $response->getBody()->getContents();
-        assertStringContainsString(
-            'ডিজিটাল সেবা এক ক্লিকে!',
-            $body,
-        );
+        // The hero highlights its second half in an accent span, so the line
+        // is never contiguous in the source — both fragments must be there.
+        assertStringContainsString('ডিজিটাল সেবা', $body);
+        assertStringContainsString('এক ক্লিকে!', $body);
     }
 
     public function loginPage(FunctionalTester $tester): void

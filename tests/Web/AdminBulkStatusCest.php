@@ -11,18 +11,21 @@ use Yiisoft\Di\Container;
 use Yiisoft\Di\ContainerConfig;
 
 /**
- * The bulk status bars on /admin/users and /admin/staff.
+ * The bulk bars on /admin/users and /admin/staff — four actions (status,
+ * role, trash, restore) sharing one form per page.
  *
  * The markup contract is pinned here because it is easy to break invisibly:
  * the row checkboxes cannot live *inside* their form (the tables hold
  * per-row forms, and a wrapper form would nest and silently break every
  * one), so they join it through the HTML5 `form` attribute instead. Nothing
  * about that looks wrong in a browser until the submit arrives with an
- * empty `ids[]`.
+ * empty `ids[]`. `do` rides on the submit button's value, because four
+ * actions now share the form and a fixed hidden field would pin one.
  *
  * The server-side behaviour — permission gate, self/rank/last-superadmin
- * guards — is exercised with hand-made POSTs rather than by ticking boxes,
- * because a hand-made POST is exactly what the guards exist for.
+ * guards, reject-not-clamp on the role target — is exercised with
+ * hand-made POSTs rather than by ticking boxes, because a hand-made POST
+ * is exactly what the guards exist for.
  */
 final class AdminBulkStatusCest
 {
@@ -65,9 +68,9 @@ final class AdminBulkStatusCest
             'The bar needs a stable form the checkboxes can join by attribute.',
         );
         Assert::assertMatchesRegularExpression(
-            '/<input type="hidden" name="do" value="bulk_status">/',
+            '/<select x-model="action"/',
             $source,
-            'The action rides on the form so a submit cannot arrive unnamed.',
+            'Four actions share the bar, so the choice lives in one `action` select.',
         );
         Assert::assertMatchesRegularExpression(
             '/<input type="checkbox" data-bulk form="user-bulk-form" value="\d+"/',
@@ -80,9 +83,19 @@ final class AdminBulkStatusCest
             'The header box joins the same form and is bound to the derived `all` state.',
         );
         Assert::assertMatchesRegularExpression(
+            '/<button type="submit" name="do" value="" x-bind:value="action"/',
+            $source,
+            '`do` rides on the submit button now — a fixed hidden field would pin one action.',
+        );
+        Assert::assertMatchesRegularExpression(
             '/<select name="status" x-model="target"/',
             $source,
             'The direction select has to be bound to the same `target` the submit reads.',
+        );
+        Assert::assertMatchesRegularExpression(
+            '/<select name="role" x-model="roleTarget"/',
+            $source,
+            'The role leg binds its own target so the confirm can name it.',
         );
         Assert::assertMatchesRegularExpression(
             '/<input type="hidden" name="return_q"/',
@@ -90,7 +103,7 @@ final class AdminBulkStatusCest
             'The batch is picked within a filtered view; the redirect must be able to land back on it.',
         );
         Assert::assertMatchesRegularExpression(
-            '/window\.bulkStatusAsk = function \(count, label\)/',
+            '/window\.bulkUsersAsk = function \(count, action, target, role\)/',
             $source,
             'The confirm carries the live count, which a static data-confirm cannot.',
         );
@@ -124,9 +137,14 @@ final class AdminBulkStatusCest
             'The roster needs the same stable form the user list has.',
         );
         Assert::assertMatchesRegularExpression(
-            '/<input type="hidden" name="do" value="bulk_status">/',
+            '/<select x-model="action"/',
             $source,
-            'The action rides on the form.',
+            'The roster bar carries the same four-action choice as the user list.',
+        );
+        Assert::assertMatchesRegularExpression(
+            '/<button type="submit" name="do" value="" x-bind:value="action"/',
+            $source,
+            '`do` rides on the submit button so the four legs can share one form.',
         );
         Assert::assertMatchesRegularExpression(
             '/<input type="checkbox" data-bulk form="staff-bulk-form" value="\d+"/',
@@ -134,12 +152,17 @@ final class AdminBulkStatusCest
             'Each roster row posts its own id through the form attribute.',
         );
         Assert::assertMatchesRegularExpression(
+            '/<option value="trash">ট্র্যাশে পাঠান<\/option>/',
+            $source,
+            'A superadmin sees the trash leg; each page speaks its own vocabulary.',
+        );
+        Assert::assertMatchesRegularExpression(
             '/<option value="suspended">নিষ্ক্রিয় করুন<\/option>/',
             $source,
             'The roster suspends; the users list disables. Each page speaks its own vocabulary.',
         );
         Assert::assertMatchesRegularExpression(
-            '/window\.bulkStaffAsk = function \(count, label\)/',
+            '/window\.bulkStaffAsk = function \(count, action, target, role\)/',
             $source,
             'The roster has its own asker with roster wording.',
         );
@@ -292,6 +315,178 @@ final class AdminBulkStatusCest
         Assert::assertSame('active', $this->statusOf($operator), 'The operator’s own planted row must be untouched too.');
     }
 
+    public function bulkRoleChangePromotesTheChosenUsers(WebTester $I): void
+    {
+        $I->wantTo('promote two planted accounts in one request while the superadmin’s own row keeps its rank.');
+        $one = $this->plantUser('user', 'active');
+        $two = $this->plantUser('user', 'active');
+        $adminId = $this->adminId();
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/users');
+        $csrf = $I->grabAttributeFrom('#user-bulk-form input[name="_csrf"]', 'value');
+
+        $I->sendAjaxPostRequest('/admin/users', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_role',
+            'role' => 'admin',
+            'ids' => [$one, $two, $adminId],
+        ]);
+
+        Assert::assertSame('admin', $this->roleOf($one), 'The first chosen account must be promoted.');
+        Assert::assertSame('admin', $this->roleOf($two), 'The second chosen account must be promoted.');
+        Assert::assertSame(
+            'superadmin',
+            $this->roleOf($adminId),
+            'Self and rank guards must answer the role leg exactly as they answer status.',
+        );
+    }
+
+    public function bulkRoleRejectsAnUnknownRoleInsteadOfClampingToUser(WebTester $I): void
+    {
+        $I->wantTo('refuse a bogus role outright rather than quietly demoting the batch.');
+        $id = $this->plantUser('staff', 'active');
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/users');
+        $csrf = $I->grabAttributeFrom('#user-bulk-form input[name="_csrf"]', 'value');
+
+        $I->sendAjaxPostRequest('/admin/users', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_role',
+            'role' => 'wizard',
+            'ids' => [$id],
+        ]);
+
+        Assert::assertSame(
+            'staff',
+            $this->roleOf($id),
+            'The single-row path clamps unknown roles to "user"; a batch must be rejected instead, or a hand-made POST demotes by typo.',
+        );
+    }
+
+    public function bulkTrashSparesAdminAndSelfAndRestoreBringsTheRestBack(WebTester $I): void
+    {
+        $I->wantTo('trash plain users in one request — sparing admin rows and my own — then restore them.');
+        $plain = $this->plantUser('user', 'active');
+        $adminRow = $this->plantUser('admin', 'active');
+        $adminId = $this->adminId();
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/users');
+        $csrf = $I->grabAttributeFrom('#user-bulk-form input[name="_csrf"]', 'value');
+
+        $I->sendAjaxPostRequest('/admin/users', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_trash',
+            'ids' => [$plain, $adminRow, $adminId],
+        ]);
+
+        Assert::assertNotNull($this->deletedAtOf($plain), 'A plain user must be trashed by the trash leg.');
+        Assert::assertNull($this->deletedAtOf($adminRow), 'An admin row is never trashed — the single-row path refuses it too.');
+        Assert::assertNull($this->deletedAtOf($adminId), 'The acting superadmin’s own id must survive the trash leg.');
+
+        $I->sendAjaxPostRequest('/admin/users', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_restore',
+            'ids' => [$plain, $adminRow, $adminId],
+        ]);
+
+        Assert::assertNull($this->deletedAtOf($plain), 'The restore leg must bring the trashed row back.');
+        Assert::assertNull($this->deletedAtOf($adminId), 'A row that was never trashed is out of the restore leg’s scope.');
+    }
+
+    public function staffBulkRoleAndTrashLegsMoveRosterRows(WebTester $I): void
+    {
+        $I->wantTo('promote, trash and restore a roster row through the staff bar’s three new legs.');
+        $id = $this->plantUser('staff', 'active');
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/staff');
+        $csrf = $I->grabAttributeFrom('#staff-bulk-form input[name="_csrf"]', 'value');
+
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_role',
+            'role' => 'admin',
+            'ids' => [$id],
+        ]);
+        Assert::assertSame('admin', $this->roleOf($id), 'The roster’s role leg must promote the chosen operator.');
+
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_trash',
+            'ids' => [$id],
+        ]);
+        Assert::assertNotNull($this->deletedAtOf($id), 'The trash leg must move the chosen operator out of the roster.');
+
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_restore',
+            'ids' => [$id],
+        ]);
+        Assert::assertNull($this->deletedAtOf($id), 'The restore leg must bring the operator back.');
+    }
+
+    public function theStaffSingleRowRestoreFormActuallyRestores(WebTester $I): void
+    {
+        $I->wantTo('use the per-row রিস্টোর form, which posts do=restore and used to answer "অজানা অ্যাকশন।".');
+        $id = $this->plantUser('staff', 'active');
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/staff');
+        $csrf = $I->grabAttributeFrom('#staff-bulk-form input[name="_csrf"]', 'value');
+
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_trash',
+            'ids' => [$id],
+        ]);
+        Assert::assertNotNull($this->deletedAtOf($id), 'The row must start trashed or the restore below proves nothing.');
+
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'restore',
+            'id' => $id,
+        ]);
+        Assert::assertNull($this->deletedAtOf($id), 'apply() had no restore case, so the button it renders was dead.');
+    }
+
+    public function anAdminCannotMintASuperadminThroughEitherRolePath(WebTester $I): void
+    {
+        $I->wantTo('hold superadmin assignment behind manage_superadmin, which the admin role does not carry.');
+        $actor = $this->plantUser('admin', 'active', 'AdminActPass123!');
+        $subject = $this->plantUser('staff', 'active');
+        $bystander = $this->plantUser('staff', 'active');
+
+        $this->signIn($I, $this->usernameOf($actor), 'AdminActPass123!');
+        $I->amOnPage('/admin/staff');
+        $csrf = $I->grabAttributeFrom('meta[name="_csrf"]', 'content');
+
+        // The single-row dropdown sits inside staff.update, which admins hold.
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'role',
+            'id' => $subject,
+            'role' => 'superadmin',
+        ]);
+        Assert::assertSame(
+            'staff',
+            $this->roleOf($subject),
+            'A plain admin must not be able to mint a superadmin through the row dropdown.',
+        );
+
+        // And the bulk leg must refuse the whole batch before touching a row.
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_role',
+            'role' => 'superadmin',
+            'ids' => [$subject, $bystander],
+        ]);
+        Assert::assertSame('staff', $this->roleOf($subject), 'The batch must be refused, not partly applied.');
+        Assert::assertSame('staff', $this->roleOf($bystander), 'The bystander proves the refusal happened before any row was touched.');
+    }
+
     /** A live row under the plant prefix, so cleanup can find it by prefix. */
     private function plantUser(string $role, string $status, ?string $password = null, ?string $username = null): int
     {
@@ -341,6 +536,32 @@ final class AdminBulkStatusCest
             ->createCommand('SELECT [[status]] FROM {{%user}} WHERE [[id]] = :id LIMIT 1')
             ->bindValue(':id', $id)
             ->queryScalar();
+    }
+
+    private function roleOf(int $id): string
+    {
+        return (string) $this->db()
+            ->createCommand('SELECT [[role]] FROM {{%user}} WHERE [[id]] = :id LIMIT 1')
+            ->bindValue(':id', $id)
+            ->queryScalar();
+    }
+
+    private function usernameOf(int $id): string
+    {
+        return (string) $this->db()
+            ->createCommand('SELECT [[username]] FROM {{%user}} WHERE [[id]] = :id LIMIT 1')
+            ->bindValue(':id', $id)
+            ->queryScalar();
+    }
+
+    private function deletedAtOf(int $id): ?string
+    {
+        $value = $this->db()
+            ->createCommand('SELECT [[deleted_at]] FROM {{%user}} WHERE [[id]] = :id LIMIT 1')
+            ->bindValue(':id', $id)
+            ->queryScalar();
+
+        return $value === null || $value === '' ? null : (string) $value;
     }
 
     /** Tag newlines collapse, so a directive split across lines still matches. */

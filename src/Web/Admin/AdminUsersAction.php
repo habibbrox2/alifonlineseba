@@ -52,17 +52,24 @@ final readonly class AdminUsersAction
                 'role' => 'admin-users-role-update',
                 'reset' => 'admin-users-password-reset',
                 'bulk_status' => 'admin-users-status-update',
+                'bulk_role' => 'admin-users-role-update',
+                'bulk_trash' => 'admin-users-delete',
+                'bulk_restore' => 'admin-users-restore',
             ][$action] ?? null;
 
             if ($permission !== null && (!$identity instanceof Identity
                 || !$this->permissions->canAccessRoute($identity, $permission))) {
                 $this->session->set('flash_error', 'আপনার এই অ্যাকশন করার অনুমতি নেই।');
-            } elseif ($action === 'bulk_status') {
-                $this->bulkStatus($input, $identity, $adminId);
+            } elseif (str_starts_with($action, 'bulk_')) {
+                $this->bulkApply($action, $input, $identity, $adminId);
             } elseif ($action === 'create') {
                 $this->createUser($input, $adminId);
             } elseif ($action === 'delete') {
-                $this->trashUser((int) ($input['user_id'] ?? 0), $adminId);
+                $this->trashUser(
+                    (int) ($input['user_id'] ?? 0),
+                    $identity instanceof Identity ? $identity : null,
+                    $adminId,
+                );
             } elseif ($action === 'restore') {
                 $this->restoreUser((int) ($input['user_id'] ?? 0), $adminId);
             } elseif ($action === 'restore_all') {
@@ -98,7 +105,7 @@ final readonly class AdminUsersAction
             // A bulk run must not dump the operator back on page 1 with the
             // search gone: the batch was picked *within* a filtered view.
             $location = $this->url->generate('admin-users')
-                . ($action === 'bulk_status' ? $this->bulkReturnQuery($input) : '');
+                . (str_starts_with($action, 'bulk_') ? $this->bulkReturnQuery($input) : '');
 
             return new \Nyholm\Psr7\Response(302, ['Location' => $location]);
         }
@@ -175,22 +182,40 @@ final readonly class AdminUsersAction
     }
 
     /**
-     * Suspend or reactivate a batch of accounts from the bulk bar.
+     * Run one bulk bar action — status, role, trash or restore — over the
+     * selected batch.
      *
      * The checkbox column only offers rows this actor may touch, but the POST
      * body is attacker-controlled: every id is re-checked here against the
-     * same guards as the single-row path — self, rank, trash state, the
+     * same guards as the single-row paths — self, rank, trash state, the
      * last-superadmin rule — and counted rather than trusted.
      */
-    private function bulkStatus(array $input, ?Identity $identity, ?int $adminId): void
+    private function bulkApply(string $do, array $input, ?Identity $identity, ?int $adminId): void
     {
         if (!$identity instanceof Identity) {
             $this->session->set('flash_error', 'অনুমতি নেই।');
             return;
         }
 
-        $target = ((string) ($input['status'] ?? '')) === 'active' ? 'active' : 'disabled';
-        $label = $target === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়';
+        if (!in_array($do, ['bulk_status', 'bulk_role', 'bulk_trash', 'bulk_restore'], true)) {
+            $this->session->set('flash_error', 'অজানা অ্যাকশন।');
+            return;
+        }
+
+        $targetStatus = ((string) ($input['status'] ?? '')) === 'active' ? 'active' : 'disabled';
+        $targetRole = (string) ($input['role'] ?? '');
+        if ($do === 'bulk_role') {
+            // Rejected rather than clamped: a hand-made POST with a bogus role
+            // must not quietly demote the batch to 'user' the way a single-row
+            // edit's getAllowedRoles() fallback would.
+            $allowed = $identity->isSuperAdmin()
+                ? ['user', 'staff', 'admin', 'superadmin']
+                : ['user', 'staff', 'admin'];
+            if (!in_array($targetRole, $allowed, true)) {
+                $this->session->set('flash_error', 'ভূমিকা বেছে নিন।');
+                return;
+            }
+        }
 
         $ids = [];
         foreach ((array) ($input['ids'] ?? []) as $raw) {
@@ -211,37 +236,82 @@ final readonly class AdminUsersAction
         $touched = [];
 
         foreach ($ids as $id) {
-            $row = $this->users->findById($id);
+            // withDeleted: the restore leg can only find its rows this way, and
+            // trash state is decided per-action below, not by the lookup.
+            $row = $id === (int) $identity->id ? null : $this->users->findById($id, true);
+            $rowRole = $row === null ? '' : (string) $row['role'];
+            $trashed = $row !== null && $row['deleted_at'] !== null;
 
             $refused = $row === null
-                || $row['deleted_at'] !== null
-                || $id === (int) $identity->id
-                || !$identity->canManageRole((string) $row['role'])
-                || (string) $row['status'] === $target
-                || ($row['role'] === 'superadmin' && $target !== 'active' && !$this->users->hasOtherSuperAdmin($id));
+                || !$identity->canManageRole($rowRole)
+                || ($do === 'bulk_restore' ? !$trashed : $trashed);
+
+            if (!$refused) {
+                $refused = match ($do) {
+                    'bulk_status' => (string) $row['status'] === $targetStatus
+                        || ($rowRole === 'superadmin' && $targetStatus !== 'active' && !$this->users->hasOtherSuperAdmin($id)),
+                    'bulk_role' => $rowRole === $targetRole
+                        || ($rowRole === 'superadmin' && $targetRole !== 'superadmin' && !$this->users->hasOtherSuperAdmin($id)),
+                    'bulk_trash' => in_array($rowRole, ['admin', 'superadmin'], true),
+                    default => false,
+                };
+            }
 
             if ($refused) {
                 $skipped++;
                 continue;
             }
 
-            $this->users->update($id, ['status' => $target]);
-            $changed++;
-            $touched[] = $id;
+            if ($do === 'bulk_status') {
+                $this->users->update($id, ['status' => $targetStatus]);
+                $ok = true;
+            } elseif ($do === 'bulk_role') {
+                $this->users->update($id, ['role' => $targetRole]);
+                $ok = true;
+            } else {
+                $ok = match ($do) {
+                    'bulk_trash' => $this->users->softDelete($id),
+                    default => $this->users->restore($id),
+                };
+            }
+
+            if ($ok) {
+                $changed++;
+                $touched[] = $id;
+            } else {
+                $skipped++;
+            }
         }
 
         if ($changed > 0) {
             $this->logs->create([
                 'user_id' => $adminId,
-                'action' => 'admin.user.bulk_status',
-                'description' => "Bulk status change to '{$target}': {$changed} user(s)",
-                'metadata' => ['user_ids' => $touched, 'status' => $target],
+                'action' => "admin.user.{$do}",
+                'description' => match ($do) {
+                    'bulk_status' => "Bulk status change to '{$targetStatus}': {$changed} user(s)",
+                    'bulk_role' => "Bulk role change to '{$targetRole}': {$changed} user(s)",
+                    'bulk_trash' => "Moved to trash: {$changed} user(s)",
+                    default => "Restored from trash: {$changed} user(s)",
+                },
+                'metadata' => [
+                    'user_ids' => $touched,
+                    'target' => $do === 'bulk_role' ? $targetRole : $targetStatus,
+                ],
             ]);
         }
 
-        $message = "নির্বাচিত ইউজারদের মধ্যে {$changed} জনের স্ট্যাটাস {$label} হয়েছে।";
+        $message = match ($do) {
+            'bulk_status' => sprintf(
+                'নির্বাচিত ইউজারদের মধ্যে %d জনের স্ট্যাটাস %s হয়েছে।',
+                $changed,
+                $targetStatus === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+            ),
+            'bulk_role' => sprintf('নির্বাচিত ইউজারদের মধ্যে %d জনের রোল %s হয়েছে।', $changed, $targetRole),
+            'bulk_trash' => sprintf('নির্বাচিত ইউজারদের মধ্যে %d জন ট্র্যাশে পাঠানো হয়েছে।', $changed),
+            default => sprintf('নির্বাচিত ইউজারদের মধ্যে %d জন ফিরিয়ে আনা হয়েছে।', $changed),
+        };
         if ($skipped > 0) {
-            $message .= " {$skipped} জন বাদ পড়েছে — নিজের অ্যাকাউন্ট, উচ্চতর ভূমিকা বা ইতিমধ্যে একই অবস্থা।";
+            $message .= " {$skipped} জন বাদ পড়েছে — নিজের অ্যাকাউন্ট, উচ্চতর ভূমিকা, অনুপযুক্ত অবস্থা বা ইতিমধ্যে একই ফলাফল।";
         }
 
         $this->session->set($changed > 0 ? 'flash_success' : 'flash_error', $message);
@@ -378,7 +448,7 @@ final readonly class AdminUsersAction
      * balance, transactions and notifications survive a restore, and the
      * account cannot log in while trashed.
      */
-    private function trashUser(int $userId, ?int $adminId): void
+    private function trashUser(int $userId, ?Identity $identity, ?int $adminId): void
     {
         $row = $userId > 0 ? $this->users->findById($userId, true) : null;
 
@@ -391,6 +461,13 @@ final readonly class AdminUsersAction
         }
         if ($row['role'] === 'admin') {
             $this->session->set('flash_error', 'অ্যাডমিন অ্যাকাউন্ট মুছতে পারবেন না — আগে রোল বদলান।');
+            return;
+        }
+        // The rank gate belongs on the server, not only in the template: a
+        // hand-made POST carrying a superadmin's id must not let a lower rank
+        // trash the platform's last authority.
+        if (!$identity instanceof Identity || !$identity->canManageRole((string) $row['role'])) {
+            $this->session->set('flash_error', 'এই অ্যাকাউন্ট ট্র্যাশে পাঠানোর ক্ষমতা আপনার নেই।');
             return;
         }
         if ($row['deleted_at'] !== null) {

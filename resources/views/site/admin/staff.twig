@@ -57,16 +57,30 @@
 {# The bulk bar floats at the bottom, but its Alpine scope has to cover the
    table above it — one wrapper owns the checkboxes, the counter and the bar.
    `data-bulk` marks our checkboxes so the count can never pick up a widget
-   belonging to a per-row form. #}
-<div x-data="{ count: 0, all: false, target: '',
+   belonging to a per-row form. The bar carries four actions, so the target
+   select and the confirm both key off `action`. #}
+<div x-data="{ count: 0, all: false, action: '', target: '', roleTarget: '',
+        ready() {
+            return this.count > 0 && this.action !== ''
+                && (this.action !== 'status' || this.target !== '')
+                && (this.action !== 'role' || this.roleTarget !== '');
+        },
         clear() {
             this.$root.querySelectorAll('tbody input[data-bulk]').forEach(box => { box.checked = false; });
-            this.count = 0; this.all = false; this.target = '';
+            this.count = 0; this.all = false; this.action = ''; this.target = ''; this.roleTarget = '';
         } }"
      @change="count = $root.querySelectorAll('tbody input[data-bulk]:checked').length;
                all = count > 0 && count === $root.querySelectorAll('tbody input[data-bulk]').length">
 
-{% set canBulk = can_access(identity, 'admin-staff-status-update') %}
+{% set canBulkStatus = can_access(identity, 'admin-staff-status-update') %}
+{% set canBulkRole = can_access(identity, 'admin-staff-role-update') %}
+{% set canBulkTrash = can_access(identity, 'admin-staff-delete') %}
+{% set canBulkRestore = can_access(identity, 'admin-users-restore') %}
+{% set canBulk = canBulkStatus or canBulkRole or canBulkTrash or canBulkRestore %}
+{# ASSIGNABLE in AdminStaffAction; the superadmin option exists only for a
+   superadmin actor — the same gate setRole() enforces server-side. #}
+{% set canManageSuperadmin = can_access(identity, 'admin-staff-manage-superadmin') %}
+{% set assignableRoles = canManageSuperadmin ? ['superadmin', 'admin', 'staff', 'user'] : ['admin', 'staff', 'user'] %}
 
 <div class="card overflow-hidden">
     {% if staff is empty %}
@@ -116,8 +130,10 @@
                         <td>
                             {# Mirror the backend's canModify(): self and
                                equal-or-higher ranks are refused there, so they
-                               are not offered here either. #}
-                            {% if not member.deleted_at and member.id != identity.id and identity.canManageRole(member.role) %}
+                               are not offered here either. Trashed rows stay
+                               selectable because restore is one of the bar's
+                               actions — each leg then filters by trash state. #}
+                            {% if member.id != identity.id and identity.canManageRole(member.role) %}
                                 <input type="checkbox" data-bulk form="staff-bulk-form" value="{{ member.id }}"
                                        class="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
                                        aria-label="{{ member.username }} নির্বাচন করুন">
@@ -172,7 +188,7 @@
                                         <select name="role" class="form-input form-input-sm py-1 text-xs"
                                                 aria-label="{{ member.username }} এর ভূমিকা"
                                                 onchange="this.form.requestSubmit()">
-                                            {% for role in ['superadmin', 'admin', 'staff', 'user'] %}
+                                            {% for role in assignableRoles %}
                                                 <option value="{{ role }}" {{ member.role == role ? 'selected' }}>
                                                     {{ roleLabels[role] }}
                                                 </option>
@@ -266,15 +282,16 @@
 {# Selection is plain `ids[]` checkboxes associated with this form via the
    `form` attribute (the table cannot wrap them: its rows hold their own
    forms). Without JavaScript the bar never appears — exactly like the order
-   desk. Alpine adds the count, the select-all and the confirm. #}
+   desk. Alpine adds the count, the select-all and the confirm. `do` rides on
+   the submit button's own value — four actions share one form — exactly as
+   the order queue's bulk bar does. #}
 <form method="post" action="/admin/staff" id="staff-bulk-form"
-      @submit="if (count < 1 || target === '') { $event.preventDefault(); return; }
+      @submit="if (!ready()) { $event.preventDefault(); return; }
                if ($el.dataset.confirmed === '1') { return; }
                $event.preventDefault();
-               bulkStaffAsk(count, target === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়')
+               bulkStaffAsk(count, action, target, roleTarget)
                    .then(ok => { if (ok) { $el.dataset.confirmed = '1'; $el.requestSubmit(); delete $el.dataset.confirmed; } });">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
-    <input type="hidden" name="do" value="bulk_status">
     {# The batch was picked within this view; the redirect lands back on it. #}
     <input type="hidden" name="return_q" value="{{ q }}">
     <input type="hidden" name="return_trashed" value="{{ currentFilter }}">
@@ -286,12 +303,30 @@
          class="fixed bottom-4 left-1/2 z-40 w-[min(42rem,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-[0_18px_40px_-18px_rgba(15,23,42,0.45)] backdrop-blur">
         <div class="flex flex-wrap items-center gap-2">
             <span class="badge badge-neutral"><span x-text="count"></span> জন স্টাফ নির্বাচিত</span>
-            <select name="status" x-model="target" class="form-input w-auto text-sm" aria-label="নতুন অবস্থা">
+            <select x-model="action" class="form-input w-auto text-sm" aria-label="অ্যাকশন">
+                <option value="">অ্যাকশন…</option>
+                {% if canBulkStatus %}<option value="status">স্ট্যাটাস বদলান</option>{% endif %}
+                {% if canBulkRole %}<option value="role">রোল বদলান</option>{% endif %}
+                {% if canBulkTrash %}<option value="trash">ট্র্যাশে পাঠান</option>{% endif %}
+                {% if canBulkRestore %}<option value="restore">রিস্টোর করুন</option>{% endif %}
+            </select>
+            {# x-show only hides: the disabled binding also keeps the dormant
+               target out of the POST body. #}
+            <select name="status" x-model="target" x-show="action === 'status'" :disabled="action !== 'status'"
+                    class="form-input w-auto text-sm" aria-label="নতুন অবস্থা">
                 <option value="">নতুন অবস্থা…</option>
                 <option value="active">সক্রিয় করুন</option>
                 <option value="suspended">নিষ্ক্রিয় করুন</option>
             </select>
-            <button type="submit" class="btn btn-primary btn-sm" :disabled="count < 1 || target === ''">প্রয়োগ করুন</button>
+            <select name="role" x-model="roleTarget" x-show="action === 'role'" :disabled="action !== 'role'"
+                    class="form-input w-auto text-sm" aria-label="নতুন ভূমিকা">
+                <option value="">নতুন ভূমিকা…</option>
+                {% for role in assignableRoles %}
+                    <option value="{{ role }}">{{ roleLabels[role] }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" name="do" value="" x-bind:value="action" class="btn btn-primary btn-sm"
+                    :disabled="!ready()">প্রয়োগ করুন</button>
             <button type="button" class="btn btn-ghost btn-sm" @click="clear()">বাতিল</button>
         </div>
     </div>
@@ -301,21 +336,56 @@
    data-confirm attribute cannot — same reason the order desk declares its
    asker as a global. #}
 <script>
-    window.bulkStaffAsk = function (count, label) {
-        var message = 'নির্বাচিত ' + count + ' জন স্টাফের অবস্থা "' + label + '" হবে।';
-        if (typeof window.thConfirm !== 'function') {
-            return Promise.resolve(window.confirm(message));
+    window.bulkStaffAsk = function (count, action, target, role) {
+        var roleLabels = {{ roleLabels|json_encode|raw }};
+        var statusLabel = target === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়';
+        var spec = {
+            status: {
+                title: count + ' জন স্টাফের অবস্থা বদলাবেন?',
+                message: 'নির্বাচিত ' + count + ' জন স্টাফের অবস্থা "' + statusLabel + '" হবে।',
+                tone: 'warn',
+                bullets: [
+                    'এই অ্যাকাউন্টগুলো একসাথে ' + statusLabel + ' হবে',
+                    'নিজের বা নিয়ন্ত্রণের বাইরের অ্যাকাউন্ট বাদ পড়বে',
+                ],
+                confirm: statusLabel + ' করুন',
+            },
+            role: {
+                title: count + ' জন স্টাফের ভূমিকা বদলাবেন?',
+                message: 'নির্বাচিত ' + count + ' জন স্টাফের ভূমিকা হবে "' + (roleLabels[role] || role) + '"।',
+                tone: 'warn',
+                bullets: [
+                    'নতুন ভূমিকা: ' + (roleLabels[role] || role),
+                    'নিজের, উচ্চতর বা ইতিমধ্যে একই ভূমিকার অ্যাকাউন্ট বাদ পড়বে',
+                ],
+                confirm: (roleLabels[role] || role) + ' করুন',
+            },
+            trash: {
+                title: count + ' জন স্টাফ ট্র্যাশে পাঠাবেন?',
+                message: 'নির্বাচিত ' + count + ' জন স্টাফ ট্র্যাশে চলে যাবে।',
+                tone: 'danger',
+                bullets: [
+                    'তারা আর লগইন করতে পারবে না',
+                    'পরে রিস্টোর করে ফিরিয়ে আনা যাবে',
+                ],
+                confirm: 'ট্র্যাশে পাঠান',
+            },
+            restore: {
+                title: count + ' জন স্টাফ ফিরিয়ে আনবেন?',
+                message: 'নির্বাচিত ট্র্যাশে থাকা ' + count + ' জন স্টাফ আবার দেখা যাবে।',
+                tone: 'neutral',
+                bullets: ['অ্যাকাউন্টগুলো আগের মতে ফিরে আসবে'],
+                confirm: 'ফিরিয়ে আনুন',
+            },
+        };
+        var s = spec[action];
+        if (!s) {
+            return Promise.resolve(false);
         }
-        return window.thConfirm({
-            title: count + ' জন স্টাফের অবস্থা বদলাবেন?',
-            tone: 'warning',
-            bullets: [
-                'এই অ্যাকাউন্টগুলো একসাথে ' + label + ' হবে',
-                'নিজের বা নিয়ন্ত্রণের বাইরের অ্যাকাউন্ট বাদ পড়বে',
-            ],
-            message: 'প্রয়োগের আগে তালিকা দেখে নিন।',
-            confirm: label + ' করুন',
-        });
+        if (typeof window.thConfirm !== 'function') {
+            return Promise.resolve(window.confirm(s.message));
+        }
+        return window.thConfirm(s);
     };
 </script>
 {% endif %}
