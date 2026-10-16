@@ -54,6 +54,7 @@ use App\Web\Api\Admin\AdminDashboardApiAction;
 use App\Web\Api\Admin\AdminLogsApiAction;
 use App\Web\Api\Admin\AdminNotificationsApiAction;
 use App\Web\Api\Admin\AdminOrdersApiAction;
+use App\Web\Api\Admin\AdminRechargeReceiptApiAction;
 use App\Web\Api\Admin\AdminRechargesApiAction;
 use App\Web\Api\Admin\AdminSettingsApiAction;
 use App\Web\Api\Admin\AdminStaffApiAction;
@@ -211,6 +212,10 @@ return [
         Route::post('/orders/bulk')->action(AdminOrdersApiAction::class)->name('api-admin-orders-bulk'),
         Route::get('/topups')->action(AdminTopupsApiAction::class)->name('api-admin-topups'),
         Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargesApiAction::class)->name('api-admin-recharges'),
+        // Static `receipt` suffix after {id} — a distinct FastRoute pattern,
+        // no conflict with /recharges/{id}; streams the stored file so the
+        // app can verify a payment without the receipt ever being public.
+        Route::get('/recharges/{id}/receipt')->action(AdminRechargeReceiptApiAction::class)->name('api-admin-recharge-receipt'),
         Route::get('/withdraws')->action(AdminWithdrawsApiAction::class)->name('api-admin-withdraws'),
         // The decision desk. Same action, same AdminWithdrawService as
         // the web /admin/withdraws/{id} desk — the Android super-admin

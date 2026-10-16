@@ -140,6 +140,28 @@ final class AdminApiRouterCest
     }
 
     /**
+     * 401 with no credential at all — which only the real middleware stack can
+     * prove: the Functional harness injects an identity by construction and
+     * AdminApiMiddleware never runs there, so this lives over HTTP instead.
+     * The header state is fresh per test (InnerBrowser::_after drops it), so
+     * no token from a login in another test can leak into this request.
+     */
+    public function rechargeReceiptUnauthorizedWithoutToken(WebTester $I): void
+    {
+        $I->wantTo('see a token-less request to the receipt stream refused with 401 before the action runs.');
+        $I->sendAjaxGetRequest('/api/admin/recharges/1/receipt');
+
+        $I->seeResponseCodeIs(401);
+        $payload = $this->decode($I);
+        Assert::assertFalse($payload['success'] ?? true, 'An unauthenticated request must be refused.');
+        Assert::assertSame(
+            'Authentication required.',
+            $payload['message'] ?? null,
+            'AdminApiMiddleware/AuthMiddleware answer API paths with the 401 JSON envelope.',
+        );
+    }
+
+    /**
      * A dead queue row of this file's own, keyed by the marker.
      *
      * Mirrors what AdminApiTest::testNotificationDeleteRemovesDeadRow enqueues,

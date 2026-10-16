@@ -18,17 +18,21 @@ use App\Service\AdminWithdrawService;
 use App\Service\Api;
 use App\Service\BulkJobService;
 use App\Service\PermissionService;
+use App\Service\ReceiptStorage;
 use App\Web\Api\Admin\AdminDashboardApiAction;
 use App\Web\Api\Admin\AdminLogsApiAction;
 use App\Web\Api\Admin\AdminNotificationsApiAction;
 use App\Web\Api\Admin\AdminOrdersApiAction;
+use App\Web\Api\Admin\AdminRechargeReceiptApiAction;
 use App\Web\Api\Admin\AdminRechargesApiAction;
 use App\Web\Api\Admin\AdminSettingsApiAction;
 use App\Web\Api\Admin\AdminStaffApiAction;
 use App\Web\Api\Admin\AdminTopupsApiAction;
 use App\Web\Api\Admin\AdminUsersApiAction;
 use App\Web\Api\Admin\AdminWithdrawsApiAction;
+use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\ServerRequest;
+use Nyholm\Psr7\UploadedFile;
 use Psr\Http\Message\ResponseInterface;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Router\CurrentRoute;
@@ -44,6 +48,9 @@ use Yiisoft\Router\Route;
  */
 final class AdminApiTest extends \Codeception\Test\Unit
 {
+    /** Smallest thing finfo still identifies as a real PNG (same fixture as RechargeTest). */
+    private const RECEIPT_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
     private ConnectionInterface $db;
     private UserRepository $users;
     private TopupRepository $topups;
@@ -55,6 +62,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
     private BulkJobService $bulk;
     private QueueRepository $queue;
     private PermissionService $permissions;
+    private ReceiptStorage $receipts;
 
     private string $suffix = '';
 
@@ -69,6 +77,9 @@ final class AdminApiTest extends \Codeception\Test\Unit
 
     /** @var int[] */
     private array $withdrawIds = [];
+
+    /** @var string[] Relative receipt paths planted by this test, purged in _after(). */
+    private array $receiptPaths = [];
 
     /** @var array<string, array{id: int, setting_value: string, updated_by: int|null}> */
     private array $settingsSnapshot = [];
@@ -95,6 +106,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $this->bulk = new \App\Service\BulkJobService(new \App\Repository\BulkJobRepository($this->db), $settle);
         $this->queue = $queue;
         $this->services = new \App\Repository\ServiceRepository($this->db);
+        $this->receipts = ReceiptStorage::fromProjectRoot();
         $this->topupService = new \App\Service\TopupService(
             $this->topups,
             $this->users,
@@ -102,7 +114,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
             $notifications,
             $this->logs,
             $this->settings,
-            \App\Service\ReceiptStorage::fromProjectRoot(),
+            $this->receipts,
             $notify,
         );
         $roleRanks = new RoleRankRepository($this->db);
@@ -113,6 +125,17 @@ final class AdminApiTest extends \Codeception\Test\Unit
 
     protected function _after(): void
     {
+        // Receipt files before their rows: delete() reads receipt_path from
+        // the row. Only ids/paths this test planted are ever touched.
+        foreach ($this->topupIds as $id) {
+            $row = $this->topups->findById($id);
+            if ($row !== null) {
+                $this->receipts->delete($row['receipt_path'] ?? null);
+            }
+        }
+        foreach ($this->receiptPaths as $path) {
+            $this->receipts->delete($path);
+        }
         foreach ($this->orderIds as $id) {
             $this->db->createCommand()->delete('{{%service_order}}', ['id' => $id])->execute();
         }
@@ -141,6 +164,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $this->topupIds = [];
         $this->withdrawIds = [];
         $this->userIds = [];
+        $this->receiptPaths = [];
         $this->settingsSnapshot = [];
     }
 
@@ -195,6 +219,41 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $id = (int) $this->db->getLastInsertID();
         $this->topupIds[] = $id;
         return $id;
+    }
+
+    /**
+     * File a real PNG receipt through the production storage layer and attach
+     * it to the row — the same bytes/mime/path a submit() leaves behind,
+     * without the notification fan-out of a full TopupService request.
+     *
+     * @return array{bytes: string, path: string, mime: string}
+     */
+    private function plantReceipt(int $topupId): array
+    {
+        $bytes = base64_decode(self::RECEIPT_PNG_BASE64, true);
+        if ($bytes === false) {
+            throw new \RuntimeException('PNG fixture must be valid base64');
+        }
+
+        $stream = fopen('php://temp', 'r+b');
+        fwrite($stream, $bytes);
+        rewind($stream);
+
+        $stored = $this->receipts->store(
+            new UploadedFile($stream, strlen($bytes), UPLOAD_ERR_OK, 'receipt.png', 'image/png'),
+            $topupId,
+        );
+        $this->receiptPaths[] = $stored['path'];
+        $this->assertSame('image/png', $stored['mime'], 'MIME must be sniffed from the planted bytes');
+
+        $this->db->createCommand()->update('{{%topup_request}}', [
+            'receipt_path' => $stored['path'],
+            'receipt_name' => $stored['name'],
+            'receipt_mime' => $stored['mime'],
+            'receipt_size' => $stored['size'],
+        ], ['id' => $topupId])->execute();
+
+        return ['bytes' => $bytes, 'path' => $stored['path'], 'mime' => $stored['mime']];
     }
 
     private function makeWithdraw(int $adminId, string $status = 'pending', array $extra = []): int
@@ -294,6 +353,14 @@ final class AdminApiTest extends \Codeception\Test\Unit
         }
         if (preg_match('#^/api/admin/topups$#', $uri)) {
             return new AdminTopupsApiAction($this->topups);
+        }
+        if (preg_match('#^/api/admin/recharges/\d+/receipt$#', $uri)) {
+            return new AdminRechargeReceiptApiAction(
+                $this->topups,
+                $this->receipts,
+                new Psr17Factory(),
+                new Psr17Factory(),
+            );
         }
         if (preg_match('#^/api/admin/recharges/\d+$#', $uri)) {
             return new AdminRechargesApiAction($this->topups, $this->topupService);
@@ -731,6 +798,109 @@ final class AdminApiTest extends \Codeception\Test\Unit
 
         $row = $this->topups->findById($topupId);
         $this->assertSame('rejected', $row['status']);
+    }
+
+    // ---- Recharge receipt stream (GET /recharges/{id}/receipt) ----------
+
+    public function testRechargeReceiptStreamsBytesForAdmin(): void
+    {
+        $admin = $this->makeUser('rstream', 'admin');
+        $user = $this->makeUser('rstreamtarget', 'user');
+        $topupId = $this->makeTopup($user->id, 'pending');
+        $planted = $this->plantReceipt($topupId);
+
+        $response = $this->call(
+            $admin,
+            'GET',
+            '/api/admin/recharges/' . $topupId . '/receipt',
+            ['id' => (string) $topupId],
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(
+            hash('sha256', $planted['bytes']),
+            hash('sha256', (string) $response->getBody()),
+            'The stream must be the stored bytes, byte for byte',
+        );
+        $this->assertSame($planted['mime'], $response->getHeaderLine('Content-Type'));
+        $this->assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));
+        // Viewable mime (image/png) → the inline half of the isViewable() split.
+        $this->assertSame(
+            'inline',
+            explode(';', $response->getHeaderLine('Content-Disposition'))[0],
+        );
+
+        // The detail row must tell the app a receipt exists.
+        $detail = $this->decode(
+            $this->call($admin, 'GET', '/api/admin/recharges/' . $topupId, ['id' => (string) $topupId]),
+        );
+        $this->assertSame($planted['path'], $detail['data']['topup']['receipt_path']);
+    }
+
+    public function testRechargeReceipt404WithoutReceipt(): void
+    {
+        $admin = $this->makeUser('r404', 'admin');
+        $user = $this->makeUser('r404target', 'user');
+        $topupId = $this->makeTopup($user->id, 'pending');
+
+        $response = $this->call(
+            $admin,
+            'GET',
+            '/api/admin/recharges/' . $topupId . '/receipt',
+            ['id' => (string) $topupId],
+        );
+
+        $this->assertSame(404, $response->getStatusCode());
+        $payload = $this->decode($response);
+        $this->assertFalse($payload['success']);
+        // On-disk copy of ReceiptAction's "stored path does not resolve" answer.
+        $this->assertSame('রশিদ ফাইলটি আর পাওয়া যাচ্ছে না।', $payload['message']);
+    }
+
+    public function testRechargeReceiptForbiddenForPlainUser(): void
+    {
+        $user = $this->makeUser('r403', 'user');
+        $topupId = $this->makeTopup($user->id, 'pending');
+
+        $response = $this->call(
+            $user,
+            'GET',
+            '/api/admin/recharges/' . $topupId . '/receipt',
+            ['id' => (string) $topupId],
+        );
+
+        $this->assertSame(403, $response->getStatusCode());
+        $payload = $this->decode($response);
+        $this->assertFalse($payload['success']);
+        $this->assertSame('You do not have permission to perform this action.', $payload['message']);
+    }
+
+    /**
+     * Staff must read receipts exactly like the sibling recharges endpoints
+     * let them act: the gate is canAccessAdmin() alone (same as the web
+     * ReceiptAction), so a staff operator verifying a payment is never walled
+     * off from the file while holding the row.
+     */
+    public function testRechargeReceiptVisibleToStaff(): void
+    {
+        $staff = $this->makeUser('rstaff', 'staff');
+        $user = $this->makeUser('rstafftarget', 'user');
+        $topupId = $this->makeTopup($user->id, 'pending');
+        $planted = $this->plantReceipt($topupId);
+
+        $response = $this->call(
+            $staff,
+            'GET',
+            '/api/admin/recharges/' . $topupId . '/receipt',
+            ['id' => (string) $topupId],
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(
+            hash('sha256', $planted['bytes']),
+            hash('sha256', (string) $response->getBody()),
+            'The stream must be the stored bytes, byte for byte',
+        );
     }
 
     // ---- Staff list (superadmin only) ------------------------------------
