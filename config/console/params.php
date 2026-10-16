@@ -13,6 +13,7 @@ use App\Console\RoleRankInitCommand;
 use App\Console\SeedCommand;
 use App\Console\StaffCommand;
 use App\Console\SuperAdminCommand;
+use App\Console\AppReleasePublishCommand;
 use App\Console\TwaFingerprintCommand;
 use App\Console\WebPushCheckCommand;
 
@@ -43,7 +44,9 @@ return [
             'app:webpush:check' => WebPushCheckCommand::class,
             'app:webpush:watch' => PushWatchCommand::class,
             'app:bulk:work' => BulkWorkCommand::class,
+            'app:release:publish' => AppReleasePublishCommand::class,
             'app:twa:fingerprints' => TwaFingerprintCommand::class,
+            'app:release:publish' => AppReleasePublishCommand::class,
         ],
     ],
 ];
