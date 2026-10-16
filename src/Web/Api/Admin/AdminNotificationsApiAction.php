@@ -33,7 +33,7 @@ final readonly class AdminNotificationsApiAction
 
         if ($request->getMethod() === 'POST') {
             $id = (int) $route->getArgument('id', '0');
-            $action = (string) ($route->getArgument('action') ?? 'retry');
+            $action = (string) $route->getArgument('action', '');
 
             if ($action === 'delete') {
                 if (!$this->permissions->canAccessRoute($identity, 'admin-notifications-delete')) {
@@ -49,6 +49,10 @@ final readonly class AdminNotificationsApiAction
                 $this->queue->delete($id);
 
                 return Api::ok(['message' => 'নোটিফিকেশনটি মুছে ফেলা হয়েছে।']);
+            }
+
+            if ($action !== 'retry') {
+                return Api::fail('Unknown notification action.', [], 400);
             }
 
             $ok = $this->queue->requeue($id);

@@ -220,8 +220,12 @@ return [
         Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsApiAction::class)->name('api-admin-settings'),
         Route::get('/logs')->action(AdminLogsApiAction::class)->name('api-admin-logs'),
         Route::get('/notifications')->action(AdminNotificationsApiAction::class)->name('api-admin-notifications'),
-        Route::post('/notifications/{id}/retry')->action(AdminNotificationsApiAction::class)->name('api-admin-notification-retry'),
-        Route::post('/notifications/{id}/delete')->action(AdminNotificationsApiAction::class)->name('api-admin-notification-delete'),
+        // One route with an {action} segment, not two static suffixes: FastRoute
+        // matched both old URLs, but neither put an `action` argument into the
+        // route, so AdminNotificationsApiAction could only ever read 'retry' —
+        // the Android delete button requeued instead of deleting. Same shape as
+        // the service-requests route above.
+        Route::post('/notifications/{id}/{action}')->action(AdminNotificationsApiAction::class)->name('api-admin-notification-action'),
     ),
 
     // Admin (admin/staff/superadmin)

@@ -1199,6 +1199,9 @@ final class AdminApiTest extends \Codeception\Test\Unit
             'updated_at' => date('Y-m-d H:i:s'),
         ], ['id' => $rowId])->execute();
 
+        // The `action` route argument is supplied by hand because this suite
+        // drives the action directly; that the real router delivers it is
+        // proven by AdminApiRouterCest.
         $response = $this->call($admin, 'POST', '/api/admin/notifications/' . $rowId . '/delete', ['id' => (string) $rowId, 'action' => 'delete']);
         $payload = $this->decode($response);
 
@@ -1219,6 +1222,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
             'payload' => ['subject' => 'Active notification', 'body' => 'Still queued'],
         ]);
 
+        // Synthetic `action` argument again; router wiring is AdminApiRouterCest's job.
         $response = $this->call($admin, 'POST', '/api/admin/notifications/' . $rowId . '/delete', ['id' => (string) $rowId, 'action' => 'delete']);
         $payload = $this->decode($response);
 
@@ -1231,6 +1235,7 @@ final class AdminApiTest extends \Codeception\Test\Unit
     {
         $admin = $this->makeUser('ndelmissing', 'admin');
 
+        // Synthetic `action` argument again; router wiring is AdminApiRouterCest's job.
         $response = $this->call($admin, 'POST', '/api/admin/notifications/999999999/delete', ['id' => '999999999', 'action' => 'delete']);
         $payload = $this->decode($response);
 
