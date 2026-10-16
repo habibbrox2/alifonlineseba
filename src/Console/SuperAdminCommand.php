@@ -19,12 +19,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * `superadmin` is a `user.role` value, and every page that hands money to
  * somebody is behind `SuperAdminMiddleware`, which only a holder of that role
- * may pass. Appointing the first one happens *on* the page that only a
- * super-admin may open, so a fresh install has no way in: `app:seed` creates an
- * `admin`, and `AdminStaffAction` refuses everybody but an existing
- * super-admin, and the ledger's last-super-admin guard refuses to let the
- * roster empty itself. The CLI is the one place outside the web that can name
- * the platform owner, which is exactly what this is for.
+ * may pass. The web alone can never start the chain: appointing one happens
+ * *on* the page that only a super-admin may open, `AdminStaffAction` refuses
+ * everybody but an existing super-admin, and the ledger's last-super-admin
+ * guard refuses to let the roster empty itself. `app:seed` names the first
+ * super-admin (the `admin` account) so a fresh install is reachable, and this
+ * CLI is the one place outside the web that can name another platform owner
+ * or promote an existing account.
  *
  *   php yii app:super-admin                              # create `superadmin`
  *   php yii app:super-admin --username=owner --phone=01712345678
@@ -90,8 +91,10 @@ final class SuperAdminCommand extends Command
             ->addOption('email', null, InputOption::VALUE_REQUIRED, 'Optional email address for the new account.')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Show what would change without writing.')
             ->setHelp(
-                "The first super-admin has to be created here: /admin/staff is guarded by\n"
-                . "SuperAdminMiddleware, so nobody can appoint one before one exists.\n\n"
+                "`app:seed` names the first super-admin (the `admin` account);\n"
+                . "use this to create another or promote an existing account. On the\n"
+                . "web /admin/staff is guarded by SuperAdminMiddleware, so nobody can\n"
+                . "appoint one before one exists.\n\n"
                 . "Creates a new account by default; --promote=ID turns an account that\n"
                 . "already exists into the platform owner instead (role=superadmin,\n"
                 . "status=active, restored if it had been trashed).\n\n"

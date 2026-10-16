@@ -46,7 +46,7 @@ use Yiisoft\Db\Connection\ConnectionInterface;
  *   php yii app:seed-orders                    # 12 orders across 14 days
  *   php yii app:seed-orders --count=30
  *   php yii app:seed-orders --count=6 --days=3
- *   php yii app:seed-orders --user=rahim.demo  # one account only
+ *   php yii app:seed-orders --user=demo  # one account only
  *   php yii app:seed-orders --dry-run
  *
  * Re-running is safe and additive: it never edits or removes an existing order,
@@ -199,7 +199,7 @@ final class OrderSeedCommand extends Command
         $customers = $this->customers((string) ($input->getOption('user') ?? ''));
         if ($customers === []) {
             $io->error(
-                'No usable customer accounts. `php yii app:seed` creates one (rahim.demo) '
+                'No usable customer accounts. `php yii app:seed` creates one (demo) '
                 . 'when the user table is empty.',
             );
             return Command::FAILURE;

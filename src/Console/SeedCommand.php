@@ -300,7 +300,7 @@ final class SeedCommand extends Command
 
         $io->success(sprintf(
             'Users: %s. Catalog: %d services present, %d newly added, %d categories.',
-            $usersExist ? 'kept' : 'seeded (admin/Admin1234!, rahim.demo/Demo1234!)',
+            $usersExist ? 'kept' : 'seeded (admin/Admin1234! superadmin, demo/Demo1234! customer)',
             count($existingSlugs) + $created,
             $created,
             count($catIds),

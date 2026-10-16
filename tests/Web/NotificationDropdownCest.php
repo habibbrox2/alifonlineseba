@@ -20,7 +20,7 @@ use PHPUnit\Framework\Assert;
  */
 final class NotificationDropdownCest
 {
-    private const DEMO_USER = 'rahim.demo';
+    private const DEMO_USER = 'demo';
     private const DEMO_PASSWORD = 'Demo1234!';
 
     public function dropdownIsAnApiBackedAlpineComponent(WebTester $I): void

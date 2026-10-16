@@ -14,7 +14,7 @@ use PHPUnit\Framework\Assert;
  */
 final class HeaderBalanceCest
 {
-    private const DEMO_USER = 'rahim.demo';
+    private const DEMO_USER = 'demo';
     private const DEMO_PASSWORD = 'Demo1234!';
 
     public function balanceAppearsInTopbar(WebTester $I): void
