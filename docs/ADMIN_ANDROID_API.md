@@ -19,7 +19,7 @@ Transport: HTTPS only. Auth: `Authorization: Bearer <selector>.<verifier>` (exce
 
 > **Client quirk:** `Api::fail()` puts `$errors` in **both** `data` and `errors`. Read `errors`.
 
-**Status codes:** 200 ok · 400 validation/business failure · 401 `Api::unauthorized()` (invalid/expired presented token — no session fallback) · 403 `Api::forbidden()` (role check failed) · 404 route.
+**Status codes:** 200 ok · 400 business/validation failure · 401 `Api::unauthorized()` (invalid/expired/revoked presented token — no session fallback) · 403 `Api::forbidden()` (role check failed) · 404 unknown route/row · 422 validation failure (empty/wrong body before per-action checks) · 429 login throttle (AuthThrottle, 5 attempts / 300 s, T1.3).
 
 ---
 
@@ -71,7 +71,7 @@ Response: `{ rows: [...], total, page, perPage: 15, trashedCount }`.
 Body field `do`:
 - `create` — `{username: /^[a-zA-Z0-9._-]{3,32}$/, phone: /^01[3-9][0-9]{8}$/, password: ≥8 chars, role: user|staff|admin}` (superadmin is NOT creatable here — CLI only).
 - `toggle` — `{id}` — flips status active/disabled.
-- `role` — `{id, role: user|staff|admin}`.
+- `role` — `{ "user_id": <int>, "role": "user"|"staff"|"admin" }` (server reads `user_id`, not `id`).
 - `reset` — `{id}` → returns one-time `temporary_password` (14 chars, unambiguous alphabet). Show it once; force the user to copy it.
 - `delete` — `{id}` — soft delete; **server forbids** self-delete and deleting role=admin rows.
 - `restore` — `{id}` · `restore_all`.
@@ -91,7 +91,7 @@ Returns the topup row.
 
 ### `POST /api/admin/recharges/{id}`
 Body: `{ do: "approve" }` → `TopupService::approve` (idempotent via `OPEN_STATUSES` gate; credits ledger first, then stamps the row; dispatches TOPUP_APPROVED; referral bonus side-effects are no-op-safe).
-Body: `{ do: "reject", reason: "<non-empty>" }` → `TopupService::reject` (reason is shown to the user; dispatches TOPUP_REJECTED).
+Body: `{ "do": "reject", "note": "<non-empty reason (shown to the user)>" }` → `TopupService::reject` (field is `note`, not `reason`).
 
 ### `GET /api/admin/withdraws` — `AdminWithdrawsApiAction` (**superadmin only** — 403 otherwise)
 Query: `page`, `status` ∈ pending|review|approved|rejected, `q`.
@@ -111,8 +111,8 @@ Behavior (delegates to `src/Service/AdminWithdrawService.php`):
 Response: `{ success: true, data: { ...fresh withdrawal row via findById... } }`.
 Errors: 403 non-superadmin · 400 business refusal (self-approval, already reviewed, missing reason) with message.
 
-### `GET /api/admin/staff` — `AdminStaffApiAction` (**superadmin only**)
-Query: `page`, `q`. `perPage: 20`. Superadmin listed first (`paginateStaff`).
+### `GET /api/admin/staff` — `AdminStaffApiAction` (permission `admin-staff` read; `user` role gets 403)
+Query: `page`, `q`. `perPage: 20`. `password_hash`/`remember_token` stripped. Superadmins listed first (`paginateStaff`).
 
 ### `GET /api/admin/settings` — `AdminSettingsApiAction` (**superadmin only**)
 Returns `SettingsRepository::all()` — defaults merged with `site_setting` rows. Keys are whitelisted (`SettingsRepository::KEYS`) with types text|url|multiline|number|checkbox, e.g. `site_tagline`, `contact_email`, `topup_min_amount` (10), `topup_max_amount` (100000), `topup_receipt_required` (checkbox), `wallet_bkash/nagad/rocket`, `referral_enabled`, `referrer_bonus_amount`, `order_window_enabled/start/end`, `maintenance_enabled` (checkbox) + `maintenance_message`.
@@ -128,15 +128,33 @@ Query: `page`, `perPage` (≤25), `q` (searches action/description/ip_address). 
 ### `GET /api/admin/notifications` — `AdminNotificationsApiAction`
 Query: `page`, `status` ∈ queued|processing|sent|dead. Response: `{ rows, total, page, perPage: 20, stats: QueueRepository::stats() }`.
 
-### `POST /api/admin/notifications/{id}/retry`
-Requeues a **dead-letter** row only (`QueueRepository::requeue`).
+### `POST /api/admin/notifications/{id}/{action}` — `AdminNotificationsApiAction` (T1.1)
+Unified route: `retry` requeues a dead-letter row; `delete` removes it. Unknown `action` → `400` `{ success: false, message: "Unknown notification action." }`.
+
+---
+
+## 1A. Recharges / Receipts — `AdminRechargesApiAction`
+
+### `GET /api/admin/recharges/{id}/receipt` — `AdminRechargeReceiptApiAction`
+Streams the stored receipt bytes (raw bytes, no JSON envelope — deliberate). Auth: `Authorization: Bearer <token>`. `404` when the topup has no `receipt_path` or the file is gone. Headers `Content-Type: receipt_mime`, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`.
+
+### `POST /api/admin/staff` — `AdminStaffApiAction` body `do=reset` (superadmin) → one-time temporary password. Non-staff rows rejected.
+
+### Withdraws claim / release — `AdminWithdrawsApiAction`
+`POST /api/admin/withdraws/{id}` `do ∈ {claim, release, approve, reject}`. `claim` holds row against the caller; `release` hands it back; `approve`/`reject` already documented above. Approval of one's own request forbidden.
+
+### Firebase login — `POST /api/auth/firebase` (`FirebaseAuthAction`)
+`Authorization: Bearer <Firebase ID token>`. Verifies ID token, reuses user by phone/email, issues the same `{token, refresh, expires_at, user}` envelope as password login. Throttled + logged like password login.
+
+### `POST /api/auth/logout` — header only
+`Authorization: Bearer <access token>` revokes the presented token. No body (earlier drafts named a body — it is a header).
 
 ---
 
 ## 3. Device / FCM API (`ApiAuthMiddleware`: bearer OR session)
 
 ### `POST /api/devices` — `DeviceApiAction`
-`{ device_token, platform: android|ios (default android), device_name, app_version }` → idempotent `DeviceRepository::upsert` (a token moving devices re-points the owner). Call from `FirebaseMessagingService.onNewToken` and on login.
+`{ "token" (FCM token, not `device_token`), "platform": "android"|"ios" (default `android`), "device_name", "app_version" }` → idempotent `DeviceRepository::upsert` (a token moving devices re-points the owner). Call from `FirebaseMessagingService.onNewToken` and on login.
 
 ### `GET /api/devices` — the user's registered devices.
 ### `DELETE /api/devices/{id}` — remove a device registration.
@@ -144,7 +162,8 @@ Requeues a **dead-letter** row only (`QueueRepository::requeue`).
 Admin-targeted push requires **no new backend**: `NotificationManager` already fans out staff/admin events to each staff-role user's active device tokens; the admin app registers its token under the admin's own user id.
 
 ## 4. Update check — `GET /api/app/version` (`AppVersionApiAction`)
-Unauthenticated on purpose. Returns the newest **published** `app_release` row (`version_code`, `version_name`, `min_version_code`, `release_notes`, apk path). `minVersionCode()` returns 0 when nothing is published (an unpublished release must not brick old apps). The APK bytes are served from outside the web root via `GET /app/apk`.
+Unauthenticated on purpose. Query: `version_code` (default 0), `platform` (default `android`), `channel` (`twa` default | `admin`; unknown → 400 "Unknown release channel.").
+Returns the newest published release for the channel: `{ version_code, version_name, min_version_code, release_notes, sha256, published_at, size_bytes, download_url }`, with `download_url` = `/app/apk` (twa) or `/app/apk?channel=<channel>` (admin). `minVersionCode()` returns 0 when nothing is published (an unpublished release must not brick old apps). APK bytes served via `GET /app/apk` (same `channel`).
 
 > **Distribution note:** if the admin APK shares the `app_release` table, publish it as a distinct row and verify `min_version_code` semantics so neither app is forced to update into the other's APK. Recommended: separate distribution channel/endpoint for the admin app (open decision in the architecture doc).
 
@@ -160,6 +179,8 @@ Unauthenticated on purpose. Returns the newest **published** `app_release` row (
 | 200 | success | render `data` |
 | 400 | business/validation failure | show `message` (+ `errors` map on fields) |
 | 401 | token invalid/expired/revoked | refresh once → retry → else logout to Login |
-| 403 | role insufficient | show "superadmin required" notice; hide the screen |
+| 403 | role/permission insufficient (incl. user-action denials) | show "permission required" notice; hide the screen |
 | 404 | unknown route/row | error state with retry |
+| 422 | validation failure (empty/wrong body before per-action checks) | show `message` + field errors |
+| 429 | login throttle (5 attempts / 300 s) | show the message; no bypass |
 | no network | — | offline state, no writes queued |
