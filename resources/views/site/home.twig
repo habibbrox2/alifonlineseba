@@ -109,10 +109,16 @@
             <svg class="h-4 w-4" aria-hidden="true"><use href="/assets/icons/lucide-sprite.svg#arrow-right"></use></svg>
         </a>
     </div>
-    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    {# One panel split by hairline rules into whole-row links — a service
+       counter board rather than the card wall the catalog uses. The white
+       filler keeps an odd tail row from showing the panel's grey backing. #}
+    <div class="grid gap-px overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 sm:grid-cols-2">
         {% for service in popular %}
-            {% include 'components/service-card.twig' with { service: service } %}
+            {% include 'components/service-card.twig' with { service: service, variant: 'board' } %}
         {% endfor %}
+        {% if popular|length is odd %}
+            <div class="hidden bg-white sm:block"></div>
+        {% endif %}
     </div>
 </section>
 {% endif %}

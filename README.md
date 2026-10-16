@@ -149,7 +149,7 @@ vendor/bin/codecept run Unit,Console,Functional   # ইন-প্রসেস �
 vendor/bin/codecept run Web       # PhpBrowser টেস্ট (127.0.0.1:8099-এ সার্ভার দরকার: php yii serve --port=8099 --docroot=public)
 ```
 
-বর্তমান স্ট্যাটাস: **৯১৫টি টেস্ট, সব পাস** (Unit 306 · Console 1 · Functional 567 · Web 41; মোট ৫,৮৭২ অ্যাসার্শন — ১৬-১০-২০২৬-এ `composer test` দিয়ে যাচাইকৃত)।
+বর্তমান স্ট্যাটাস: **৯১৬টি টেস্ট, সব পাস** (Unit 306 · Console 1 · Functional 568 · Web 41; মোট ৫,৮৭৫ অ্যাসার্শন — ১৬-১০-২০২৬-এ `composer test` দিয়ে যাচাইকৃত)।
 
 ## প্রজেক্ট স্ট্রাকচার
 

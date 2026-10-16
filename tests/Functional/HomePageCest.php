@@ -9,6 +9,7 @@ use HttpSoft\Message\ServerRequest;
 
 use function PHPUnit\Framework\assertSame;
 use function PHPUnit\Framework\assertStringContainsString;
+use function PHPUnit\Framework\assertStringNotContainsString;
 
 final class HomePageCest
 {
@@ -24,6 +25,21 @@ final class HomePageCest
         // is never contiguous in the source — both fragments must be there.
         assertStringContainsString('ডিজিটাল সেবা', $body);
         assertStringContainsString('এক ক্লিকে!', $body);
+    }
+
+    public function popularShelfCarriesNoPrice(FunctionalTester $tester): void
+    {
+        $response = $tester->sendRequest(
+            new ServerRequest(uri: '/'),
+        );
+
+        assertSame(200, $response->getStatusCode());
+        $body = $response->getBody()->getContents();
+        // The home shelf is the storefront: its cells link to the detail page
+        // but draw no price — only the category catalog and the detail page
+        // may quote a number.
+        assertStringNotContainsString('accent-value', $body);
+        assertStringContainsString('/services/view/', $body);
     }
 
     public function loginPage(FunctionalTester $tester): void
