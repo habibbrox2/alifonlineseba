@@ -10,6 +10,8 @@ use HttpSoft\Message\Stream;
 
 use function PHPUnit\Framework\assertNotSame;
 use function PHPUnit\Framework\assertSame;
+use function PHPUnit\Framework\assertStringContainsString;
+use function PHPUnit\Framework\assertStringNotContainsString;
 
 /**
  * The Android admin app speaks JSON with a bearer token and holds no session
@@ -83,6 +85,103 @@ final class ApiCsrfCest
             422,
             $response->getStatusCode(),
             'A header-less POST is exactly what CSRF exists to refuse.',
+        );
+    }
+
+    /**
+     * The login form is where a bare 422 hurts most.
+     *
+     * A form post whose session has been rotated out from under it — a tab left
+     * open across a later login, a logout, a double submit — used to draw a blank
+     * page whose only symptom was a status in a console nobody opens. The gate
+     * still refuses the request with the same 422; what changed is that the
+     * refusal now says what happened and how to get past it.
+     */
+    public function aFailedBrowserFormPostGetsAPageTheVisitorCanActOn(FunctionalTester $tester): void
+    {
+        $response = $tester->sendRequest($this->formPost('/login', [
+            'identifier' => '01700000000',
+            'password' => 'wrongpass123',
+        ]));
+        $body = (string) $response->getBody();
+
+        assertSame(
+            422,
+            $response->getStatusCode(),
+            'The gate must keep refusing a form post that carries no valid token.',
+        );
+        assertStringContainsString(
+            'সেশনের মেয়াদ শেষ হয়ে গেছে',
+            $body,
+            'A refused form post has to say why, or the visitor is left staring at a blank page.',
+        );
+        assertStringContainsString(
+            'href="/login"',
+            $body,
+            'The one action that clears this is reopening the page: it mints a token '
+                . 'matching the session the browser now holds.',
+        );
+        assertSame(
+            'no-store',
+            $response->getHeaderLine('Cache-Control'),
+            'The page must not be cached, or a retry would be handed the same dead token.',
+        );
+    }
+
+    /**
+     * The handler explains the failure; it does not act on the request.
+     *
+     * Re-rendering the target with a fresh token would let through the forgeries
+     * CSRF exists to stop, and reflecting the fields would paint an attacker's
+     * payload into a page the victim is looking at.
+     */
+    public function theFailurePageEchoesNeitherTheBodyNorAnInjectedQuery(FunctionalTester $tester): void
+    {
+        $response = $tester->sendRequest($this->formPost(
+            '/login?next=%3Cscript%3Ealert(1)%3C%2Fscript%3E',
+            ['identifier' => '<script>alert(2)</script>'],
+        ));
+        $body = (string) $response->getBody();
+
+        assertStringNotContainsString(
+            '<script>alert(2)</script>',
+            $body,
+            'Submitted fields must never be written back into the refusal.',
+        );
+        assertStringNotContainsString(
+            '<script>alert(1)</script>',
+            $body,
+            'The reload link is built from the request URI, so it has to be escaped.',
+        );
+        assertStringContainsString(
+            'href="/login?next=%3Cscript%3Ealert(1)%3C%2Fscript%3E"',
+            $body,
+            'An escaped link still reloads the page the form was on.',
+        );
+    }
+
+    /**
+     * A machine client gets the same envelope as every other API response, so it
+     * can read the refusal instead of handing a parser an empty body.
+     */
+    public function aFailedApiPostGetsTheJsonEnvelope(FunctionalTester $tester): void
+    {
+        $response = $tester->sendRequest($this->formPost('/api/auth/refresh', []));
+        $body = (string) $response->getBody();
+
+        assertSame(422, $response->getStatusCode(), 'The gate still refuses.');
+        assertSame(
+            'application/json; charset=UTF-8',
+            $response->getHeaderLine('Content-Type'),
+            'An API caller must not be handed an HTML page to parse.',
+        );
+        assertSame(
+            ['success' => false, 'data' => [], 'errors' => []],
+            array_intersect_key(
+                json_decode($body, true),
+                ['success' => null, 'data' => null, 'errors' => null],
+            ),
+            'The envelope has to match the one every other API response uses.',
         );
     }
 

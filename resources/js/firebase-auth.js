@@ -271,7 +271,10 @@ function showPhoneError(message: string): void
  */
 function getCsrfToken(): string
 {
-    const meta = document.querySelector('meta[name="csrf-token"]');
+    // Layouts/base.twig renders the token as `<meta name="_csrf">` (and the
+    // older name "csrf" in legacy pages); the auth pages never use
+    // "csrf-token", so fall through until a name actually matches.
+    const meta = document.querySelector('meta[name="_csrf"]') || document.querySelector('meta[name="csrf"]');
     if (meta instanceof HTMLMetaElement && meta.content) {
         return meta.content;
     }

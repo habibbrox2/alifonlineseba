@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Web\CsrfFailureHandler;
 use App\Web\CsrfMiddleware;
 use App\Web\FlashMiddleware;
 use App\Web\ForwardedProtoMiddleware;
@@ -10,6 +11,9 @@ use App\Web\MaintenanceMiddleware;
 use App\Web\NoIndexMiddleware;
 use App\Web\NotFound\NotFoundHandler;
 use App\Web\SecurityHeadersMiddleware;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Yiisoft\Csrf\CsrfTokenInterface;
+use Yiisoft\Csrf\CsrfTokenMiddleware;
 use Yiisoft\Definitions\DynamicReference;
 use Yiisoft\Definitions\Reference;
 use Yiisoft\ErrorHandler\Middleware\ErrorCatcher;
@@ -66,6 +70,19 @@ return [
                 ],
             ]),
             'fallbackHandler' => Reference::to(NotFoundHandler::class),
+        ],
+    ],
+
+    // The stock CsrfTokenMiddleware answers a failed check with a status and an
+    // empty body. That is a dead end on a form — the login POST that arrives
+    // with a token minted for a session since replaced shows the visitor a blank
+    // page — so it gets a handler that explains the failure and offers a reload.
+    // The check itself, and the 422 it refuses with, are unchanged.
+    CsrfTokenMiddleware::class => [
+        '__construct()' => [
+            Reference::to(ResponseFactoryInterface::class),
+            Reference::to(CsrfTokenInterface::class),
+            Reference::to(CsrfFailureHandler::class),
         ],
     ],
 
