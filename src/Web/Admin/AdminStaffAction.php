@@ -139,6 +139,15 @@ final readonly class AdminStaffAction
      */
     private function apply(string $do, array $input, Identity $identity): array
     {
+        // `restore_all` acts on the whole roster and therefore names no subject:
+        // the button posts id=0. It has to answer before the subject lookup, or
+        // the missing row reads as "not found" and the button does nothing.
+        if ($do === 'restore_all') {
+            return $this->checkPermission($identity, 'admin-users-restore')
+                ? $this->restoreAllStaff($identity)
+                : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'];
+        }
+
         $id = (int) ($input['id'] ?? 0);
         $subject = $id > 0 ? $this->users->findById($id, true) : null;
 
@@ -170,9 +179,6 @@ final readonly class AdminStaffAction
                 : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
             'restore' => $this->checkPermission($identity, 'admin-users-restore')
                 ? $this->restoreStaff($subject, $identity)
-                : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
-            'restore_all' => $this->checkPermission($identity, 'admin-users-restore')
-                ? $this->restoreAllStaff($identity)
                 : [false, 'আপনার এই অ্যাকশন করার অনুমতি নেই।'],
             default => [false, 'অজানা অ্যাকশন।'],
         };

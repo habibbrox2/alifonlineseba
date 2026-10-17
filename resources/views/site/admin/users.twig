@@ -112,8 +112,8 @@
 <div x-data="{ count: 0, all: false, action: '', target: '', roleTarget: '',
         ready() {
             return this.count > 0 && this.action !== ''
-                && (this.action !== 'status' || this.target !== '')
-                && (this.action !== 'role' || this.roleTarget !== '');
+                && (this.action !== 'bulk_status' || this.target !== '')
+                && (this.action !== 'bulk_role' || this.roleTarget !== '');
         },
         clear() {
             this.$root.querySelectorAll('tbody input[data-bulk]').forEach(box => { box.checked = false; });
@@ -339,7 +339,9 @@
    forms). Without JavaScript the bar simply never appears, exactly like the
    order desk. Alpine adds the count, the select-all and the confirm. `do`
    rides on the submit button's own value — four actions share one form —
-   exactly as the order queue's bulk bar does. #}
+   exactly as the order queue's bulk bar does. The four option values *are*
+   the `do` values AdminUsersAction branches on, so the bar and the action
+   cannot drift apart into a `do` no server path recognises. #}
 <form method="post" action="/admin/users" id="user-bulk-form"
       @submit="if (!ready()) { $event.preventDefault(); return; }
                if ($el.dataset.confirmed === '1') { return; }
@@ -360,20 +362,20 @@
             <span class="badge badge-neutral"><span x-text="count"></span> জন ইউজার নির্বাচিত</span>
             <select x-model="action" class="form-input w-auto text-sm" aria-label="অ্যাকশন">
                 <option value="">অ্যাকশন…</option>
-                {% if canBulkStatus %}<option value="status">স্ট্যাটাস বদলান</option>{% endif %}
-                {% if canBulkRole %}<option value="role">রোল বদলান</option>{% endif %}
-                {% if canBulkTrash %}<option value="trash">ট্র্যাশে পাঠান</option>{% endif %}
-                {% if canBulkRestore %}<option value="restore">রিস্টোর করুন</option>{% endif %}
+                {% if canBulkStatus %}<option value="bulk_status">স্ট্যাটাস বদলান</option>{% endif %}
+                {% if canBulkRole %}<option value="bulk_role">রোল বদলান</option>{% endif %}
+                {% if canBulkTrash %}<option value="bulk_trash">ট্র্যাশে পাঠান</option>{% endif %}
+                {% if canBulkRestore %}<option value="bulk_restore">রিস্টোর করুন</option>{% endif %}
             </select>
             {# x-show only hides: the disabled binding also keeps the dormant
                target out of the POST body. #}
-            <select name="status" x-model="target" x-show="action === 'status'" :disabled="action !== 'status'"
+            <select name="status" x-model="target" x-show="action === 'bulk_status'" :disabled="action !== 'bulk_status'"
                     class="form-input w-auto text-sm" aria-label="নতুন স্ট্যাটাস">
                 <option value="">নতুন স্ট্যাটাস…</option>
                 <option value="active">সক্রিয় করুন</option>
                 <option value="disabled">নিষ্ক্রিয় করুন</option>
             </select>
-            <select name="role" x-model="roleTarget" x-show="action === 'role'" :disabled="action !== 'role'"
+            <select name="role" x-model="roleTarget" x-show="action === 'bulk_role'" :disabled="action !== 'bulk_role'"
                     class="form-input w-auto text-sm" aria-label="নতুন রোল">
                 <option value="">নতুন রোল…</option>
                 {% for role in bulkRoles %}
@@ -395,7 +397,7 @@
         var roleLabels = {{ roleLabels|json_encode|raw }};
         var statusLabel = target === 'active' ? 'সক্রিয়' : 'নিষ্ক্রিয়';
         var spec = {
-            status: {
+            bulk_status: {
                 title: count + ' জন ইউজারের স্ট্যাটাস বদলাবেন?',
                 message: 'নির্বাচিত ' + count + ' জন ইউজারের স্ট্যাটাস "' + statusLabel + '" হবে।',
                 tone: 'warn',
@@ -405,7 +407,7 @@
                 ],
                 confirm: statusLabel + ' করুন',
             },
-            role: {
+            bulk_role: {
                 title: count + ' জন ইউজারের রোল বদলাবেন?',
                 message: 'নির্বাচিত ' + count + ' জন ইউজারের রোল "' + (roleLabels[role] || role) + '" হবে।',
                 tone: 'warn',
@@ -415,7 +417,7 @@
                 ],
                 confirm: (roleLabels[role] || role) + ' করুন',
             },
-            trash: {
+            bulk_trash: {
                 title: count + ' জন ইউজার ট্র্যাশে পাঠাবেন?',
                 message: 'নির্বাচিত ' + count + ' জন ইউজার ট্র্যাশে চলে যাবে।',
                 tone: 'danger',
@@ -425,7 +427,7 @@
                 ],
                 confirm: 'ট্র্যাশে পাঠান',
             },
-            restore: {
+            bulk_restore: {
                 title: count + ' জন ইউজার ফিরিয়ে আনবেন?',
                 message: 'নির্বাচিত ট্র্যাশে থাকা ' + count + ' জন ইউজার আবার দেখা যাবে।',
                 tone: 'neutral',

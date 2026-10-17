@@ -72,6 +72,14 @@ final class AdminBulkStatusCest
             $source,
             'Four actions share the bar, so the choice lives in one `action` select.',
         );
+        Assert::assertSame(
+            ['bulk_status', 'bulk_role', 'bulk_trash', 'bulk_restore'],
+            $this->bulkActionValues($source),
+            'The chosen option is posted as `do`, so the bar must offer the exact verbs '
+                . 'AdminUsersAction branches on. A bare "status"/"trash" reaches no bulk path: the '
+                . 'request falls through to the single-row branch, finds no user_id, and silently '
+                . 'changes nothing — which is how this bar shipped dead.',
+        );
         Assert::assertMatchesRegularExpression(
             '/<input type="checkbox" data-bulk form="user-bulk-form" value="\d+"/',
             $source,
@@ -146,13 +154,20 @@ final class AdminBulkStatusCest
             $source,
             '`do` rides on the submit button so the four legs can share one form.',
         );
+        Assert::assertSame(
+            ['bulk_status', 'bulk_role', 'bulk_trash', 'bulk_restore'],
+            $this->bulkActionValues($source),
+            'The roster bar posts its option values as `do` too, so they must be the verbs '
+                . 'AdminStaffAction branches on. A bare "status" is read as the single-row '
+                . 'suspend, which finds no id and answers "স্টাফ অ্যাকাউন্ট পাওয়া যায়নি।".',
+        );
         Assert::assertMatchesRegularExpression(
             '/<input type="checkbox" data-bulk form="staff-bulk-form" value="\d+"/',
             $source,
             'Each roster row posts its own id through the form attribute.',
         );
         Assert::assertMatchesRegularExpression(
-            '/<option value="trash">ট্র্যাশে পাঠান<\/option>/',
+            '/<option value="bulk_trash">ট্র্যাশে পাঠান<\/option>/',
             $source,
             'A superadmin sees the trash leg; each page speaks its own vocabulary.',
         );
@@ -517,6 +532,93 @@ final class AdminBulkStatusCest
         Assert::assertSame('staff', $this->roleOf($bystander), 'The bystander proves the refusal happened before any row was touched.');
     }
 
+    public function everyVerbTheBarOffersMovesAUser(WebTester $I): void
+    {
+        $I->wantTo('send the bar\'s own option values as `do` and have each one land.');
+        $id = $this->plantUser('user', 'active');
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/users');
+        $source = $this->flat($I->grabPageSource());
+        $csrf = $I->grabAttributeFrom('#user-bulk-form input[name="_csrf"]', 'value');
+
+        // Read the verbs out of the rendered page rather than repeating them, so
+        // a bar that offers one the action does not know fails here instead of
+        // shipping.
+        $verbs = $this->bulkActionValues($source);
+
+        // One row, four legs, in the order the bar can apply them: suspend,
+        // promote, trash, restore. Each step asserts the row moved, so a verb
+        // the server drops is caught instead of passing as "no error".
+        $legs = [
+            'bulk_status' => ['status' => 'disabled'],
+            'bulk_role' => ['role' => 'staff'],
+            'bulk_trash' => ['deleted' => true],
+            'bulk_restore' => ['deleted' => false],
+        ];
+
+        Assert::assertSame(
+            array_keys($legs),
+            $verbs,
+            'The bar must offer exactly the legs exercised below, in order.',
+        );
+
+        foreach ($legs as $verb => $expected) {
+            // Both targets travel with every leg, exactly as the bar posts them.
+            $I->sendAjaxPostRequest('/admin/users', [
+                '_csrf' => $csrf,
+                'do' => $verb,
+                'ids' => [$id],
+                'status' => 'disabled',
+                'role' => 'staff',
+            ]);
+
+            foreach ($expected as $field => $value) {
+                $actual = match ($field) {
+                    'deleted' => $this->deletedAtOf($id) !== null,
+                    'status' => $this->statusOf($id),
+                    default => $this->roleOf($id),
+                };
+
+                Assert::assertSame(
+                    $value,
+                    $actual,
+                    "The bar offers `do={$verb}`, so posting it must move the row. An unchanged row "
+                        . 'means the verb fell through to the single-row branch and did nothing.',
+                );
+            }
+        }
+    }
+
+    public function theStaffRestoreAllButtonRestoresTheRoster(WebTester $I): void
+    {
+        $I->wantTo('use "সব স্টাফ ফিরিয়ে আনুন", which posts id=0 and used to answer "not found".');
+        $id = $this->plantUser('staff', 'active');
+
+        $this->signIn($I);
+        $I->amOnPage('/admin/staff');
+        $csrf = $I->grabAttributeFrom('meta[name="_csrf"]', 'content');
+
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'bulk_trash',
+            'ids' => [$id],
+        ]);
+        Assert::assertNotNull($this->deletedAtOf($id), 'The row must start trashed or the restore proves nothing.');
+
+        // Exactly what the template's button posts.
+        $I->sendAjaxPostRequest('/admin/staff', [
+            '_csrf' => $csrf,
+            'do' => 'restore_all',
+            'id' => '0',
+        ]);
+
+        Assert::assertNull(
+            $this->deletedAtOf($id),
+            'restore_all names no subject, so it must answer before the subject lookup.',
+        );
+    }
+
     /** A live row under the plant prefix, so cleanup can find it by prefix. */
     private function plantUser(string $role, string $status, ?string $password = null, ?string $username = null): int
     {
@@ -605,6 +707,20 @@ final class AdminBulkStatusCest
         preg_match('/<input type="checkbox" form="user-bulk-form" x-bind:checked="all"[^>]*>/', $source, $m);
 
         return $m[0] ?? '';
+    }
+
+    /**
+     * The action verbs the bulk bar offers, in markup order, skipping the empty
+     * "choose an action" placeholder.
+     *
+     * @return list<string>
+     */
+    private function bulkActionValues(string $flatSource): array
+    {
+        preg_match('/<select x-model="action"[^>]*>(.*?)<\/select>/', $flatSource, $select);
+        preg_match_all('/<option value="([^"]*)"/', $select[1] ?? '', $options);
+
+        return array_values(array_filter($options[1] ?? [], static fn (string $v): bool => $v !== ''));
     }
 
     private function db(): ConnectionInterface
