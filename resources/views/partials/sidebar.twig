@@ -1,27 +1,23 @@
 {# Sidebar navigation — shared by desktop + mobile drawer #}
 <nav class="px-3 py-4" aria-label="সাইডবার">
-    <p class="px-3 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">সার্ভিস</p>
-
     {% set groups = [
         {
             label: 'সার্ভিস হাব',
-            icon: 'layout-grid',
             items: [
-                { label: 'ড্যাশবোর্ড', href: '/dashboard', icon: 'home', match: 'dashboard' },
-                { label: 'সকল সার্ভিস', href: '/services', icon: 'layers', match: 'services' },
-                { label: 'সার্ভিস হিস্ট্রি', href: '/service-history', icon: 'history', match: 'service-history' },
-                { label: 'অ্যান্ড্রয়েড অ্যাপ', href: '/app', icon: 'smartphone', match: 'app' },
+                { label: 'ড্যাশবোর্ড', href: '/dashboard', icon: 'home' },
+                { label: 'সকল সার্ভিস', href: '/services', icon: 'layers' },
+                { label: 'সার্ভিস হিস্ট্রি', href: '/service-history', icon: 'history' },
+                { label: 'অ্যান্ড্রয়েড অ্যাপ', href: '/app', icon: 'smartphone' },
             ],
         },
         {
             label: 'অ্যাকাউন্ট',
-            icon: 'user',
             items: [
-                { label: 'প্রোফাইল', href: '/profile', icon: 'user-circle', match: 'profile' },
-                { label: 'রিচার্জ', href: '/recharge', icon: 'wallet', match: 'recharge' },
-                { label: 'লেনদেন', href: '/transactions', icon: 'receipt', match: 'transactions' },
-                { label: 'রেফারেল', href: '/referrals', icon: 'gift', match: 'referrals' },
-                { label: 'নোটিফিকেশন', href: '/notifications', icon: 'bell', match: 'notifications' },
+                { label: 'প্রোফাইল', href: '/profile', icon: 'user-circle' },
+                { label: 'রিচার্জ', href: '/recharge', icon: 'wallet' },
+                { label: 'লেনদেন', href: '/transactions', icon: 'receipt' },
+                { label: 'রেফারেল', href: '/referrals', icon: 'gift' },
+                { label: 'নোটিফিকেশন', href: '/notifications', icon: 'bell' },
             ],
         },
     ] %}
@@ -33,87 +29,126 @@
         {% set adminMonitoring = [] %}
 
         {% if can_access(identity, 'admin') %}
-            {% set adminManagement = adminManagement|merge([{ label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge', match: 'admin' }]) %}
+            {% set adminManagement = adminManagement|merge([{ label: 'অ্যাডমিন প্যানেল', href: '/admin', icon: 'gauge' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-services') %}
-            {% set adminManagement = adminManagement|merge([{ label: 'সার্ভিস ম্যানেজমেন্ট', href: '/admin/services', icon: 'sparkles', match: 'admin-services' }]) %}
+            {% set adminManagement = adminManagement|merge([{ label: 'সার্ভিস ম্যানেজমেন্ট', href: '/admin/services', icon: 'sparkles' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-categories') %}
-            {% set adminManagement = adminManagement|merge([{ label: 'বিভাগ ম্যানেজমেন্ট', href: '/admin/categories', icon: 'layers', match: 'admin-categories' }]) %}
+            {% set adminManagement = adminManagement|merge([{ label: 'বিভাগ ম্যানেজমেন্ট', href: '/admin/categories', icon: 'layers' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-staff') %}
-            {% set adminManagement = adminManagement|merge([{ label: 'স্টাফ পরিচালনা', href: '/admin/staff', icon: 'users', match: 'admin-staff' }]) %}
+            {% set adminManagement = adminManagement|merge([{ label: 'স্টাফ পরিচালনা', href: '/admin/staff', icon: 'users' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-users') %}
-            {% set adminManagement = adminManagement|merge([{ label: 'ইউজার ম্যানেজমেন্ট', href: '/admin/users', icon: 'user-plus', match: 'admin-users' }]) %}
+            {% set adminManagement = adminManagement|merge([{ label: 'ইউজার ম্যানেজমেন্ট', href: '/admin/users', icon: 'user-plus' }]) %}
         {% endif %}
 
         {% if can_access(identity, 'admin-orders') %}
-            {% set adminManagement = adminManagement|merge([{ label: 'সার্ভিস অর্ডার', href: '/admin/orders', icon: 'inbox', match: 'admin-orders' }]) %}
+            {% set adminManagement = adminManagement|merge([{ label: 'সার্ভিস অর্ডার', href: '/admin/orders', icon: 'inbox' }]) %}
         {% endif %}
 
         {% if can_access(identity, 'admin-ledger') %}
-            {% set adminFinance = adminFinance|merge([{ label: 'আমার হিসাব', href: '/admin/ledger', icon: 'receipt', match: 'admin-ledger' }]) %}
+            {% set adminFinance = adminFinance|merge([{ label: 'আমার হিসাব', href: '/admin/ledger', icon: 'receipt' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-topups') %}
-            {% set adminFinance = adminFinance|merge([{ label: 'রিচার্জ অনুরোধ', href: '/admin/topups', icon: 'wallet', match: 'topups' }]) %}
+            {% set adminFinance = adminFinance|merge([{ label: 'রিচার্জ অনুরোধ', href: '/admin/topups', icon: 'wallet' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-withdraws') %}
-            {% set adminFinance = adminFinance|merge([{ label: 'উত্তোলন অনুরোধ', href: '/admin/withdraws', icon: 'send', match: 'admin-withdraws' }]) %}
+            {% set adminFinance = adminFinance|merge([{ label: 'উত্তোলন অনুরোধ', href: '/admin/withdraws', icon: 'send' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-referrals') %}
-            {% set adminFinance = adminFinance|merge([{ label: 'রেফারেল', href: '/admin/referrals', icon: 'gift', match: 'admin-referrals' }]) %}
+            {% set adminFinance = adminFinance|merge([{ label: 'রেফারেল', href: '/admin/referrals', icon: 'gift' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-transactions') %}
-            {% set adminFinance = adminFinance|merge([{ label: 'লেনদেন ইতিহাস', href: '/admin/transactions', icon: 'receipt', match: 'admin-transactions' }]) %}
+            {% set adminFinance = adminFinance|merge([{ label: 'লেনদেন ইতিহাস', href: '/admin/transactions', icon: 'receipt' }]) %}
         {% endif %}
 
         {% if can_access(identity, 'admin-settings-edit') %}
-            {% set adminSettings = adminSettings|merge([{ label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings', match: 'settings' }]) %}
+            {% set adminSettings = adminSettings|merge([{ label: 'সাইট সেটিংস', href: '/admin/settings', icon: 'settings' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-role-hierarchy') %}
-            {% set adminSettings = adminSettings|merge([{ label: 'ভূমিকার পদক্ষেপ', href: '/admin/role-hierarchy', icon: 'layers', match: 'admin-role-hierarchy' }]) %}
+            {% set adminSettings = adminSettings|merge([{ label: 'ভূমিকার পদক্ষেপ', href: '/admin/role-hierarchy', icon: 'layers' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-permissions-matrix') %}
-            {% set adminSettings = adminSettings|merge([{ label: 'অনুমতি ম্যাট্রিক্স', href: '/admin/permissions-matrix', icon: 'grid', match: 'admin-permissions-matrix' }]) %}
+            {% set adminSettings = adminSettings|merge([{ label: 'অনুমতি ম্যাট্রিক্স', href: '/admin/permissions-matrix', icon: 'grid' }]) %}
         {% endif %}
 
         {% if can_access(identity, 'admin-logs') %}
-            {% set adminMonitoring = adminMonitoring|merge([{ label: 'অ্যাক্টিভিটি লগ', href: '/admin/activity-logs', icon: 'file-text', match: 'admin-logs' }]) %}
+            {% set adminMonitoring = adminMonitoring|merge([{ label: 'অ্যাক্টিভিটি লগ', href: '/admin/activity-logs', icon: 'file-text' }]) %}
         {% endif %}
         {% if can_access(identity, 'admin-notifications') %}
-            {% set adminMonitoring = adminMonitoring|merge([{ label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring', match: 'admin-notifications' }]) %}
+            {% set adminMonitoring = adminMonitoring|merge([{ label: 'নোটিফিকেশন কিউ', href: '/admin/notifications', icon: 'bell-ring' }]) %}
         {% endif %}
 
-        {% set groups = groups|merge([
-            { label: 'পরিচালনা', icon: 'shield', items: adminManagement },
-            { label: 'অর্থনীতি', icon: 'wallet', items: adminFinance },
-            { label: 'সেটিংস', icon: 'settings', items: adminSettings },
-            { label: 'নিরীক্ষণ', icon: 'activity', items: adminMonitoring },
-        ]) %}
+        {# Only the groups that ended up with something in them. A permission set
+           that reaches one admin area and not the others would otherwise leave
+           three empty headers on screen — labels that promise pages and have
+           none, which reads as a broken menu rather than a restricted one. #}
+        {% if adminManagement is not empty %}
+            {% set groups = groups|merge([{ label: 'পরিচালনা', items: adminManagement }]) %}
+        {% endif %}
+        {% if adminFinance is not empty %}
+            {% set groups = groups|merge([{ label: 'অর্থনীতি', items: adminFinance }]) %}
+        {% endif %}
+        {% if adminSettings is not empty %}
+            {% set groups = groups|merge([{ label: 'সেটিংস', items: adminSettings }]) %}
+        {% endif %}
+        {% if adminMonitoring is not empty %}
+            {% set groups = groups|merge([{ label: 'নিরীক্ষণ', items: adminMonitoring }]) %}
+        {% endif %}
     {% endif %}
 
+    {# Which link is "you are here", resolved once up front: each group needs to
+       know whether it holds that link (to decide if it starts open) and each
+       link needs it for its own state. Prefix match, except for '/admin' —
+       every admin page starts with it, so highlighting the dashboard link on
+       all of them makes the active item useless. #}
+    {% set resolved = [] %}
     {% for group in groups %}
-        <div class="mb-1" x-data="{ open: true }">
-            <button @click="open = !open" class="sidebar-group-header" aria-expanded="true">
-                <span class="flex items-center gap-2.5">
-                    {{ icon(group.icon, 'w-4 h-4 sidebar-group-icon') }}
-                    {{ group.label }}
-                </span>
-                <svg class="sidebar-chevron" :class="{ open: 'rotate-180' }" aria-hidden="true">
+        {% set items = [] %}
+        {% set holdsActive = false %}
+        {% for item in group.items %}
+            {% set isActive = currentPath is defined and (
+                currentPath == item.href or (item.href != '/admin' and currentPath starts with item.href)
+            ) %}
+            {% if isActive %}
+                {% set holdsActive = true %}
+            {% endif %}
+            {% set items = items|merge([{
+                label: item.label,
+                href: item.href,
+                icon: item.icon,
+                active: isActive,
+            }]) %}
+        {% endfor %}
+        {% set resolved = resolved|merge([{
+            label: group.label,
+            items: items,
+            holdsActive: holdsActive,
+        }]) %}
+    {% endfor %}
+
+    {# A six-group admin menu rendered fully open is about 1478px of nav in an
+       ~830px column, which puts the page you are on — and usually the links
+       around it — below the fold. So each group starts closed unless it holds
+       the current page. Collapsing is still the visitor's to undo. #}
+    {% for group in resolved %}
+        <div class="sidebar-group" x-data="{ open: {{ group.holdsActive ? 'true' : 'false' }} }">
+            <button type="button" @click="open = !open" class="sidebar-group-header"
+                    :class="{ 'sidebar-group-header-open': open }" :aria-expanded="open.toString()">
+                {{ group.label }}
+                <svg class="sidebar-chevron" :class="{ 'rotate-180': open }" aria-hidden="true">
                     <use href="/assets/icons/lucide-sprite.svg#chevron-down"></use>
                 </svg>
             </button>
+            {# x-transition rather than x-collapse: the collapse plugin is not in
+               the vendored Alpine bundle, so that directive would silently do
+               nothing and the group would snap open. #}
             <div x-show="open" x-transition class="sidebar-items">
                 {% for item in group.items %}
-                    {# Prefix match, except for '/admin' — every admin page starts with
-                       it, so highlighting the dashboard link on all of them makes the
-                       active item useless. #}
-                    {% set isActive = currentPath is defined and (
-                        currentPath == item.href or (item.href != '/admin' and currentPath starts with item.href)
-                    ) %}
-                    <a href="{{ item.href }}" class="nav-link {{ isActive ? 'nav-link-active' }}" {% if isActive %}aria-current="page"{% endif %}>
-                        {{ icon(item.icon, 'w-4 h-4') }} {{ item.label }}
+                    <a href="{{ item.href }}" class="nav-link {{ item.active ? 'nav-link-active' }}" {% if item.active %}aria-current="page"{% endif %}>
+                        {{ icon(item.icon, 'w-4 h-4 shrink-0') }} <span class="truncate">{{ item.label }}</span>
                     </a>
                 {% endfor %}
             </div>
@@ -121,9 +156,9 @@
     {% endfor %}
 
     <div class="sidebar-help-card">
-        <p class="text-xs font-medium text-primary-800 flex items-center justify-center gap-1.5">
-            {{ icon('lightbulb', 'w-3.5 h-3.5') }} সহায়তা
+        <p class="text-xs font-medium text-neutral-700 flex items-center justify-center gap-1.5">
+            {{ icon('lightbulb', 'w-3.5 h-3.5 shrink-0') }} সহায়তা
         </p>
-        <p class="mt-1 text-[11px] leading-relaxed text-primary-700/80">অর্ডারের জন্য দেওয়া তথ্য সুরক্ষিত রাখা হয়। কোনো সমস্যা হলে সাপোর্টে যোগাযোগ করুন।</p>
+        <p class="mt-1 text-[11px] leading-relaxed text-neutral-500">অর্ডারের জন্য দেওয়া তথ্য সুরক্ষিত রাখা হয়। কোনো সমস্যা হলে সাপোর্টে যোগাযোগ করুন।</p>
     </div>
 </nav>

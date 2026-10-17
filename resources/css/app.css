@@ -289,8 +289,11 @@
       transition-colors duration-150 hover:bg-primary-50 hover:text-primary-700
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
   }
+  /* `relative` is load-bearing: it is what the rail below is positioned against.
+     The geometry itself lives in the ::before rule, which is more specific than
+     any utility an @apply here could set, so it must not be duplicated inline. */
   .nav-link-active {
-    @apply bg-primary-50 text-primary-700 font-semibold relative before:absolute before:inset-0 before:bg-primary-50;
+    @apply relative bg-primary-50 text-primary-700 font-semibold;
   }
   .nav-link-active::before {
     content: '';
@@ -304,32 +307,46 @@
     border-radius: 0 2px 2px 0;
   }
 
+  /* Sidebar groups. The hairline is an adjacent-sibling rule so it never draws
+     above the first group, and the icon that used to sit beside the label is
+     gone: six coloured glyphs up the column spent the same accent the active
+     row needs, and the divider already says where one group ends. */
+  .sidebar-group {
+    @apply mb-1;
+  }
+  .sidebar-group + .sidebar-group {
+    @apply mt-4 border-t border-neutral-100 pt-4;
+  }
+
   /* Sidebar group headers */
   .sidebar-group-header {
-    @apply tap-target flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-neutral-700
-      hover:bg-neutral-50 transition-colors duration-150;
+    @apply tap-target flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-neutral-500
+      transition-colors duration-150 hover:bg-neutral-50 hover:text-neutral-700
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
   }
-  .sidebar-group-header:hover .sidebar-group-icon {
-    @apply text-primary-600;
-  }
-  .sidebar-group-icon {
-    @apply w-4 h-4 text-primary-600 transition-colors duration-150;
+  /* The group holding the current page: darker than its neighbours, so the eye
+     lands on the section the visitor is in before it lands on the link. */
+  .sidebar-group-header-open {
+    @apply text-neutral-800;
   }
   .sidebar-chevron {
-    @apply h-4 w-4 text-neutral-400 transition-transform duration-200;
+    @apply h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200;
   }
   .sidebar-chevron.rotate-180 {
     transform: rotate(180deg);
   }
 
-  /* Sidebar items container */
+  /* Sidebar items container. The slide-down replays on every x-show toggle
+     (display none -> block), which is what gives the group its open/close
+     movement without the collapse plugin. */
   .sidebar-items {
     @apply mt-0.5 space-y-0.5 animate-slide-down;
   }
 
-  /* Help card */
+  /* Help card — a static footnote, so it recedes rather than competing with the
+     links above it for the same green. */
   .sidebar-help-card {
-    @apply mt-6 rounded-xl bg-primary-50 p-4 text-center border border-primary-100
+    @apply mt-6 rounded-xl bg-neutral-50 p-4 text-center border border-neutral-200
       animate-fade-in;
   }
 
