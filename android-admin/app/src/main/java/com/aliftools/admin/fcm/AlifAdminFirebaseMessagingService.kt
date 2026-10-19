@@ -10,31 +10,26 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.aliftools.admin.MainActivity
 import com.aliftools.admin.R
+import com.aliftools.admin.data.local.NotificationRetryHandler
 import com.aliftools.admin.data.repository.AdminRepository
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.MainCoroutineDispatcher
+import kotlinx.coroutines.android.viewModelScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Receives data messages and turns them into a tappable notification.
- *
- * A data-only message always arrives here — foreground or background — and
- * the system never displays those on its own, so doing nothing would mean
- * the push pipeline silently swallows every alert while the app is not
- * on screen. The `route` field (validated against the real destinations
- * when MainActivity reads it) is what makes the tap land on the screen the
- * alert is about instead of the dashboard.
- */
 @AndroidEntryPoint
 class AlifAdminFirebaseMessagingService : FirebaseMessagingService() {
 
     @Inject
     lateinit var repository: AdminRepository
+
+    @Inject
+    lateinit var notificationRetryHandler: NotificationRetryHandler
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -52,6 +47,7 @@ class AlifAdminFirebaseMessagingService : FirebaseMessagingService() {
         val body = data["body"] ?: message.notification?.body
         if (body.isNullOrBlank()) return
 
+        // Attempt to show the notification; if fails, queue for retry
         showNotification(
             title = title,
             body = body,
@@ -96,7 +92,27 @@ class AlifAdminFirebaseMessagingService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             .build()
 
-        manager.notify(id, notification)
+        // Try to notify immediately; if fails, queue for retry
+        try {
+            manager.notify(id, notification)
+        } catch (e: Exception) {
+            // Notification failed (e.g., permission denied, channel error)
+            val payload = mapOf(
+                "title" to title,
+                "body" to body,
+                "route" to route,
+                "id" to id.toString()
+            )
+            val jsonPayload = payload.toString()
+            notificationRetryHandler.addFailedNotification(
+                notificationId = id,
+                payload = jsonPayload,
+                route = route,
+                title = title,
+                body = body
+            )
+            Log.w(TAG, "Initial notification failed, queued for retry", e)
+        }
     }
 
     override fun onNewToken(token: String) {
@@ -115,4 +131,4 @@ class AlifAdminFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "AlifAdminFCM"
     }
-}
+}

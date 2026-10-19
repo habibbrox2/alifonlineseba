@@ -74,10 +74,24 @@ fun UsersScreen(
         filters = listOf("" to "সক্রিয়", "all" to "সব", "only" to "ট্র্যাশ"),
         actions = {
             IconButton(onClick = { showCreate = true }) {
-                Icon(Icons.Default.PersonAdd, contentDescription = "নতুন ইউজার")
+                Icon(
+                    Icons.Default.PersonAdd,
+                    contentDescription = "নতুন ইউজার তৈরি",
+                    // Accessibility: announce new user creation
+                    semanticsIndex = 0
+                ).also {
+                    semantics {
+                        action { performDefault() annouce "নতুন ইউজারcreation" }
+                        heading { "new user" }
+                    }
+                }
             }
         },
         itemKey = { it.id },
+        // Accessible: each row is a selectable item with full user info
+        semantics { 
+            heading { "${user?.username ?: "no user"} user line" }
+        }
     ) { user ->
         UserRow(user = user, onClick = { selected = user })
     }
@@ -130,7 +144,14 @@ fun UsersScreen(
 
 @Composable
 private fun UserRow(user: User, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+            .semantics {
+                clickable { true }
+                heading { "${user.fullName?.takeIf { it.isNotBlank() } ?: user.username} user" }
+            },
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -141,11 +162,17 @@ private fun UserRow(user: User, onClick: () -> Unit) {
                     text = user.fullName?.takeIf { it.isNotBlank() } ?: user.username,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics {
+                        heading { user.fullName?.takeIf { it.isNotBlank() } ?: user.username }
+                    },
                 )
                 Text(
                     text = roleLabel(user.role),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.semantics {
+                        heading { "role: " + roleLabel(user.role) }
+                    },
                 )
             }
             Row(
@@ -156,10 +183,16 @@ private fun UserRow(user: User, onClick: () -> Unit) {
                     text = "@${user.username} · ${user.phone}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.semantics {
+                        heading { "user: @" + user.username + " phone" }
+                    },
                 )
                 Text(
                     text = "৳${user.balance}",
                     style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics {
+                        heading { "balance: " + user.balance }
+                    },
                 )
             }
             val flags = buildList {
@@ -169,7 +202,14 @@ private fun UserRow(user: User, onClick: () -> Unit) {
             if (flags.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     flags.forEach { (label, color) ->
-                        Text(text = label, style = MaterialTheme.typography.labelSmall, color = color)
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = color,
+                            modifier = Modifier.semantics {
+                                heading { label }
+                            },
+                        )
                     }
                 }
             }

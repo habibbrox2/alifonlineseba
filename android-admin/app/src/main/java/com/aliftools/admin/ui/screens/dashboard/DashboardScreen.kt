@@ -27,11 +27,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Semantics
+import androidx.compose.ui.algorithms.TextStyle
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.rememberContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.content.Intent
 import android.net.Uri
@@ -75,33 +79,88 @@ fun DashboardScreen(
         onSnackShown = viewModel::clearSnack,
         actions = {
             IconButton(onClick = viewModel::logout, enabled = !busy) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "লগআউট")
+                Icon(
+                    Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = "লগআউট",
+                    // Accessibility: high contrast icon, announce action
+                    semanticsIndex = 0
+                ).also {
+                    semantics {
+                        action { performDefault() annouce "লগআউট বাটন pressed" }
+                        button { "logout" }
+                    }
+                }
             }
         },
     ) { padding ->
         when (state) {
             is DashboardUiState.Loading -> {
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxSize().padding(padding)
+                        .semantics {
+                            heading { "ড্যাশবোর্ড লোডিং" }
+                        }
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(
+                        // Accessible: spinner state for screen readers
+                        modifier = Modifier.semantics {
+                            contentDescription = "লোডিং indicator"
+                        }
+                    }
                 }
             }
 
             is DashboardUiState.Error -> {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                Card(
+                    modifier = Modifier.fillMaxSize().padding(padding).semantics {
+                        heading { "ত্রুটি: " + (state as DashboardUiState.Error).message }
+                        button { "error card" }
+                    },
+                    elevation = 8.dp,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
                 ) {
-                    Text(
-                        text = (state as DashboardUiState.Error).message,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    Button(onClick = { viewModel.load() }, modifier = Modifier.padding(top = 8.dp)) {
-                        Text("পুনরায় চেষ্টা করুন")
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = (state as DashboardUiState.Error).message,
+                            color = MaterialTheme.colorScheme.onError,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.semantics {
+                                heading { "ত্রুটিরinformation" }
+                            },
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(top = 8.dp),
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                        // Accessible action buttons
+                        Row(
+                            verticalArrangement = Arrangement.Center,
+                            horizontalArrangement = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(top = 16.dp).semantics {
+                                button { "পুনরায় চেষ্টা করুন retry" }
+                                button { "ত্রুটির বিচার details" }
+                            }
+                        ) {
+                            Button(onClick = { viewModel.load() }) {
+                                Text("পুনরায় চেষ্টা করুন")
+                                    .semantics {
+                                        button { "retry loading" }
+                                    }
+                            }
+                            Button(onClick = { /* Navigate to logs to see error details */ }) {
+                                Text("ত্রুটির বিচার")
+                                    .semantics {
+                                        button { "view error details" }
+                                    }
+                            }
+                        }
                     }
                 }
             }
@@ -113,10 +172,13 @@ fun DashboardScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    // Update card with accessibility
                     update?.let { av ->
                         item {
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().semantics {
+                                    heading { "আপডেট উপলব্ধ update available" }
+                                },
                                 shape = MaterialTheme.shapes.large,
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
@@ -124,13 +186,18 @@ fun DashboardScreen(
                                         text = "একটি নতুন আপডেট উপলব্ধ: ${av.versionName}",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.semantics {
+                                            heading { "update version" }
+                                        },
                                     )
                                     if (!av.releaseNotes.isNullOrBlank()) {
                                         Text(
                                             text = av.releaseNotes,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 6.dp),
+                                            modifier = Modifier.padding(top = 6.dp).semantics {
+                                                body { "release notes" }
+                                            },
                                         )
                                     }
                                     Button(
@@ -139,11 +206,17 @@ fun DashboardScreen(
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                                         },
                                         modifier = Modifier.padding(top = 8.dp),
-                                    ) { Text("আপডেট করুন") }
+                                    ) {
+                                        Text("আপডেট করুন")
+                                            .semantics {
+                                                button { "download and install update" }
+                                            }
+                                    }
                                 }
                             }
                         }
                     }
+
                     item {
                         MetricGrid(
                             userCount = data.userCount,
@@ -152,9 +225,9 @@ fun DashboardScreen(
                             unresolvedAmount = data.unresolvedAmount,
                         )
                     }
+
                     if (updateRequired && update != null) {
                         item {
-                            val av = update!!
                             AlertDialog(
                                 onDismissRequest = {},
                                 title = { Text("আপডেট প্রয়োজন") },
@@ -169,27 +242,12 @@ fun DashboardScreen(
                             )
                         }
                     }
-                    item {
-                        QuickActions(
-                            // The backend 403s these anyway; hiding them just
-                            // keeps a staff operator from meeting a wall.
-                            showSuperAdmin = role == "superadmin",
-                            onUsers = onNavigateToUsers,
-                            onOrders = onNavigateToOrders,
-                            onRecharges = onNavigateToRecharges,
-                            onWithdraws = onNavigateToWithdraws,
-                            onSettings = onNavigateToSettings,
-                            onLogs = onNavigateToLogs,
-                            onNotifications = onNavigateToNotifications,
-                            onStaff = onNavigateToStaff,
-                        )
-                    }
                 }
             }
 
             else -> { /* Idle */ }
         }
-    }
+    )
 }
 
 @Composable
@@ -197,16 +255,46 @@ private fun MetricGrid(
     userCount: Int,
     openOrders: Int,
     unresolvedCount: Int,
-    unresolvedAmount: String
+    unresolvedAmount: String,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetricCard(title = "মোট ইউজার", value = userCount.toString(), modifier = Modifier.weight(1f))
-            MetricCard(title = "অ্যাক্টিভ অর্ডার", value = openOrders.toString(), modifier = Modifier.weight(1f))
+    // Accessible: proper heading structure and labels
+    Semantics(
+        container = true,
+        heading = {
+            "অ্যাডমিন ড্যাশবোর্ড metrics"
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetricCard(title = "পেন্ডিং রিচার্জ", value = unresolvedCount.toString(), modifier = Modifier.weight(1f))
-            MetricCard(title = "অনরক্ষিত Amount", value = unresolvedAmount, modifier = Modifier.weight(1f))
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MetricCard(
+                    title = "মোট ইউজার",
+                    value = userCount.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                MetricCard(
+                    title = "অ্যাক্টিভ অর্ডার",
+                    value = openOrders.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MetricCard(
+                    title = "পেন্ডিং রিচার্জ",
+                    value = unresolvedCount.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                MetricCard(
+                    title = "অনরক্ষিত Amount",
+                    value = unresolvedAmount,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
@@ -214,7 +302,11 @@ private fun MetricGrid(
 @Composable
 private fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
     Card(
-        modifier = modifier,
+        modifier = modifier
+            .semantics {
+                // Accessible: card is a summary region
+                heading { "$title: " + value }
+            },
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -228,6 +320,9 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
                 text = title,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics {
+                    heading { title }
+                },
             )
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 6.dp),
@@ -237,6 +332,9 @@ private fun MetricCard(title: String, value: String, modifier: Modifier = Modifi
                 text = value,
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics {
+                    heading { value }
+                },
             )
         }
     }
@@ -252,32 +350,177 @@ private fun QuickActions(
     onSettings: () -> Unit,
     onLogs: () -> Unit,
     onNotifications: () -> Unit,
-    onStaff: () -> Unit
+    onStaff: () -> Unit,
 ) {
     // Filled for the two queues an operator checks most (users, orders),
     // tonal for the rest — a wall of identical buttons hides the priority.
     val primary = ButtonDefaults.buttonColors()
     val tonal = ButtonDefaults.filledTonalButtonColors()
+
+    // Ensure minimum 48dp touch target accessibility
+    val minTouchTarget = 48.dp
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = onUsers, colors = primary, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("ইউজার") }
-            Button(onClick = onOrders, colors = primary, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("অর্ডার") }
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .semantics {
+                    // Group of related actions
+                    direction { Axis.Horizontal }
+                },
+        ) {
+            Button(
+                onClick = onUsers,
+                colors = primary,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(minTouchTarget)
+                    .semantics {
+                        button { "users section" }
+                    },
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text("ইউজার")
+                    .semantics {
+                        heading { "users" }
+                    }
+            }
+            Button(
+                onClick = onOrders,
+                colors = primary,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(minTouchTarget)
+                    .semantics {
+                        button { "orders section" }
+                    },
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text("অর্ডার")
+                    .semantics {
+                        heading { "orders" }
+                    }
+            }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = onRecharges, colors = tonal, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("রিচার্জ") }
-            Button(onClick = onLogs, colors = tonal, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("লগ") }
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .semantics {
+                    direction { Axis.Horizontal }
+                },
+        ) {
+            Button(
+                onClick = onRecharges,
+                colors = tonal,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(minTouchTarget)
+                    .semantics {
+                        button { "recharges section" }
+                    },
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text("রিচার্জ")
+                    .semantics {
+                        heading { "recharges" }
+                    }
+            }
+            Button(
+                onClick = onLogs,
+                colors = tonal,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(minTouchTarget)
+                    .semantics {
+                        button { "logs section" }
+                    },
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text("লগ")
+                    .semantics {
+                        heading { "logs" }
+                    }
+            }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = onNotifications, colors = tonal, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("নোটিফিকেশন") }
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .semantics {
+                    direction { Axis.Horizontal }
+                },
+        ) {
+            Button(
+                onClick = onNotifications,
+                colors = tonal,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(minTouchTarget)
+                    .semantics {
+                        button { "notifications section" }
+                    },
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text("নোটিফিকেশন")
+                    .semantics {
+                        heading { "notifications" }
+                    }
+            }
             if (showSuperAdmin) {
-                Button(onClick = onStaff, colors = tonal, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("স্টাফ") }
+                Button(
+                    onClick = onStaff,
+                    colors = tonal,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(minTouchTarget)
+                        .semantics {
+                            button { "staff section" }
+                        },
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text("স্টাফ")
+                        .semantics {
+                            heading { "staff" }
+                        }
+                }
             }
         }
         if (showSuperAdmin) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onWithdraws, colors = tonal, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("উত্তোলন") }
-                Button(onClick = onSettings, colors = tonal, modifier = Modifier.weight(1f).height(44.dp), shape = MaterialTheme.shapes.medium) { Text("সেটিংস") }
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .semantics {
+                        direction { Axis.Horizontal }
+                    },
+            ) {
+                Button(
+                    onClick = onWithdraws,
+                    colors = tonal,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(minTouchTarget)
+                        .semantics {
+                            button { "withdraws section" }
+                        },
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text("উত্তোলন")
+                        .semantics {
+                            heading { "withdrawals" }
+                        }
+                }
+                Button(
+                    onClick = onSettings,
+                    colors = tonal,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(minTouchTarget)
+                        .semantics {
+                            button { "settings section" }
+                        },
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Text("সেটিংস")
+                        .semantics {
+                            heading { "settings" }
+                        }
+                )
             }
         }
     }
-}
+}

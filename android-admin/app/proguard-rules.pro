@@ -40,3 +40,45 @@
 
 # Compose
 -keep class com.aliftools.admin.BuildConfig { *; }
+
+# Alif Admin - keep all Hilt-related classes
+-keep class com.aliftools.admin.di.** { *; }
+-keepclassmembers class * { @dagger.hilt.android.Hilt class *; }
+-keep @dagger.hilt.android.AndroidEntryPoint class *;
+
+# Retrofit specific keep rules
+-keep interface * retrofit2.http.FormUrlEncoded
+-keep interface * retrofit2.http.multipart.Part
+-keep interface * retrofit2.http.PartMap
+
+# Keep admin API classes
+-keepclassmembers class com.aliftools.admin.data.api.** { *; }
+-keepclassmembers class com.aliftools.admin.data.model.** { *; }
+
+# Keep OkHttp logging interceptor
+-keepclassmembers class * extends okhttp3.Interceptor { *; }
+
+# Keep Coroutine Suspendables
+-keep class * implements kotlin.coroutines.Continuation { *; }
+
+# Keep Enums
+-keepclassmembers enum * {
+    public static ** values();
+    public static ** valueOf();
+}
+
+# Keep Parcelable classes
+-keep @androidx.annotation.Keep class * implements android.os.Parcelable
+-keep @androidx.annotation.Keep class * implements android.os.Parcelable$Creator
+
+# Keep ViewModels
+-keepclassmembers class * extends androidx.lifecycle.ViewModel {
+    public void *getFactory();
+    public void *onCleared();
+}
+
+# Keep Compose UI elements
+-keep @compose.ui.Bindable class *;
+-keep class * extends androidx.compose.ui.View;
+-keep class * extends androidx.compose.foundation.layout.Layer;
+-keep class * extends androidx.compose.foundation.interaction.interaction;

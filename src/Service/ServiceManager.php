@@ -112,6 +112,7 @@ final class ServiceManager
             new MockDigitalFileService(),
             new MockBanglaConverterService(),
             new MockLocalGovService(),
+
         ];
         $this->providers = [];
         foreach ($mocks as $provider) {

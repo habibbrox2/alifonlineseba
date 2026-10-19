@@ -77,9 +77,43 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
         }
     }
 
+    private const val SESSION_TIMEOUT_MILLIS = 15 * 60 * 1000 // 15 minutes
+
     suspend fun setBiometricEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[biometricEnabled] = enabled.toString()
         }
+    }
+
+    /**
+     * Calculates time remaining until token expiry.
+     * Returns millis until expiry, or negative if already expired.
+     */
+    suspend fun timeUntilExpiry(): Long {
+        val expiresAtStr = context.dataStore.data.value[expiresAt]
+        if (expiresAtStr.isNullOrBlank()) return -1L
+        val expiresAt = expiresAtStr.toInstant()
+        val now = Instant.now()
+        val until = expiresAt.millisUntilNow
+        return until
+    }
+
+    /**
+     * Returns whether the token is close to expiry (within the timeout window).
+     */
+    suspend fun isTokenExpiringSoon(): Boolean = timeUntilExpiry() < SESSION_TIMEOUT_MILLIS
+
+    /**
+     * Resets the expiry timer by updating expiresAt to current time + session duration.
+     * Call this on user activity to extend the session.
+     */
+    suspend fun resetExpiry(): String {
+        val calendar = java.util.Calendar.getInstance()
+        calendar.add(java.util.Calendar.MINUTE, 15) // 15-minute session
+        val newExpiry = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'", java.util.Locale.getDefault()).format(calendar.time)
+        context.dataStore.edit { prefs ->
+            prefs[expiresAt] = newExpiry
+        }
+        return newExpiry
     }
 }

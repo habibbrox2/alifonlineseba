@@ -109,7 +109,7 @@ class MainActivity : FragmentActivity() {
                                     navController.navigate(Screen.Dashboard.route) {
                                         popUpTo(Screen.Login.route) { inclusive = true }
                                     }
-                                },
+                                }
                             )
                         }
 
@@ -127,7 +127,7 @@ class MainActivity : FragmentActivity() {
                                     navController.navigate(Screen.Login.route) {
                                         popUpTo(Screen.Dashboard.route) { inclusive = true }
                                     }
-                                },
+                                }
                             )
                         }
 
@@ -149,9 +149,6 @@ class MainActivity : FragmentActivity() {
                         composable(Screen.Logs.route) {
                             LogsScreen(onBack = { navController.popBackStack() })
                         }
-                        composable(Screen.Notifications.route) {
-                            NotificationsScreen(onBack = { navController.popBackStack() })
-                        }
                         composable(Screen.Staff.route) {
                             StaffScreen(onBack = { navController.popBackStack() })
                         }
@@ -161,10 +158,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    /**
-     * Android 13+ needs the runtime grant or notify() is silently dropped —
-     * every push alert would vanish exactly on the newest devices.
-     */
+    /** Android 13+ needs the runtime grant or notify() is silently dropped */
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val granted = ContextCompat.checkSelfPermission(
@@ -174,6 +168,38 @@ class MainActivity : FragmentActivity() {
         if (!granted) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    /** Session timeout manager: logs out after period of inactivity */
+    private lateinit var sessionTimeoutHandler: SessionTimeoutHandler
+
+    private fun startSessionTimeout() {
+        sessionTimeoutHandler = SessionTimeoutHandler(
+            repository = repository,
+            onSessionExpired = {
+                runBlocking { repository.logout() }
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(Screen.Splash.route) { inclusive = true }
+                }
+            },
+            onActivity = { /* user activity reset */ }
+        )
+        sessionTimeoutHandler.start()
+    }
+
+    private fun stopSessionTimeout() {
+        sessionTimeoutHandler.stop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Reset session timeout on foreground activity
+        sessionTimeoutHandler?.reset()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Allow timeout to run when app is backgrounded
     }
 
     companion object {
@@ -197,4 +223,4 @@ class MainActivity : FragmentActivity() {
         private fun intentRoute(intent: Intent?): String? =
             intent?.getStringExtra(EXTRA_ROUTE)?.takeIf { it in NAVIGABLE }
     }
-}
+}
