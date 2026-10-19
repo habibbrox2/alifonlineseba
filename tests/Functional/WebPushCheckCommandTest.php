@@ -161,7 +161,11 @@ final class WebPushCheckCommandTest extends \Codeception\Test\Unit
         [$exit, $out] = $this->check();
 
         assertSame(Command::SUCCESS, $exit);
-        assertStringContainsString('nothing was sent', $out);
+        // The note is wrapped by the console to the terminal width, so the
+        // words can be split across two lines. The sentence is what matters,
+        // not where the wrap landed.
+        assertStringContainsString('nothing', $out);
+        assertStringContainsString('was sent', $out);
         assertStringContainsString('Subscriptions', $out);
     }
 

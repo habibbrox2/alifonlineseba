@@ -113,7 +113,7 @@ final class TwaFingerprintCommand extends Command
         $io->section('TWA_FINGERPRINTS');
         $entries = [];
         foreach ($links->json() as $statement) {
-            /** @var array{sha256_cert_fingerprints: string[]} $target */
+            /** @var array{package_name: string, sha256_cert_fingerprints: string[]} $target */
             $target = $statement['target'];
             foreach ($target['sha256_cert_fingerprints'] as $fingerprint) {
                 $entries[] = $target['package_name'] . '@' . $fingerprint;

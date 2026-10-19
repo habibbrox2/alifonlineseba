@@ -163,7 +163,7 @@ final class ApiTokenRepository
     }
 
     /**
-     * @return array{0: string, 1: string} selector + the hash to STORE
+     * @return array{0: string, 1: string, 2: string} selector, the hash to STORE, and the verifier
      */
     private static function generatePair(): array
     {

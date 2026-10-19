@@ -24,6 +24,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand('app:release:publish', 'Copy an APK into the releases directory and publish its manifest row.')]
 final class AppReleasePublishCommand extends Command
 {
+    public function __construct(
+        private readonly AppReleaseRepository $releases,
+    ) {
+        parent::__construct();
+    }
+
     protected function configure(): void
     {
         $this

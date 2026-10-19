@@ -14,6 +14,7 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\ServerRequest;
 use Psr\Http\Message\ResponseInterface;
 use Yiisoft\Db\Connection\ConnectionInterface;
+use Yiisoft\Router\UrlGeneratorInterface;
 use Yiisoft\Session\SessionInterface;
 use Yiisoft\Aliases\Aliases;
 use Yiisoft\View\WebView;
@@ -78,6 +79,53 @@ final class FirebaseAuthActionTest extends \Codeception\Test\Unit
         $response = $action($request);
 
         assertSame(200, $response->getStatusCode());
+    }
+
+    /**
+     * The browser posts `_forward_flash` when the sign-in fails on its side, so
+     * the server can hand the reason to the login page as a flash banner.
+     *
+     * Two things have to hold for that banner to exist at all: the redirect
+     * has to name the login route, and the flash has to survive the request
+     * that set it. FlashMiddleware reads the value on the *next* request (the
+     * redirect) and removes it there — so removing it here, in the same
+     * request, deleted it before the redirect could ever show it, and the
+     * visitor saw a plain login page with no reason on it.
+     */
+    public function testForwardedFlashIsKeptForTheLoginPageToRender(): void
+    {
+        [$action, $session] = $this->createAction();
+
+        $request = (new ServerRequest('POST', '/auth/firebase'))
+            ->withParsedBody([
+                'credential' => '',
+                '_forward_flash' => '1',
+                'message' => 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।',
+            ]);
+
+        $response = $action($request);
+
+        assertSame(302, $response->getStatusCode());
+        assertStringContainsString('/login', $response->getHeaderLine('Location'));
+        assertSame(
+            'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।',
+            $session->get('flash_error'),
+            'The flash must still be in the session: FlashMiddleware consumes it on the redirect.',
+        );
+    }
+
+    /** A missing flash would mean the banner is never rendered. */
+    public function testForwardedFlashDefaultsToAGenericMessage(): void
+    {
+        [$action, $session] = $this->createAction();
+
+        $request = (new ServerRequest('POST', '/auth/firebase'))
+            ->withParsedBody(['credential' => '', '_forward_flash' => '1']);
+
+        $response = $action($request);
+
+        assertSame(302, $response->getStatusCode());
+        assertSame('সাইন ইন করা যায়নি। আবার চেষ্টা করুন।', $session->get('flash_error'));
     }
 
     public function testValidTokenForNewEmailCreatesAccountAndRedirects(): void
@@ -238,9 +286,60 @@ final class FirebaseAuthActionTest extends \Codeception\Test\Unit
             codecept_root_dir() . 'resources/views',
         );
 
-        $action = new FirebaseAuthAction($view, $verifier, $service, $session);
+        $action = new FirebaseAuthAction($view, $verifier, $service, $session, $this->urlGenerator());
 
         return [$action, $session];
+    }
+
+    /**
+     * A URL generator that answers the route names this action uses.
+     *
+     * The action redirects to the `login` route when it forwards a flash, so
+     * the double has to know that name — a generator that threw on an unknown
+     * route would turn a missing dependency into a test failure that reads
+     * like a routing bug.
+     */
+    private function urlGenerator(): UrlGeneratorInterface
+    {
+        return new class implements UrlGeneratorInterface {
+            public function generate(
+                string $name,
+                array $arguments = [],
+                array $queryParameters = [],
+                ?string $hash = null,
+            ): string {
+                return '/' . $name;
+            }
+
+            public function generateAbsolute(
+                string $name,
+                array $arguments = [],
+                array $queryParameters = [],
+                ?string $hash = null,
+                ?string $scheme = null,
+                ?string $host = null,
+            ): string {
+                return '/' . $name;
+            }
+
+            public function generateFromCurrent(
+                array $replacedArguments = [],
+                array $queryParameters = [],
+                ?string $hash = null,
+                ?string $fallbackRouteName = null,
+            ): string {
+                return '/';
+            }
+
+            public function getUriPrefix(): string
+            {
+                return '';
+            }
+
+            public function setUriPrefix(string $name): void {}
+
+            public function setDefaultArgument(string $name, bool|float|int|string|\Stringable|null $value): void {}
+        };
     }
 }
 

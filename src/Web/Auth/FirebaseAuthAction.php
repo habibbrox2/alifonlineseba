@@ -9,6 +9,7 @@ use App\Auth\FirebaseIdTokenVerifier;
 use App\Auth\IdentityRepository;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Yiisoft\Router\UrlGeneratorInterface;
 use Yiisoft\Session\SessionInterface;
 use Yiisoft\Yii\View\Renderer\WebViewRenderer;
 
@@ -41,6 +42,7 @@ final readonly class FirebaseAuthAction
         private FirebaseIdTokenVerifier $verifier,
         private FirebaseAuthService $service,
         private SessionInterface $session,
+        private UrlGeneratorInterface $url,
     ) {}
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -51,12 +53,14 @@ final readonly class FirebaseAuthAction
         $forwardToLogin = (bool) ($input['_forward_flash'] ?? false);
 
         if ($forwardToLogin) {
-            // A one-shot flash: the JS stashes a sign-in failure and the server
-            // applies it as the login page's flash_error, so the banner renders
-            // instead of a JS alert(). The session value is removed immediately,
-            // so it is a true one-shot message (no real credential to verify).
+            // The JS stashes a sign-in failure and the server applies it as the
+            // login page's flash_error, so the banner renders instead of a JS
+            // alert(). The value is left in the session: FlashMiddleware reads
+            // it on the *next* request (the redirect to /login) and removes it
+            // there, which is what makes it a one-shot message. Removing it
+            // here instead would delete it before the redirect ever happened,
+            // so the banner would never render at all.
             $this->session->set('flash_error', (string) ($input['message'] ?? 'সাইন ইন করা যায়নি। আবার চেষ্টা করুন।'));
-            $this->session->remove('flash_error');
             return new \Nyholm\Psr7\Response(302, ['Location' => $this->url->generate('login')]);
         }
 

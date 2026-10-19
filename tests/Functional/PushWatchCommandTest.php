@@ -712,11 +712,22 @@ final class PushWatchCommandTest extends \Codeception\Test\Unit
     {
         return $this->subs->subscribe(
             $endpoint ?? $this->endpoint,
-            random_bytes(65),
-            random_bytes(16),
+            // base64url, like a real browser sends it — the raw bytes are not
+            // what a PushSubscription hands over, and a `utf8mb4` column cannot
+            // store them: a strict server rejects the insert outright. The
+            // decoded lengths are the RFC 8291 ones the API validates, so the
+            // row this writes is indistinguishable from a live subscription.
+            $this->base64Url(random_bytes(65)),
+            $this->base64Url(random_bytes(16)),
             null,
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
         );
+    }
+
+    /** base64url without padding, the encoding every Push API key uses. */
+    private function base64Url(string $bytes): string
+    {
+        return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
     }
 
     /**
