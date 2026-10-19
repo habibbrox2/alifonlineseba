@@ -97,6 +97,9 @@ __pycache__/
 # Local PHP CLI / dev caches
 .phpunit.result.cache
 
+# Freebuff local project config (contains service UUID, never commit)
+config/.freebuff/
+
 # Android build output, Gradle caches and the distributions Gradle downloads
 # on first run. One unpacked distribution is ~146 MB and the wrapper cache
 # hundreds more, none of it source — `gradlew` reproduces the build, and
