@@ -149,3 +149,59 @@ jobs:
           path: twa/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
           retention-days: 7
+
+      # ── Publish to production (only on push to main, with signed release APK) ──
+      # The TWA APK is the public-facing app served at /app. After a successful
+      # signed build, transfer it to the production server and publish it via
+      # `app:release:publish` so /app/apk serves the new bytes automatically.
+      - name: Prepare SSH key for production deploy
+        if: github.event_name == 'push' && steps.signing.outputs.signed == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.CPANEL_SSH_KEY_B64 }}" | base64 --decode > ~/.ssh/cpanel_deploy
+          chmod 600 ~/.ssh/cpanel_deploy
+          ssh-keyscan -p ${{ vars.CPANEL_SSH_PORT || 22 }} ${{ secrets.CPANEL_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Transfer TWA APK to production server
+        if: github.event_name == 'push' && steps.signing.outputs.signed == 'true'
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_USER: ${{ secrets.CPANEL_USER }}
+          CPANEL_PATH: ${{ vars.CPANEL_PATH }}
+          SSH_PORT: ${{ vars.CPANEL_SSH_PORT || 22 }}
+        run: |
+          set -euo pipefail
+          APK="twa/app/build/outputs/apk/release/app-release.apk"
+          REMOTE_DIR="$CPANEL_PATH/twa-staging"
+          ssh -p "$SSH_PORT" -i ~/.ssh/cpanel_deploy "$CPANEL_USER@$CPANEL_HOST" "mkdir -p '$REMOTE_DIR'"
+          scp -P "$SSH_PORT" -i ~/.ssh/cpanel_deploy "$APK" "$CPANEL_USER@$CPANEL_HOST:$REMOTE_DIR/"
+
+      - name: Publish TWA APK on production server
+        if: github.event_name == 'push' && steps.signing.outputs.signed == 'true'
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_USER: ${{ secrets.CPANEL_USER }}
+          CPANEL_PATH: ${{ vars.CPANEL_PATH }}
+          SSH_PORT: ${{ vars.CPANEL_SSH_PORT || 22 }}
+          PHP_BIN: ${{ vars.CPANEL_PHP_BIN }}
+        run: |
+          set -euo pipefail
+          REMOTE_APK="$CPANEL_PATH/twa-staging/app-release.apk"
+          ssh -p "$SSH_PORT" -i ~/.ssh/cpanel_deploy "$CPANEL_USER@$CPANEL_HOST" \
+            "cd '$CPANEL_PATH' && ${PHP_BIN:-php} yii app:release:publish --file='$REMOTE_APK' --channel=twa"
+
+      - name: Cleanup staging directory on server
+        if: github.event_name == 'push' && steps.signing.outputs.signed == 'true'
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_USER: ${{ secrets.CPANEL_USER }}
+          CPANEL_PATH: ${{ vars.CPANEL_PATH }}
+          SSH_PORT: ${{ vars.CPANEL_SSH_PORT || 22 }}
+        run: |
+          ssh -p "$SSH_PORT" -i ~/.ssh/cpanel_deploy "$CPANEL_USER@$CPANEL_HOST" \
+            "rm -rf '$CPANEL_PATH/twa-staging'" || true
+
+      - name: Verify /app page on production
+        if: github.event_name == 'push' && steps.signing.outputs.signed == 'true'
+        run: |
+          curl -sI "${{ vars.DEPLOY_HEALTH_URL || 'https://allseba.online' }}/app" | head -5
