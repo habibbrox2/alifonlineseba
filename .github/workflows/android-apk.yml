@@ -62,7 +62,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
 
@@ -156,11 +156,41 @@ jobs:
       # `app:release:publish` so /app/apk serves the new bytes automatically.
       - name: Prepare SSH key for production deploy
         if: github.event_name == 'push' && steps.signing.outputs.signed == 'true'
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_SSH_KEY_B64: ${{ secrets.CPANEL_SSH_KEY_B64 }}
+          SSH_PORT: ${{ vars.CPANEL_SSH_PORT || 22 }}
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.CPANEL_SSH_KEY_B64 }}" | base64 --decode > ~/.ssh/cpanel_deploy
-          chmod 600 ~/.ssh/cpanel_deploy
-          ssh-keyscan -p ${{ vars.CPANEL_SSH_PORT || 22 }} ${{ secrets.CPANEL_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          key="$HOME/.ssh/cpanel_deploy"
+
+          if [ -n "$CPANEL_SSH_KEY_B64" ]; then
+            if ! printf '%s' "$CPANEL_SSH_KEY_B64" | tr -d ' \t\r\n' | base64 --decode | tr -d '\r' > "$key" 2>/dev/null; then
+              echo "::error::CPANEL_SSH_KEY_B64 is not valid base64."
+              exit 1
+            fi
+          elif [ -n "$CPANEL_SSH_KEY" ]; then
+            printf '%s' "$CPANEL_SSH_KEY" | tr -d '\r' \
+              | sed -n '/-----BEGIN [A-Z ]*PRIVATE KEY-----/,/-----END [A-Z ]*PRIVATE KEY-----/p' \
+              > "$key"
+          else
+            echo "::error::No SSH key secret. Set CPANEL_SSH_KEY_B64 (preferred) or CPANEL_SSH_KEY."
+            exit 1
+          fi
+
+          if [ -n "$(tail -c 1 "$key")" ]; then
+            printf '\n' >> "$key"
+          fi
+          chmod 600 "$key"
+
+          if [ ! -s "$key" ]; then
+            echo "::error::No private key found."
+            exit 1
+          fi
+
+          ssh-keyscan -p "$SSH_PORT" "$CPANEL_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Transfer TWA APK to production server
         if: github.event_name == 'push' && steps.signing.outputs.signed == 'true'
