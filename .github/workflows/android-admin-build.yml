@@ -49,11 +49,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;27.0.12077973
+          packages: platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.0.12077973
           accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
@@ -100,11 +96,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;27.0.12077973
+          packages: platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.0.12077973
           accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
@@ -152,11 +144,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;27.0.12077973
+          packages: platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.0.12077973
           accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
@@ -229,11 +217,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;27.0.12077973
+          packages: platform-tools platforms;android-36 build-tools;36.0.0 ndk;27.0.12077973
           accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
