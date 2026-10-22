@@ -29,6 +29,10 @@ permissions:
 env:
   JAVA_VERSION: '17'
   GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"'
+  # Read by android-admin/app/build.gradle.kts. Left empty here on purpose: a fork's PR
+  # must not be able to touch the release keystore, and `if: secrets.X != ''` below
+  # already tests them without printing them.
+  ADMIN_KEYSTORE_BASE64: ${{ secrets.ADMIN_KEYSTORE_BASE64 }}
 
 jobs:
   lint-and-test:
@@ -172,21 +176,40 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
           gradle-home-cache-cleanup: true
 
+      - name: Decode release keystore
+        id: signing
+        env:
+          ADMIN_KEYSTORE_BASE64: ${{ secrets.ADMIN_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ADMIN_KEYSTORE_BASE64}" ]; then
+            echo "No ADMIN_KEYSTORE_BASE64 secret: release will build UNSIGNED."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          key="$RUNNER_TEMP/admin-release.jks"
+          printf '%s' "$ADMIN_KEYSTORE_BASE64" | base64 --decode > "$key"
+          keytool -list -v -keystore "$key" \
+            -storepass "$ADMIN_STORE_PASSWORD" -alias "$ADMIN_KEY_ALIAS" > /dev/null
+          echo "ADMIN_STORE_FILE=$key" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
       - name: Create keystore.properties from secrets
-        if: env.ADMIN_STORE_FILE != ''
+        if: steps.signing.outputs.signed == 'true'
         run: |
           cat > android-admin/keystore.properties <<EOF
-          storeFile=${{ secrets.ADMIN_STORE_FILE }}
+          storeFile=${{ env.ADMIN_STORE_FILE }}
           storePassword=${{ secrets.ADMIN_STORE_PASSWORD }}
           keyAlias=${{ secrets.ADMIN_KEY_ALIAS }}
           keyPassword=${{ secrets.ADMIN_KEY_PASSWORD }}
           EOF
 
       - name: Build Release APK
+        if: steps.signing.outputs.signed == 'true'
         run: cd android-admin && ./gradlew assembleRelease --no-daemon
         env:
           ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
-          ADMIN_STORE_FILE: ${{ secrets.ADMIN_STORE_FILE }}
+          ADMIN_STORE_FILE: ${{ env.ADMIN_STORE_FILE }}
           ADMIN_STORE_PASSWORD: ${{ secrets.ADMIN_STORE_PASSWORD }}
           ADMIN_KEY_ALIAS: ${{ secrets.ADMIN_KEY_ALIAS }}
           ADMIN_KEY_PASSWORD: ${{ secrets.ADMIN_KEY_PASSWORD }}
