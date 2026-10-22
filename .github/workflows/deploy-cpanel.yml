@@ -302,8 +302,8 @@ jobs:
         # and every config file without touching the database.
         run: php yii list
 
-      - name: Validate DB schema (dry-run)
-        run: php yii migrate:up --no-interaction --dry-run
+      - name: Validate DB schema (check pending migrations)
+        run: php yii migrate:new --no-interaction
 
       # ------------------------------------------------------------------ ssh
 
