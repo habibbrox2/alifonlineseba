@@ -50,9 +50,9 @@
 }
 
 # Retrofit specific keep rules
--keep interface * retrofit2.http.FormUrlEncoded
--keep interface * retrofit2.http.multipart.Part
--keep interface * retrofit2.http.PartMap
+-keep interface retrofit2.http.FormUrlEncoded
+-keep interface retrofit2.http.multipart.Part
+-keep interface retrofit2.http.PartMap
 
 # Keep admin API classes
 -keepclassmembers class com.aliftools.admin.data.api.** { *; }
@@ -81,7 +81,7 @@
 }
 
 # Keep Compose UI elements
--keep @compose.ui.Bindable class *;
+-keep class * { @compose.ui.Bindable <fields>; }
 -keep class * extends androidx.compose.ui.View;
 -keep class * extends androidx.compose.foundation.layout.Layer;
 -keep class * extends androidx.compose.foundation.interaction.interaction;
