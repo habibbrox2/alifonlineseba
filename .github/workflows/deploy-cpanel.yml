@@ -302,6 +302,9 @@ jobs:
         # and every config file without touching the database.
         run: php yii list
 
+      - name: Validate DB schema (dry-run)
+        run: php yii migrate:up --no-interaction --dry-run
+
       # ------------------------------------------------------------------ ssh
 
       - name: Set up SSH
@@ -611,6 +614,16 @@ jobs:
 
           # release.tgz is a build artifact of this run, not source.
           rm -f "$rsync_ex" "$tar_ex"
+
+      - name: Upload deploy manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-manifest
+          path: |
+            .deploy-manifest
+            .deploy-manifest.old
+          retention-days: 7
 
       - name: Prune files this release dropped
         # tar cannot delete, so stale code from the previous release would
