@@ -49,10 +49,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          api-level: 36
-          ndk-version: r27c
-          build-tools: 36.0.0
-          cmdline-tools-version: "16.0"
+          packages: platform-tools,platforms;android-36,build-tools;36.0.0,ndk;27.0.12077973
+          accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -98,10 +96,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          api-level: 36
-          ndk-version: r27c
-          build-tools: 36.0.0
-          cmdline-tools-version: "16.0"
+          packages: platform-tools,platforms;android-36,build-tools;36.0.0,ndk;27.0.12077973
+          accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -148,10 +144,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          api-level: 36
-          ndk-version: r27c
-          build-tools: 36.0.0
-          cmdline-tools-version: "16.0"
+          packages: platform-tools,platforms;android-36,build-tools;36.0.0,ndk;27.0.12077973
+          accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -223,10 +217,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          api-level: 36
-          ndk-version: r27c
-          build-tools: 36.0.0
-          cmdline-tools-version: "16.0"
+          packages: platform-tools,platforms;android-36,build-tools;36.0.0,ndk;27.0.12077973
+          accept-android-sdk-licenses: true
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
