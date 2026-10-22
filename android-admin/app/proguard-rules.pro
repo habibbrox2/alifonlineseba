@@ -44,7 +44,10 @@
 # Alif Admin - keep all Hilt-related classes
 -keep class com.aliftools.admin.di.** { *; }
 -keepclassmembers class * { @dagger.hilt.android.Hilt class *; }
--keep @dagger.hilt.android.AndroidEntryPoint class *;
+-keep class * {
+    @dagger.hilt.android.AndroidEntryPoint <methods>;
+    @dagger.hilt.android.AndroidEntryPoint <fields>;
+}
 
 # Retrofit specific keep rules
 -keep interface * retrofit2.http.FormUrlEncoded
