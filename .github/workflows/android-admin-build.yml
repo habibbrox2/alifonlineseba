@@ -180,6 +180,8 @@ jobs:
         id: signing
         env:
           ADMIN_KEYSTORE_BASE64: ${{ secrets.ADMIN_KEYSTORE_BASE64 }}
+          ADMIN_STORE_PASSWORD: ${{ secrets.ADMIN_STORE_PASSWORD }}
+          ADMIN_KEY_ALIAS: ${{ secrets.ADMIN_KEY_ALIAS }}
         run: |
           set -euo pipefail
           if [ -z "${ADMIN_KEYSTORE_BASE64}" ]; then
