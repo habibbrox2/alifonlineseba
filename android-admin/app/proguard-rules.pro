@@ -82,3 +82,11 @@
 
 # Keep Compose UI elements (annotation processors handle most of this)
 -keep class * { @compose.ui.Bindable <fields>; }
+
+# Tink / Google API client - missing classes referenced by KeysDownloader
+-dontwarn com.google.api.client.http.**
+-dontwarn com.google.api.client.http.javanet.**
+-dontwarn org.joda.time.**
+
+# Tink
+-dontwarn com.google.crypto.tink.**
