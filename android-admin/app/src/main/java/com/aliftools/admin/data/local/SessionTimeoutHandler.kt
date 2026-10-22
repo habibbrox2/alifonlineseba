@@ -40,7 +40,7 @@ class SessionTimeoutHandler @Inject constructor(
     val onActivity: () -> Unit
 ) {
 
-    private val scope = CoroutineScope(Dispatchers.Main + Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO)
     private var timeoutJob: kotlinx.coroutines.Job? = null
 
     /** Start the session timeout timer */
@@ -52,13 +52,14 @@ class SessionTimeoutHandler @Inject constructor(
             while (true) {
                 // Wait for user activity or timeout
                 @SuppressLint("UnsafeCoroutines")
-                val result = kotlinx.coroutines.withTimeoutOrNull(SESSION_TIMEOUT_MILLIS) {
+                val result = kotlinx.coroutines.withTimeoutOrNull(SESSION_TIMEOUT_MILLIS.toLong()) {
                     // Wait - but check for activity resets
-                    delay(SESSION_TIMEOUT_MILLIS / 10) // Check every ~9 seconds
+                    delay(SESSION_TIMEOUT_MILLIS / 10L) // Check every ~9 seconds
                     onActivity() // Reset timer on each check (conservative approach)
+                    null
                 }
-                
-                if (result == SESSION_TIMEOUT_MILLIS) {
+
+                if (result == null) {
                     // Timeout expired without activity reset
                     onSessionExpired()
                     break

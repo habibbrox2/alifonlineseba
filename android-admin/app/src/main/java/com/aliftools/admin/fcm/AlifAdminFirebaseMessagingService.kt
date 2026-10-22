@@ -18,7 +18,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainCoroutineDispatcher
-import kotlinx.coroutines.android.viewModelScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -104,13 +104,15 @@ class AlifAdminFirebaseMessagingService : FirebaseMessagingService() {
                 "id" to id.toString()
             )
             val jsonPayload = payload.toString()
-            notificationRetryHandler.addFailedNotification(
-                notificationId = id,
-                payload = jsonPayload,
-                route = route,
-                title = title,
-                body = body
-            )
+            serviceScope.launch {
+                notificationRetryHandler.addFailedNotification(
+                    notificationId = id,
+                    payload = jsonPayload,
+                    route = route,
+                    title = title,
+                    body = body
+                )
+            }
             Log.w(TAG, "Initial notification failed, queued for retry", e)
         }
     }

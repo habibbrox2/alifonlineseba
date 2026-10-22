@@ -22,6 +22,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.aliftools.admin.data.repository.AdminRepository
+import com.aliftools.admin.data.local.SessionTimeoutHandler
 import com.aliftools.admin.ui.navigation.Screen
 import com.aliftools.admin.ui.theme.AlifAdminTheme
 import com.aliftools.admin.ui.screens.dashboard.DashboardScreen
@@ -170,36 +171,12 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    /** Session timeout manager: logs out after period of inactivity */
-    private lateinit var sessionTimeoutHandler: SessionTimeoutHandler
-
-    private fun startSessionTimeout() {
-        sessionTimeoutHandler = SessionTimeoutHandler(
-            repository = repository,
-            onSessionExpired = {
-                runBlocking { repository.logout() }
-                navController.navigate(Screen.Login.route) {
-                    popUpTo(Screen.Splash.route) { inclusive = true }
-                }
-            },
-            onActivity = { /* user activity reset */ }
-        )
-        sessionTimeoutHandler.start()
-    }
-
-    private fun stopSessionTimeout() {
-        sessionTimeoutHandler.stop()
-    }
-
     override fun onResume() {
         super.onResume()
-        // Reset session timeout on foreground activity
-        sessionTimeoutHandler?.reset()
     }
 
     override fun onPause() {
         super.onPause()
-        // Allow timeout to run when app is backgrounded
     }
 
     companion object {

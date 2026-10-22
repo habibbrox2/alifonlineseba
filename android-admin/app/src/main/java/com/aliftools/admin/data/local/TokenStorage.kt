@@ -6,8 +6,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,25 +22,49 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 @Singleton
 class TokenStorage @Inject constructor(@ApplicationContext private val context: Context) {
 
-    private val accessToken = stringPreferencesKey("access_token")
-    private val refreshToken = stringPreferencesKey("refresh_token")
-    private val expiresAt = stringPreferencesKey("expires_at")
-    private val userRole = stringPreferencesKey("user_role")
+    private val masterKey: MasterKey by lazy {
+        MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
+
+    private val encryptedPrefs by lazy {
+        EncryptedSharedPreferences.create(
+            context,
+            "alif_admin_secure_tokens",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+
+    private val accessTokenKey = "access_token"
+    private val refreshTokenKey = "refresh_token"
+    private val expiresAtKey = "expires_at"
+    private val userRoleKey = "user_role"
+
+    private val _accessToken = MutableStateFlow<String?>(null)
+    private val _refreshToken = MutableStateFlow<String?>(null)
+    private val _expiresAt = MutableStateFlow<String?>(null)
+    private val _userRole = MutableStateFlow<String?>(null)
+
+    init {
+        // Hydrate the in-memory flows from the encrypted store once. ESP is
+        // synchronous, so reading here (on the singleton's construction) is
+        // safe and keeps the Flow API unchanged for callers.
+        _accessToken.value = encryptedPrefs.getString(accessTokenKey, null)
+        _refreshToken.value = encryptedPrefs.getString(refreshTokenKey, null)
+        _expiresAt.value = encryptedPrefs.getString(expiresAtKey, null)
+        _userRole.value = encryptedPrefs.getString(userRoleKey, null)
+    }
+
+    val accessTokenFlow: Flow<String?> = _accessToken.asStateFlow()
+    val refreshTokenFlow: Flow<String?> = _refreshToken.asStateFlow()
+    val userRoleFlow: Flow<String?> = _userRole.asStateFlow()
+
+    // DataStore-backed (non-secret) values.
     private val biometricEnabled = stringPreferencesKey("biometric_enabled")
-
-    // "Remember me" persists the identifier only — never the password. A
-    // shared or lost shop phone must not hand the next person a working
-    // credential, so the field is pre-filled and nothing more.
     private val rememberedIdentifier = stringPreferencesKey("remembered_identifier")
-
-    val accessTokenFlow: Flow<String?> = context.dataStore.data
-        .map { it[accessToken] }
-
-    val refreshTokenFlow: Flow<String?> = context.dataStore.data
-        .map { it[refreshToken] }
-
-    val userRoleFlow: Flow<String?> = context.dataStore.data
-        .map { it[userRole] }
 
     val biometricEnabledFlow: Flow<Boolean> = context.dataStore.data
         .map { it[biometricEnabled]?.toBoolean() ?: false }
@@ -60,24 +89,32 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
     }
 
     suspend fun saveTokens(token: String, refresh: String, expiresAtStr: String?, role: String) {
-        context.dataStore.edit { prefs ->
-            prefs[accessToken] = token
-            prefs[refreshToken] = refresh
-            prefs[expiresAt] = expiresAtStr ?: ""
-            prefs[userRole] = role
+        encryptedPrefs.edit {
+            putString(accessTokenKey, token)
+            putString(refreshTokenKey, refresh)
+            putString(expiresAtKey, expiresAtStr ?: "")
+            putString(userRoleKey, role)
         }
+        _accessToken.value = token
+        _refreshToken.value = refresh
+        _expiresAt.value = expiresAtStr ?: ""
+        _userRole.value = role
     }
 
     suspend fun clearTokens() {
-        context.dataStore.edit { prefs ->
-            prefs.remove(accessToken)
-            prefs.remove(refreshToken)
-            prefs.remove(expiresAt)
-            prefs.remove(userRole)
+        encryptedPrefs.edit {
+            remove(accessTokenKey)
+            remove(refreshTokenKey)
+            remove(expiresAtKey)
+            remove(userRoleKey)
         }
+        _accessToken.value = null
+        _refreshToken.value = null
+        _expiresAt.value = null
+        _userRole.value = null
     }
 
-    private const val SESSION_TIMEOUT_MILLIS = 15 * 60 * 1000 // 15 minutes
+    private val SESSION_TIMEOUT_MILLIS = 15 * 60 * 1000L // 15 minutes
 
     suspend fun setBiometricEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
@@ -90,12 +127,11 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
      * Returns millis until expiry, or negative if already expired.
      */
     suspend fun timeUntilExpiry(): Long {
-        val expiresAtStr = context.dataStore.data.value[expiresAt]
+        val expiresAtStr = _expiresAt.value
         if (expiresAtStr.isNullOrBlank()) return -1L
-        val expiresAt = expiresAtStr.toInstant()
-        val now = Instant.now()
-        val until = expiresAt.millisUntilNow
-        return until
+        val expiresAt = java.time.Instant.parse(expiresAtStr)
+        val now = java.time.Instant.now()
+        return java.time.Duration.between(now, expiresAt).toMillis()
     }
 
     /**
@@ -108,12 +144,18 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
      * Call this on user activity to extend the session.
      */
     suspend fun resetExpiry(): String {
-        val calendar = java.util.Calendar.getInstance()
-        calendar.add(java.util.Calendar.MINUTE, 15) // 15-minute session
-        val newExpiry = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'", java.util.Locale.getDefault()).format(calendar.time)
-        context.dataStore.edit { prefs ->
-            prefs[expiresAt] = newExpiry
+        val instant = java.time.Instant.now().plus(java.time.Duration.ofMinutes(15))
+        val newExpiry = java.time.format.DateTimeFormatter.ISO_INSTANT.format(instant)
+        encryptedPrefs.edit {
+            putString(expiresAtKey, newExpiry)
         }
+        _expiresAt.value = newExpiry
         return newExpiry
     }
+}
+
+private fun android.content.SharedPreferences.edit(block: android.content.SharedPreferences.Editor.() -> Unit) {
+    val editor = this.edit()
+    block(editor)
+    editor.apply()
 }

@@ -2,15 +2,17 @@ package com.aliftools.admin.data.local
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.aliftools.admin.data.repository.AdminRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.Serializer
-import kotlinx.serialization.json.Json
+import org.json.JSONArray
+import org.json.JSONObject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -26,20 +28,17 @@ const val BACKOFF_MULTIPLIER = 2.0
 class NotificationRetryHandler @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repository: AdminRepository,
-
+) {
     // Callback when a notification should be retried
-    val onRetry: (notificationId: Int, payload: String) -> Unit,
+    var onRetry: ((notificationId: Int, payload: String) -> Unit)? = null
 
     // Callback when notification max retries exceeded
-    val onMaxRetriesExceeded: (notificationId: Int, payload: String, lastError: String) -> Unit
-) {
+    var onMaxRetriesExceeded: ((notificationId: Int, payload: String, lastError: String) -> Unit)? = null
 
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "alif_admin_notifications")
 
     private val retryQueue = stringPreferencesKey("retry_queue")
     private val lastError = stringPreferencesKey("last_error")
-
-    private val serializer: Serializer<Map<String, Any?>> = Json.serializer()
 
     /** Add a failed notification to the retry queue (stored as JSON array) */
     suspend fun addFailedNotification(
@@ -67,31 +66,50 @@ class NotificationRetryHandler @Inject constructor(
         Log.d("NotificationRetryHandler", "Added notification $notificationId to retry queue")
     }
 
-    /** Parse a JSON array string to mutable list using kotlinx.serialization */
-    @SuppressLint("SimpleArray")
+    /** Parse a JSON array string to mutable list. */
     private fun parseJsonArray(json: String): MutableList<Map<String, Any?>> {
-        return Json.decodeFromString(List<Map<String, Any?>>.class.java.serializer(), json) ?: mutableListOf()
+        val result = mutableListOf<Map<String, Any?>>()
+        if (json.isBlank()) return result
+        return try {
+            val arr = JSONArray(json)
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val map = mutableMapOf<String, Any?>()
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    map[k] = obj.opt(k)
+                }
+                result.add(map)
+            }
+            result
+        } catch (e: Exception) {
+            mutableListOf()
+        }
     }
 
-    /** Serialize list to JSON array string using kotlinx.serialization */
-    @SuppressLint("SimpleArray")
+    /** Serialize list to JSON array string. */
     private fun serializeJsonArray(list: List<Map<String, Any?>>): String {
-        return Json.encodeToString(List<Map<String, Any?>>.class.java.serializer(), list)
+        val arr = JSONArray()
+        for (entry in list) {
+            arr.put(JSONObject(entry))
+        }
+        return arr.toString()
     }
 
     /** Attempt to retry pending notifications */
     suspend fun retryPendingNotifications() {
-        val queueJson = context.dataStore.data.value[retryQueue] ?: ""
+        val queueJson = context.dataStore.data.first()[retryQueue] ?: ""
         if (queueJson.isBlank()) return
 
         val queue = parseJsonArray(queueJson)
         var i = queue.size - 1
 
         while (i >= 0) {
-            val entry = queue[i]
-            val id = entry["id"] as? Int ?: continue
+            val entry = queue[i].toMutableMap()
+            val id = (entry["id"] as? Number)?.toInt() ?: continue
             val payload = entry["payload"] as? String ?: continue
-            val attempt = (entry["attempt"] as? Int ?: 1).coerceAtMost(MAX_NOTIFICATION_RETRIES)
+            val attempt = ((entry["attempt"] as? Number)?.toInt() ?: 1).coerceAtMost(MAX_NOTIFICATION_RETRIES)
 
             // Check if enough time has passed since last attempt
             val lastAttempt = (entry["lastError"] as? String)?.takeIf { it.isNotBlank() }
@@ -102,7 +120,7 @@ class NotificationRetryHandler @Inject constructor(
             // In production, check timestamp against lastAttempt
 
             try {
-                onRetry(id, payload)
+                onRetry?.invoke(id, payload)
                 // Remove successfully retried notification
                 queue.removeAt(i)
                 context.dataStore.edit { prefs ->
@@ -117,7 +135,7 @@ class NotificationRetryHandler @Inject constructor(
 
                 if (attempt >= MAX_NOTIFICATION_RETRIES) {
                     // Max retries exceeded
-                    onMaxRetriesExceeded(id, payload, entry["lastError"] as? String ?: "Unknown")
+                    onMaxRetriesExceeded?.invoke(id, payload, entry["lastError"] as? String ?: "Unknown")
                     queue.removeAt(i)
                     context.dataStore.edit { prefs ->
                         prefs[retryQueue] = serializeJsonArray(queue)
@@ -140,7 +158,7 @@ class NotificationRetryHandler @Inject constructor(
     @SuppressLint("UnnecessaryReturn")
     private fun getRetryInterval(retryAttempt: Int): Long {
         // Exponential backoff: 30s, 60s, 120s, 240s, 480s, ...
-        val base = INITIAL_RETRY_MILLIS * Math.pow(BACKOFF_MULTIPLIER, retryAttempt - 1).toLong()
+        val base = (INITIAL_RETRY_MILLIS * Math.pow(BACKOFF_MULTIPLIER, (retryAttempt - 1).toDouble())).toLong()
         // Cap at 16 minutes to avoid excessive waiting
         return base.coerceAtMost(960000L)
     }
