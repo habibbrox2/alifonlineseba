@@ -80,8 +80,5 @@
     public void *onCleared();
 }
 
-# Keep Compose UI elements
+# Keep Compose UI elements (annotation processors handle most of this)
 -keep class * { @compose.ui.Bindable <fields>; }
--keep class * extends androidx.compose.ui.View;
--keep class * extends androidx.compose.foundation.layout.Layer;
--keep class * extends androidx.compose.foundation.interaction.interaction;
