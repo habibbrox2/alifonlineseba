@@ -39,18 +39,20 @@ class ServicesViewModel @Inject constructor(
     }
 
     fun toggle(id: Int) {
-        runAction {
-            repo.servicesAction("toggle", id = id)
-                .onSuccess { setSnack(it.message ?: "হালনাগাদ হয়েছে") }
-            load()
-        }
+        runAction(
+            refreshList = false,
+            messageOf = { it.message ?: "হালনাগাদ হয়েছে" },
+            block = { repo.servicesAction("toggle", id = id) },
+            onSuccess = { load() },
+        )
     }
 
     fun delete(id: Int) {
-        runAction {
-            repo.servicesAction("delete", id = id)
-                .onSuccess { setSnack(it.message ?: "মুছে ফেলা হয়েছে") }
-            load()
-        }
+        runAction(
+            refreshList = false,
+            messageOf = { it.message ?: "মুছে ফেলা হয়েছে" },
+            block = { repo.servicesAction("delete", id = id) },
+            onSuccess = { load() },
+        )
     }
 }

@@ -39,26 +39,29 @@ class CategoriesViewModel @Inject constructor(
     }
 
     fun create(name: String, slug: String) {
-        runAction {
-            repo.categoriesAction("create", name = name, slug = slug)
-                .onSuccess { setSnack(it.message ?: "তৈরি হয়েছে") }
-            load()
-        }
+        runAction(
+            refreshList = false,
+            messageOf = { it.message ?: "তৈরি হয়েছে" },
+            block = { repo.categoriesAction("create", name = name, slug = slug) },
+            onSuccess = { load() },
+        )
     }
 
     fun toggle(id: Int) {
-        runAction {
-            repo.categoriesAction("toggle", id = id)
-                .onSuccess { setSnack(it.message ?: "হালনাগাদ হয়েছে") }
-            load()
-        }
+        runAction(
+            refreshList = false,
+            messageOf = { it.message ?: "হালনাগাদ হয়েছে" },
+            block = { repo.categoriesAction("toggle", id = id) },
+            onSuccess = { load() },
+        )
     }
 
     fun delete(id: Int) {
-        runAction {
-            repo.categoriesAction("delete", id = id)
-                .onSuccess { setSnack(it.message ?: "মুছে ফেলা হয়েছে") }
-            load()
-        }
+        runAction(
+            refreshList = false,
+            messageOf = { it.message ?: "মুছে ফেলা হয়েছে" },
+            block = { repo.categoriesAction("delete", id = id) },
+            onSuccess = { load() },
+        )
     }
 }
