@@ -28,12 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.ui.components.AdminScaffold
 import com.aliftools.admin.ui.viewmodel.SettingsViewModel
+import com.aliftools.admin.util.BiometricHelper
+import androidx.biometric.BiometricManager
 
 @Composable
 fun SettingsScreen(
@@ -44,10 +48,21 @@ fun SettingsScreen(
     val busy by viewModel.busy.collectAsState()
     val snack by viewModel.snack.collectAsState()
     var showConfirm by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val biometric = remember { BiometricHelper(context.applicationContext) }
 
     fun isSensitiveKey(key: String): Boolean {
         val k = key.lowercase()
         return listOf("secret", "key", "token", "password", "private", "merchant", "api_key", "apikey", "client_secret", "access_key").any { k.contains(it) }
+    }
+
+    fun requestSave() {
+        val activity = context as? FragmentActivity
+        if (activity != null && biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
+            biometric.showPrompt(activity, onSuccess = { viewModel.save() }, onFailure = {})
+        } else {
+            viewModel.save()
+        }
     }
 
     AdminScaffold(
@@ -60,7 +75,7 @@ fun SettingsScreen(
                 onClick = {
                     val loaded = uiState as? SettingsViewModel.UiState.Loaded
                     val hasSensitive = loaded?.values?.keys?.any { isSensitiveKey(it) } == true
-                    if (hasSensitive) showConfirm = true else viewModel.save()
+                    if (hasSensitive) showConfirm = true else requestSave()
                 },
                 enabled = !busy && uiState is SettingsViewModel.UiState.Loaded
             ) {
@@ -133,7 +148,7 @@ fun SettingsScreen(
                         onClick = {
                             val loaded = uiState as? SettingsViewModel.UiState.Loaded
                             val hasSensitive = loaded?.values?.keys?.any { isSensitiveKey(it) } == true
-                            if (hasSensitive) showConfirm = true else viewModel.save()
+                            if (hasSensitive) showConfirm = true else requestSave()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !busy,
@@ -160,7 +175,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showConfirm = false
-                    viewModel.save()
+                    requestSave()
                 }) { Text("সংরক্ষণ করুন") }
             },
             dismissButton = {

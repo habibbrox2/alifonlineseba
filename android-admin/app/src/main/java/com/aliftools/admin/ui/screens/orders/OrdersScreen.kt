@@ -11,20 +11,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.data.model.AdminOrder
 import com.aliftools.admin.ui.components.PagedListView
 import com.aliftools.admin.ui.viewmodel.OrdersViewModel
+import com.aliftools.admin.util.BiometricHelper
+import androidx.biometric.BiometricManager
 
 private val SCOPES = listOf("" to "সব অর্ডার", "mine" to "আমার", "taken" to "মুক্ত")
 
@@ -46,6 +52,17 @@ fun OrdersScreen(
     val busy by viewModel.busy.collectAsState()
     val snack by viewModel.snack.collectAsState()
     val selected by viewModel.selected.collectAsState()
+    val context = LocalContext.current
+    val biometric = remember { BiometricHelper(context.applicationContext) }
+
+    fun doAction(id: Int, status: String) {
+        val activity = context as? FragmentActivity
+        if (activity != null && biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
+            biometric.showPrompt(activity, onSuccess = { viewModel.settleSelectedStatus(id, status) }, onFailure = {})
+        } else {
+            viewModel.settleSelectedStatus(id, status)
+        }
+    }
 
     PagedListView(
         title = "অর্ডার",
@@ -67,7 +84,7 @@ fun OrdersScreen(
             order = order,
             checked = order.id in selected,
             onToggle = { viewModel.toggleSelected(order.id) },
-            onAction = { status -> viewModel.settleSelectedStatus(order.id, status) },
+            onAction = { status -> doAction(order.id, status) },
             busy = busy,
         )
     }

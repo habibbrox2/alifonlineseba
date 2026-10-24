@@ -20,12 +20,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.data.model.AdminWithdraw
 import com.aliftools.admin.ui.components.PagedListView
 import com.aliftools.admin.ui.viewmodel.WithdrawsViewModel
+import com.aliftools.admin.util.BiometricHelper
+import androidx.biometric.BiometricManager
 
 private val STATUS_CHIPS = listOf(
     "" to "সব",
@@ -67,11 +71,20 @@ fun WithdrawsScreen(
     }
 
     detail?.let { row ->
+        val context2 = LocalContext.current
+        val biometric = remember { BiometricHelper(context2.applicationContext) }
         WithdrawDetailDialog(
             row = row,
             busy = busy,
             onDismiss = viewModel::closeDetail,
-            onApprove = { viewModel.approve(row) },
+            onApprove = {
+                val activity = context2 as? FragmentActivity
+                if (activity != null && biometric.isBiometricAvailable() == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
+                    biometric.showPrompt(activity, onSuccess = { viewModel.approve(row) }, onFailure = {})
+                } else {
+                    viewModel.approve(row)
+                }
+            },
             onReject = { reason -> viewModel.reject(row, reason) },
             onClaim = { viewModel.claim(row) },
             onRelease = { viewModel.release(row) },
