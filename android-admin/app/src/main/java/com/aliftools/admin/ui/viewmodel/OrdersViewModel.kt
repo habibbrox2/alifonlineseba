@@ -49,4 +49,11 @@ class OrdersViewModel @Inject constructor(
             onSuccess = { _selected.value = emptySet() },
         )
     }
+
+    fun settleSelectedStatus(id: Int, status: String) {
+        runAction(
+            messageOf = { it.message ?: "অর্ডার আপডেট করা হয়েছে" },
+            block = { repository.bulkStatus(listOf(id), status) },
+        )
+    }
 }

@@ -181,6 +181,62 @@ interface AdminApiService {
     @POST("api/admin/notifications/{id}/delete")
     suspend fun deleteNotification(@Path("id") id: Int): Response<ApiResponse<ActionResponse>>
 
+    @GET("api/admin/categories")
+    suspend fun categories(): Response<ApiResponse<Map<String, Any?>>>
+
+    @FormUrlEncoded
+    @POST("api/admin/categories")
+    suspend fun categoriesAction(
+        @Field("do") action: String,
+        @Field("id") id: Int? = null,
+        @Field("name") name: String? = null,
+        @Field("slug") slug: String? = null,
+        @Field("icon") icon: String? = null,
+        @Field("description") description: String? = null,
+        @Field("accent") accent: String? = null,
+        @Field("sort_order") sortOrder: Int? = null,
+        @Field("status") status: String? = null,
+    ): Response<ApiResponse<ActionResponse>>
+
+    @GET("api/admin/services")
+    suspend fun services(
+        @Query("trashed") trashed: String? = null
+    ): Response<ApiResponse<Map<String, Any?>>>
+
+    @FormUrlEncoded
+    @POST("api/admin/services")
+    suspend fun servicesAction(
+        @Field("do") action: String,
+        @Field("id") id: Int? = null,
+        @Field("category_id") categoryId: Int? = null,
+        @Field("name") name: String? = null,
+        @Field("slug") slug: String? = null,
+        @Field("icon") icon: String? = null,
+        @Field("description") description: String? = null,
+        @Field("price") price: String? = null,
+        @Field("unit") unit: String? = null,
+        @Field("sort_order") sortOrder: Int? = null,
+        @Field("status") status: String? = null,
+    ): Response<ApiResponse<ActionResponse>>
+
+    @GET("api/admin/ledger")
+    suspend fun ledger(
+        @Query("page") page: Int = 1,
+        @Query("scope") scope: String? = null,
+        @Query("q") query: String? = null
+    ): Response<ApiResponse<Map<String, Any?>>>
+
+    @GET("api/admin/referrals")
+    suspend fun referrals(
+        @Query("page") page: Int = 1
+    ): Response<ApiResponse<Map<String, Any?>>>
+
+    @GET("api/admin/role-hierarchy")
+    suspend fun roleHierarchy(): Response<ApiResponse<Map<String, Any?>>>
+
+    @GET("api/admin/permissions-matrix")
+    suspend fun permissionsMatrix(): Response<ApiResponse<Map<String, Any?>>>
+
     // DeviceApiAction reads `token` (not `device_token`) out of the JSON body.
     @POST("api/devices")
     suspend fun registerDevice(

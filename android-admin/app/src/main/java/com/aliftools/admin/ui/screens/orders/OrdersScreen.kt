@@ -67,6 +67,8 @@ fun OrdersScreen(
             order = order,
             checked = order.id in selected,
             onToggle = { viewModel.toggleSelected(order.id) },
+            onAction = { status -> viewModel.settleSelectedStatus(order.id, status) },
+            busy = busy,
         )
     }
 
@@ -81,36 +83,64 @@ fun OrdersScreen(
 }
 
 @Composable
-private fun OrderRow(order: AdminOrder, checked: Boolean, onToggle: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = checked, onCheckedChange = { onToggle() })
-            Column(modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp).weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = "#${order.id} ${order.service ?: ""}".trim(),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    StatusChip(order.status)
+private fun OrderRow(
+    order: AdminOrder,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    onAction: (String) -> Unit = {},
+    busy: Boolean = false,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = checked, onCheckedChange = { onToggle() })
+                Column(modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp).weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "#${order.id} ${order.service ?: ""}".trim(),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        StatusChip(order.status)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = order.username ?: "-",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = order.claimedByName?.let { "ধরা: $it" } ?: "মালিকহীন",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = order.username ?: "-",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = order.claimedByName?.let { "ধরা: $it" } ?: "মালিকহীন",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                androidx.compose.material3.OutlinedButton(onClick = { onAction("processing") }, enabled = !busy) {
+                    Text("প্রসেসিং")
+                }
+                androidx.compose.material3.OutlinedButton(onClick = { onAction("completed") }, enabled = !busy) {
+                    Text("সম্পন্ন")
+                }
+                androidx.compose.material3.OutlinedButton(onClick = { onAction("cancelled") }, enabled = !busy) {
+                    Text("বাতিল")
+                }
+                androidx.compose.material3.OutlinedButton(onClick = { onAction("failed") }, enabled = !busy) {
+                    Text("ব্যর্থ")
                 }
             }
         }

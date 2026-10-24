@@ -60,8 +60,7 @@ fun RechargesScreen(
         onSnackShown = viewModel::clearSnack,
         onFilterChange = viewModel::onFilterChange,
         filters = STATUS_CHIPS,
-        // The list route filters by status only — no `q` to search on.
-        showSearch = false,
+        showSearch = true,
         itemKey = { it.id },
     ) { row ->
         RechargeRow(row = row, onClick = { viewModel.openDetail(row) })

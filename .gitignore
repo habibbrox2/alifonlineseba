@@ -115,6 +115,9 @@ config/.freebuff/
 /android-admin/*.keystore
 /android-admin/*.p12
 /android-admin/*.pfx
+/keystore_base64.txt
+/admin-release.jks
+/android-admin/admin-release.jks
 /twa/keystore.properties
 /twa/*.jks
 /twa/*.keystore

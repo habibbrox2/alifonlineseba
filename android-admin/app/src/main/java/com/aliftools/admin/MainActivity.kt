@@ -22,7 +22,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.aliftools.admin.data.repository.AdminRepository
-import com.aliftools.admin.data.local.SessionTimeoutHandler
 import com.aliftools.admin.ui.navigation.Screen
 import com.aliftools.admin.ui.theme.AlifAdminTheme
 import com.aliftools.admin.ui.screens.dashboard.DashboardScreen
@@ -36,6 +35,12 @@ import com.aliftools.admin.ui.screens.splash.SplashScreen
 import com.aliftools.admin.ui.screens.staff.StaffScreen
 import com.aliftools.admin.ui.screens.users.UsersScreen
 import com.aliftools.admin.ui.screens.withdraws.WithdrawsScreen
+import com.aliftools.admin.ui.screens.categories.CategoriesScreen
+import com.aliftools.admin.ui.screens.services.ServicesScreen
+import com.aliftools.admin.ui.screens.ledger.LedgerScreen
+import com.aliftools.admin.ui.screens.referrals.ReferralsScreen
+import com.aliftools.admin.ui.screens.rolehierarchy.RoleHierarchyScreen
+import com.aliftools.admin.ui.screens.permissions.PermissionsMatrixScreen
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -124,6 +129,12 @@ class MainActivity : FragmentActivity() {
                                 onNavigateToLogs = { navController.navigate(Screen.Logs.route) },
                                 onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
                                 onNavigateToStaff = { navController.navigate(Screen.Staff.route) },
+                                onNavigateToCategories = { navController.navigate(Screen.Categories.route) },
+                                onNavigateToServices = { navController.navigate(Screen.Services.route) },
+                                onNavigateToLedger = { navController.navigate(Screen.Ledger.route) },
+                                onNavigateToReferrals = { navController.navigate(Screen.Referrals.route) },
+                                onNavigateToRoleHierarchy = { navController.navigate(Screen.RoleHierarchy.route) },
+                                onNavigateToPermissionsMatrix = { navController.navigate(Screen.PermissionsMatrix.route) },
                                 onLoggedOut = {
                                     navController.navigate(Screen.Login.route) {
                                         popUpTo(Screen.Dashboard.route) { inclusive = true }
@@ -152,6 +163,24 @@ class MainActivity : FragmentActivity() {
                         }
                         composable(Screen.Staff.route) {
                             StaffScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.Categories.route) {
+                            CategoriesScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.Services.route) {
+                            ServicesScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.Ledger.route) {
+                            LedgerScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.Referrals.route) {
+                            ReferralsScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.RoleHierarchy.route) {
+                            RoleHierarchyScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.PermissionsMatrix.route) {
+                            PermissionsMatrixScreen(onBack = { navController.popBackStack() })
                         }
                     }
                 }

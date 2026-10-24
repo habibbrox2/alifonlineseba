@@ -27,7 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
@@ -52,6 +54,12 @@ fun DashboardScreen(
     onNavigateToLogs: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onNavigateToStaff: () -> Unit,
+    onNavigateToCategories: () -> Unit = {},
+    onNavigateToServices: () -> Unit = {},
+    onNavigateToLedger: () -> Unit = {},
+    onNavigateToReferrals: () -> Unit = {},
+    onNavigateToRoleHierarchy: () -> Unit = {},
+    onNavigateToPermissionsMatrix: () -> Unit = {},
     onLoggedOut: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
@@ -63,6 +71,7 @@ fun DashboardScreen(
     val update by viewModel.update.collectAsState()
     val updateRequired by viewModel.updateRequired.collectAsState()
     val context = LocalContext.current
+    var updateDismissed by remember { mutableStateOf(false) }
 
     // Logout finished: leave the authed part of the graph behind entirely,
     // so the back button cannot walk into a cleared session.
@@ -183,10 +192,25 @@ fun DashboardScreen(
                         )
                     }
 
-                    if (updateRequired && update != null) {
+                    item {
+                        val isSuperAdmin = role?.contains("super", ignoreCase = true) == true
+                        QuickActions(
+                            showSuperAdmin = isSuperAdmin,
+                            onUsers = onNavigateToUsers,
+                            onOrders = onNavigateToOrders,
+                            onRecharges = onNavigateToRecharges,
+                            onWithdraws = onNavigateToWithdraws,
+                            onSettings = onNavigateToSettings,
+                            onLogs = onNavigateToLogs,
+                            onNotifications = onNavigateToNotifications,
+                            onStaff = onNavigateToStaff,
+                        )
+                    }
+
+                    if (updateRequired && update != null && !updateDismissed) {
                         item {
                             AlertDialog(
-                                onDismissRequest = {},
+                                onDismissRequest = { updateDismissed = true },
                                 title = { Text("আপডেট প্রয়োজন") },
                                 text = { Text(update?.releaseNotes ?: "") },
                                 confirmButton = {
@@ -195,7 +219,7 @@ fun DashboardScreen(
                                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                                     }) { Text("ডাউনলোড করুন") }
                                 },
-                                dismissButton = { TextButton(onClick = {}) { Text("পরে") } }
+                                dismissButton = { TextButton(onClick = { updateDismissed = true }) { Text("পরে") } }
                             )
                         }
                     }

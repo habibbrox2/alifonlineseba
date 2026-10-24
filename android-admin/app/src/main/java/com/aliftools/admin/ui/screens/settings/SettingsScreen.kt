@@ -10,16 +10,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,6 +43,12 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val busy by viewModel.busy.collectAsState()
     val snack by viewModel.snack.collectAsState()
+    var showConfirm by remember { mutableStateOf(false) }
+
+    fun isSensitiveKey(key: String): Boolean {
+        val k = key.lowercase()
+        return listOf("secret", "key", "token", "password", "private", "merchant", "api_key", "apikey", "client_secret", "access_key").any { k.contains(it) }
+    }
 
     AdminScaffold(
         title = "সেটিংস",
@@ -44,7 +56,14 @@ fun SettingsScreen(
         snack = snack,
         onSnackShown = viewModel::clearSnack,
         actions = {
-            IconButton(onClick = viewModel::save, enabled = !busy && uiState is SettingsViewModel.UiState.Loaded) {
+            IconButton(
+                onClick = {
+                    val loaded = uiState as? SettingsViewModel.UiState.Loaded
+                    val hasSensitive = loaded?.values?.keys?.any { isSensitiveKey(it) } == true
+                    if (hasSensitive) showConfirm = true else viewModel.save()
+                },
+                enabled = !busy && uiState is SettingsViewModel.UiState.Loaded
+            ) {
                 Icon(Icons.Default.Save, contentDescription = "সংরক্ষণ")
             }
         },
@@ -111,7 +130,11 @@ fun SettingsScreen(
                         )
                     }
                     Button(
-                        onClick = viewModel::save,
+                        onClick = {
+                            val loaded = uiState as? SettingsViewModel.UiState.Loaded
+                            val hasSensitive = loaded?.values?.keys?.any { isSensitiveKey(it) } == true
+                            if (hasSensitive) showConfirm = true else viewModel.save()
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !busy,
                     ) {
@@ -127,6 +150,23 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text("নিশ্চিত করুন") },
+            text = { Text("সংবেদনশীল সেটিংস পরিবর্তন করছেন। আপনি কি নিশ্চিত যে এগুলো সঠিক?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showConfirm = false
+                    viewModel.save()
+                }) { Text("সংরক্ষণ করুন") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) { Text("বাতিল") }
+            }
+        )
     }
 }
 

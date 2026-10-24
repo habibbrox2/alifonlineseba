@@ -235,6 +235,70 @@ class AdminRepository @Inject constructor(
         return safeApiCall { adminApi.appVersion() }
     }
 
+    // Categories
+    suspend fun categories(): Result<Map<String, Any?>> {
+        return safeApiCall { adminApi.categories() }
+    }
+
+    suspend fun categoriesAction(
+        action: String,
+        id: Int? = null,
+        name: String? = null,
+        slug: String? = null,
+        icon: String? = null,
+        description: String? = null,
+        accent: String? = null,
+        sortOrder: Int? = null,
+        status: String? = null,
+    ): Result<ActionResponse> {
+        return safeApiCall {
+            adminApi.categoriesAction(action, id, name, slug, icon, description, accent, sortOrder, status)
+        }
+    }
+
+    // Services
+    suspend fun services(trashed: String? = null): Result<Map<String, Any?>> {
+        return safeApiCall { adminApi.services(trashed) }
+    }
+
+    suspend fun servicesAction(
+        action: String,
+        id: Int? = null,
+        categoryId: Int? = null,
+        name: String? = null,
+        slug: String? = null,
+        icon: String? = null,
+        description: String? = null,
+        price: String? = null,
+        unit: String? = null,
+        sortOrder: Int? = null,
+        status: String? = null,
+    ): Result<ActionResponse> {
+        return safeApiCall {
+            adminApi.servicesAction(action, id, categoryId, name, slug, icon, description, price, unit, sortOrder, status)
+        }
+    }
+
+    // Ledger
+    suspend fun ledger(page: Int = 1, scope: String? = null, query: String? = null): Result<Map<String, Any?>> {
+        return safeApiCall { adminApi.ledger(page, scope, query) }
+    }
+
+    // Referrals
+    suspend fun referrals(page: Int = 1): Result<Map<String, Any?>> {
+        return safeApiCall { adminApi.referrals(page) }
+    }
+
+    // Role hierarchy
+    suspend fun roleHierarchy(): Result<Map<String, Any?>> {
+        return safeApiCall { adminApi.roleHierarchy() }
+    }
+
+    // Permissions matrix
+    suspend fun permissionsMatrix(): Result<Map<String, Any?>> {
+        return safeApiCall { adminApi.permissionsMatrix() }
+    }
+
     private suspend fun <T> safeApiCall(block: suspend () -> Response<ApiResponse<T>>): Result<T> {
         return try {
             val res = block()

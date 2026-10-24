@@ -51,6 +51,12 @@ use App\Web\Api\ServiceRequestDetailApiAction;
 use App\Web\Api\ServiceRequestsWatchApiAction;
 use App\Web\Api\ServicesApiAction;
 use App\Web\Api\Admin\AdminDashboardApiAction;
+use App\Web\Api\Admin\AdminCategoriesApiAction;
+use App\Web\Api\Admin\AdminServicesApiAction;
+use App\Web\Api\Admin\AdminLedgerApiAction;
+use App\Web\Api\Admin\AdminReferralsApiAction;
+use App\Web\Api\Admin\AdminRoleHierarchyApiAction;
+use App\Web\Api\Admin\AdminPermissionsMatrixApiAction;
 use App\Web\Api\Admin\AdminLogsApiAction;
 use App\Web\Api\Admin\AdminNotificationsApiAction;
 use App\Web\Api\Admin\AdminOrdersApiAction;
@@ -207,6 +213,12 @@ return [
     // Admin JSON API (auth required — bearer token OR session)
     Group::create('/api/admin')->middleware(AdminApiMiddleware::class)->routes(
         Route::get('/dashboard')->action(AdminDashboardApiAction::class)->name('api-admin-dashboard'),
+        Route::methods(['GET', 'POST'], '/categories')->action(AdminCategoriesApiAction::class)->name('api-admin-categories'),
+        Route::methods(['GET', 'POST'], '/services')->action(AdminServicesApiAction::class)->name('api-admin-services'),
+        Route::get('/ledger')->action(AdminLedgerApiAction::class)->name('api-admin-ledger'),
+        Route::get('/referrals')->action(AdminReferralsApiAction::class)->name('api-admin-referrals'),
+        Route::methods(['GET', 'POST'], '/role-hierarchy')->action(AdminRoleHierarchyApiAction::class)->name('api-admin-role-hierarchy'),
+        Route::get('/permissions-matrix')->action(AdminPermissionsMatrixApiAction::class)->name('api-admin-permissions-matrix'),
         Route::methods(['GET', 'POST'], '/users')->action(AdminUsersApiAction::class)->name('api-admin-users'),
         Route::methods(['GET', 'POST'], '/orders')->action(AdminOrdersApiAction::class)->name('api-admin-orders'),
         Route::post('/orders/bulk')->action(AdminOrdersApiAction::class)->name('api-admin-orders-bulk'),

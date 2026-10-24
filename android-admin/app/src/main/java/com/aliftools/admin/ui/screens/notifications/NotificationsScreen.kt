@@ -54,8 +54,7 @@ fun NotificationsScreen(
         onSnackShown = viewModel::clearSnack,
         onFilterChange = viewModel::onFilterChange,
         filters = STATUS_CHIPS,
-        // The queue route filters by status only — no `q` parameter.
-        showSearch = false,
+        showSearch = true,
         itemKey = { it.id },
     ) { row ->
         NotificationRow(
