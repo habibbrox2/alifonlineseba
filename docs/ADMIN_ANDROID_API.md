@@ -42,7 +42,7 @@ Response 200:
 Errors (string message): unknown identifier · deleted account · wrong password · disabled account. Throttled per identifier (5 attempts / 300 s, `AuthThrottle`). Logs `auth.api_token_issued`.
 
 ### `POST /api/auth/refresh`
-Request: `{ "refresh": "<refresh token>" }` → rotates: the presented refresh token is revoked, a new pair is returned (same shape as login).
+Header: `Authorization: Bearer <refresh token>` → rotates: the presented refresh token is revoked, a new pair is returned (same shape as login). The refresh token is sent in the Authorization header, not in a JSON body.
 
 ### `POST /api/auth/logout`
 Request: `Authorization: Bearer <access token>` → revokes the presented token.

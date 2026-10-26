@@ -27,15 +27,20 @@ class ServicesViewModel @Inject constructor(
     fun load() {
         viewModelScope.launch {
             _loading.value = true
-            repo.services()
-                .onSuccess { data ->
-                    val list = data["rows"] as? List<*> ?: emptyList()
-                    _rows.value = list.filterIsInstance<Map<String, Any?>>()
-                }
-                .onFailure { err ->
-                    showSnack(err.message ?: "লোড ব্যর্থ হয়েছে")
-                }
-            _loading.value = false
+            try {
+                val result: Result<Map<String, Any?>> = repo.services()
+                result.fold(
+                    onSuccess = { data: Map<String, Any?> ->
+                        val list: List<*> = data["rows"] as? List<*> ?: emptyList<Any?>()
+                        _rows.value = list.filterIsInstance<Map<String, Any?>>()
+                    },
+                    onFailure = { error: Throwable ->
+                        showSnack(error.message ?: "লোড ব্যর্থ হয়েছে")
+                    },
+                )
+            } finally {
+                _loading.value = false
+            }
         }
     }
 
