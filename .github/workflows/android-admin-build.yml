@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: lint-and-test
-    if: github.event_name == 'push' || github.event.inputs.build_type == 'debug'
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event.inputs.build_type == 'debug'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
