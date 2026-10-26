@@ -2,6 +2,7 @@ package com.aliftools.admin.ui.viewmodel
 
 import com.aliftools.admin.data.repository.AdminRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +33,7 @@ class ServicesViewModel @Inject constructor(
                     _rows.value = list.filterIsInstance<Map<String, Any?>>()
                 }
                 .onFailure { err ->
-                    setSnack(err.message ?: "লোড ব্যর্থ হয়েছে")
+                    showSnack(err.message ?: "লোড ব্যর্থ হয়েছে")
                 }
             _loading.value = false
         }

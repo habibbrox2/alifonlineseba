@@ -2,6 +2,7 @@ package com.aliftools.admin.ui.viewmodel
 
 import com.aliftools.admin.data.repository.AdminRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,7 +29,7 @@ class PermissionsMatrixViewModel @Inject constructor(
             _loading.value = true
             repo.permissionsMatrix()
                 .onSuccess { _data.value = it }
-                .onFailure { err -> setSnack(err.message ?: "লোড ব্যর্থ হয়েছে") }
+                .onFailure { err -> showSnack(err.message ?: "লোড ব্যর্থ হয়েছে") }
             _loading.value = false
         }
     }
