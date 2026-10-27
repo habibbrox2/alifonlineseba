@@ -114,11 +114,14 @@ class LoginScreenUiTest {
     private val identifierField get() = compose.onNodeWithText("ইউজারনেম / ফোন")
 
     private fun setScreen(repository: AdminRepository, onLoginSuccess: (String) -> Unit = {}) {
+        // Construct the test ViewModel before entering the composable content.
+        // This mirrors lifecycle ownership and avoids ViewModelConstructorInComposable lint.
+        val loginViewModel = LoginViewModel(repository)
         ActivityScenario.launch(MainActivity::class.java).onActivity { activity ->
             activity.setContent {
                 LoginScreen(
                     onLoginSuccess = onLoginSuccess,
-                    viewModel = LoginViewModel(repository),
+                    viewModel = loginViewModel,
                 )
             }
         }
