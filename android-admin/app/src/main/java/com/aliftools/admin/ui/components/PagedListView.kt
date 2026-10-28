@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import com.aliftools.admin.ui.viewmodel.ListUiState
  * Screens differ only in their row content, their filter set and what a row
  * taps into, all supplied by the caller.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T : Any> PagedListView(
     title: String,
@@ -62,8 +64,10 @@ fun <T : Any> PagedListView(
     showSearch: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
     itemKey: ((T) -> Any)? = null,
+    emptyText: String = "কোনো ডেটা পাওয়া যায়নি",
     itemContent: @Composable (T) -> Unit,
 ) {
+    val pullToRefreshState = rememberPullToRefreshState()
     AdminScaffold(
         title = title,
         onBack = onBack,
@@ -152,18 +156,24 @@ fun <T : Any> PagedListView(
                 state.rows.isEmpty() -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "কোনো ডেটা পাওয়া যায়নি",
+                            text = emptyText,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
 
                 else -> {
-                    LazyColumn(
+                    PullToRefreshBox(
+                        isRefreshing = state.refreshing && !state.initialLoading,
+                        onRefresh = onRefresh,
+                        state = pullToRefreshState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                         items(state.rows, key = itemKey) { row ->
                             itemContent(row)
                         }

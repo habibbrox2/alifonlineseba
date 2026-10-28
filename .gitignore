@@ -127,3 +127,10 @@ config/.freebuff/
 # plus SQLite's sidecar files (-wal/-shm/-journal), which can be non-empty even
 # when test.db itself is zero bytes. Only .gitkeep and the fixture are source.
 /tests/Support/Data/*.db*
+
+# Android admin keystore material
+/keystore_base64.txt
+/admin-release.jks
+/android-admin/admin-release.jks
+/admin-release.jks
+/android-admin/admin-release.jks
