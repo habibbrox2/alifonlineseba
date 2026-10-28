@@ -174,35 +174,36 @@ fun <T : Any> PagedListView(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                        items(state.rows, key = itemKey) { row ->
-                            itemContent(row)
-                        }
-                        if (state.hasMore) {
-                            item(key = "load-more") {
-                                Button(
-                                    onClick = onLoadMore,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    enabled = !state.refreshing,
-                                ) {
-                                    if (state.refreshing) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            strokeWidth = 2.dp,
-                                        )
-                                    } else {
-                                        Text("আরও লোড করুন")
+                            items(state.rows, key = itemKey) { row ->
+                                itemContent(row)
+                            }
+                            if (state.hasMore) {
+                                item(key = "load-more") {
+                                    Button(
+                                        onClick = onLoadMore,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = !state.refreshing,
+                                    ) {
+                                        if (state.refreshing) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                            )
+                                        } else {
+                                            Text("আরও লোড করুন")
+                                        }
                                     }
                                 }
-                            }
-                        } else {
-                            item(key = "list-end") {
-                                Text(
-                                    text = "মোট ${state.total} টি",
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Center,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            } else {
+                                item(key = "list-end") {
+                                    Text(
+                                        text = "মোট ${state.total} টি",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }

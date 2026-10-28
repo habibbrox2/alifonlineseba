@@ -1,4 +1,6 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive",
-    "python.terminal.useEnvFile": true
+    "python.terminal.useEnvFile": true,
+    "postman.settings.dotenv-detection-notification-visibility": false,
+    "chat.agent.sandbox.enabled": "off"
 }
