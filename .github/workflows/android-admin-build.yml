@@ -3,6 +3,9 @@ name: Android Admin App Build
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
+      - 'android-admin-v*'
     paths:
       - 'android-admin/**'
       - '.github/workflows/android-admin-build.yml'
@@ -134,7 +137,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: lint-and-test
-    if: github.event_name == 'push' || github.event.inputs.build_type == 'release'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
