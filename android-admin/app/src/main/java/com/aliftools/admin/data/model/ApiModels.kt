@@ -179,7 +179,7 @@ data class AdminNotification(
  */
 data class Device(
     val id: Int,
-    @SerializedName("device_token") val deviceToken: String,
+    @SerializedName("device_token") val deviceToken: String? = null,
     val platform: String?,
     @SerializedName("device_name") val deviceName: String?
 )

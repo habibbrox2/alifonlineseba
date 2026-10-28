@@ -26,7 +26,7 @@ final readonly class ApiAuthMiddleware implements MiddlewareInterface
 
     public function __construct(
         SessionInterface $session,
-        UserRepository $users,
+        private UserRepository $users,
         ActivityLogRepository $logs,
         private RoleRankRepository $roleRanks,
         UrlGeneratorInterface $url,
