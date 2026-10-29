@@ -207,7 +207,7 @@ return [
         Route::get('/notifications')->action(NotificationsApiAction::class)->name('api-notifications'),
         Route::patch('/notifications/{id}/read')->action(NotificationsApiAction::class)->name('api-notification-read'),
         Route::post('/notifications/read-all')->action(NotificationsApiAction::class)->name('api-notifications-read-all'),
-        Route::get('/profile')->action(ProfileApiAction::class)->name('api-profile'),
+        Route::methods(['GET', 'POST'], '/profile')->action(ProfileApiAction::class)->name('api-profile'),
     ),
 
     // Admin JSON API (auth required — bearer token OR session)
@@ -221,7 +221,9 @@ return [
         Route::get('/permissions-matrix')->action(AdminPermissionsMatrixApiAction::class)->name('api-admin-permissions-matrix'),
         Route::methods(['GET', 'POST'], '/users')->action(AdminUsersApiAction::class)->name('api-admin-users'),
         Route::methods(['GET', 'POST'], '/orders')->action(AdminOrdersApiAction::class)->name('api-admin-orders'),
+        Route::methods(['GET', 'POST'], '/orders/{id}')->action(AdminOrdersApiAction::class)->name('api-admin-order'),
         Route::post('/orders/bulk')->action(AdminOrdersApiAction::class)->name('api-admin-orders-bulk'),
+        Route::methods(['GET', 'POST'], '/profile')->action(ProfileApiAction::class)->name('api-admin-profile'),
         Route::get('/topups')->action(AdminTopupsApiAction::class)->name('api-admin-topups'),
         Route::methods(['GET', 'POST'], '/recharges/{id}')->action(AdminRechargesApiAction::class)->name('api-admin-recharges'),
         // Static `receipt` suffix after {id} — a distinct FastRoute pattern,
@@ -233,7 +235,7 @@ return [
         // the web /admin/withdraws/{id} desk — the Android super-admin
         // gets exactly the same approve/reject rules as the browser.
         Route::methods(['POST'], '/withdraws/{id}')->action(AdminWithdrawsApiAction::class)->name('api-admin-withdraw'),
-        Route::get('/staff')->action(AdminStaffApiAction::class)->name('api-admin-staff'),
+        Route::methods(['GET', 'POST'], '/staff')->action(AdminStaffApiAction::class)->name('api-admin-staff'),
         Route::methods(['GET', 'POST'], '/settings')->action(AdminSettingsApiAction::class)->name('api-admin-settings'),
         Route::get('/logs')->action(AdminLogsApiAction::class)->name('api-admin-logs'),
         Route::get('/notifications')->action(AdminNotificationsApiAction::class)->name('api-admin-notifications'),

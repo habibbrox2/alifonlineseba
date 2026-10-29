@@ -54,8 +54,10 @@
 -keep interface retrofit2.http.multipart.Part
 -keep interface retrofit2.http.PartMap
 
-# Keep admin API classes
+# Keep admin API and data model classes completely from obfuscation / shrinking
+-keep class com.aliftools.admin.data.api.** { *; }
 -keepclassmembers class com.aliftools.admin.data.api.** { *; }
+-keep class com.aliftools.admin.data.model.** { *; }
 -keepclassmembers class com.aliftools.admin.data.model.** { *; }
 
 # Keep OkHttp logging interceptor

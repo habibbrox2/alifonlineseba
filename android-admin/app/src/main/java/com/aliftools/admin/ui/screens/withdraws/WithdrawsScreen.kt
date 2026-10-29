@@ -85,7 +85,11 @@ fun WithdrawsScreen(
             onApprove = {
                 val activity = context2 as? FragmentActivity
                 if (activity != null && biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
-                    biometric.showPrompt(activity, onSuccess = { viewModel.approve(row) }, onFailure = {})
+                    biometric.showPrompt(
+                        activity,
+                        onSuccess = { viewModel.approve(row) },
+                        onFailure = { msg -> viewModel.showSnack(msg) }
+                    )
                 } else {
                     viewModel.approve(row)
                 }

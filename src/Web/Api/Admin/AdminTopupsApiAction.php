@@ -29,8 +29,9 @@ final readonly class AdminTopupsApiAction
         $params = $request->getQueryParams();
         $page = max(1, (int) ($params['page'] ?? '1'));
         $status = (string) ($params['status'] ?? '');
+        $q = trim((string) ($params['q'] ?? ''));
 
-        $data = $this->topups->adminList($page, self::PER_PAGE, $status);
+        $data = $this->topups->adminList($page, self::PER_PAGE, $status, $q);
 
         return Api::ok([
             'rows' => $data['rows'],
@@ -38,6 +39,8 @@ final readonly class AdminTopupsApiAction
             'page' => $page,
             'perPage' => self::PER_PAGE,
             'status' => $status,
+            'q' => $q,
+            'stats' => $this->topups->stats(),
         ]);
     }
 }

@@ -97,7 +97,7 @@ fun CategoriesScreen(
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rows) { row ->
-                    val id = (row["id"] as? Number)?.toInt() ?: 0
+                    val id = (row["id"] as? Number)?.toInt() ?: (row["id"] as? String)?.toIntOrNull() ?: 0
                     val title = row["name"]?.toString() ?: ""
                     val status = row["status"]?.toString() ?: ""
                     Card(modifier = Modifier.fillMaxWidth()) {

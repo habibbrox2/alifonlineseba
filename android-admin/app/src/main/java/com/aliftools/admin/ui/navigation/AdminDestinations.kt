@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,6 +43,7 @@ object AdminDestinations {
     val staff = AdminDestination(Screen.Staff.route, "স্টাফ", Icons.Outlined.Badge, AdminGroup.Management)
     val users = AdminDestination(Screen.Users.route, "ইউজার", Icons.Outlined.Group, AdminGroup.Management)
     val orders = AdminDestination(Screen.Orders.route, "অর্ডার", Icons.Outlined.Inbox, AdminGroup.Management)
+    val profile = AdminDestination(Screen.Profile.route, "আমার প্রোফাইল", Icons.Outlined.Person, AdminGroup.Management)
 
     // Finance
     val ledger = AdminDestination(Screen.Ledger.route, "আমার হিসাব", Icons.AutoMirrored.Outlined.ReceiptLong, AdminGroup.Finance)

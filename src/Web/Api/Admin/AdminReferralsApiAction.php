@@ -28,12 +28,16 @@ final readonly class AdminReferralsApiAction
 
         $params = $request->getQueryParams();
         $page = max(1, (int) ($params['page'] ?? '1'));
-        $data = $this->referrals->paginateOverview($page, 20);
+        $status = (string) ($params['status'] ?? '');
+        $query = trim((string) ($params['q'] ?? ''));
+
+        $data = $this->referrals->adminList($page, 20, $status, $query);
         return Api::ok([
             'rows' => $data['rows'],
             'total' => $data['total'],
             'page' => $page,
             'perPage' => 20,
+            'stats' => $this->referrals->stats(),
         ]);
     }
 }

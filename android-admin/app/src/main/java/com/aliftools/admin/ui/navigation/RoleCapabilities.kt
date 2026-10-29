@@ -38,7 +38,7 @@ object RoleCapabilities {
         isSuperAdmin(role) || role?.contains("admin", ignoreCase = true) == true
 
     fun canAccess(destination: AdminDestination, role: String?): Boolean {
-        if (destination == AdminDestinations.home) return true
+        if (destination == AdminDestinations.home || destination == AdminDestinations.profile) return true
         if (role.isNullOrBlank()) return false
         if (isSuperAdmin(role)) return true
         if (isAdmin(role)) return destination.route !in superOnly

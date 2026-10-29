@@ -123,7 +123,47 @@ data class AdminOrder(
     @SerializedName("user_id") val userId: Int,
     @SerializedName("created_at") val createdAt: String?,
     @SerializedName("claimed_by") val claimedBy: Int? = null,
-    @SerializedName("claimed_by_name") val claimedByName: String? = null
+    @SerializedName("claimed_by_name") val claimedByName: String? = null,
+    val price: String? = null,
+    val reference: String? = null,
+    @SerializedName("admin_note") val adminNote: String? = null,
+    @SerializedName("cancellation_reason") val cancellationReason: String? = null
+)
+
+data class AdminProfile(
+    val id: Int,
+    val username: String,
+    @SerializedName("full_name") val fullName: String? = null,
+    @SerializedName("display_name") val displayName: String? = null,
+    val phone: String? = null,
+    val email: String? = null,
+    val role: String,
+    val balance: Double = 0.0,
+    val avatar: String? = null
+)
+
+data class OrderDetailUser(
+    val id: Int,
+    val name: String? = null,
+    val phone: String? = null,
+    val email: String? = null
+)
+
+data class OrderResultEntry(
+    val key: String,
+    val label: String,
+    val value: String
+)
+
+data class OrderDetailEnvelope(
+    val order: AdminOrder,
+    val user: OrderDetailUser? = null,
+    val metadata: Map<String, Any?>? = null,
+    @SerializedName("canDecide") val canDecide: Boolean = false,
+    @SerializedName("isMine") val isMine: Boolean = false,
+    val claimer: OrderDetailUser? = null,
+    val approver: OrderDetailUser? = null,
+    @SerializedName("resultEntries") val resultEntries: List<OrderResultEntry>? = null
 )
 
 /**

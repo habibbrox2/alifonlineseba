@@ -55,8 +55,12 @@ fun ReferralsScreen(
                     val row = rows[idx]
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text(text = row["referrer"]?.toString() ?: row["username"]?.toString() ?: "#${row["id"]}", style = MaterialTheme.typography.titleSmall)
-                            Text(text = "রেফারেল সংখ্যা: ${row["count"] ?: row["referrals_count"] ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                            val referrer = row["referrer_name"]?.toString() ?: row["referrer"]?.toString() ?: row["username"]?.toString() ?: "রেফারেল #${row["id"]}"
+                            val referee = row["referee_name"]?.toString() ?: ""
+                            val status = row["status"]?.toString() ?: ""
+                            val code = row["code"]?.toString() ?: ""
+                            Text(text = if (referee.isNotEmpty()) "$referrer ➔ $referee" else referrer, style = MaterialTheme.typography.titleSmall)
+                            Text(text = "কোড: $code | স্ট্যাটাস: $status", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

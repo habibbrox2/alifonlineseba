@@ -32,6 +32,7 @@ final class NotificationEvent
     public const ADMIN_WITHDRAW_APPROVED = 'admin_withdraw.approved';
     public const ADMIN_WITHDRAW_REJECTED = 'admin_withdraw.rejected';
     public const SYSTEM_ALERT = 'system.alert';
+    public const ADMIN_LOGIN = 'admin.login';
 
     /**
      * Per-event channel matrix + priority + admin fan-out.
@@ -90,6 +91,7 @@ final class NotificationEvent
             self::ADMIN_WITHDRAW_APPROVED => ['channels' => ['in_app', 'webpush'], 'priority' => 1, 'also_admins' => false],
             self::ADMIN_WITHDRAW_REJECTED => ['channels' => ['in_app', 'webpush'], 'priority' => 1, 'also_admins' => false],
             self::SYSTEM_ALERT => ['channels' => ['in_app', 'webpush', 'telegram'], 'priority' => 1, 'also_admins' => true],
+            self::ADMIN_LOGIN => ['channels' => ['in_app', 'fcm', 'webpush', 'telegram'], 'priority' => 1, 'also_admins' => true],
             default => ['channels' => ['in_app'], 'priority' => 5, 'also_admins' => false],
         };
     }

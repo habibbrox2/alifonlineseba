@@ -2,6 +2,7 @@ package com.aliftools.admin.ui.screens.dashboard
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +97,7 @@ fun DashboardScreen(
     onNavigateToReferrals: () -> Unit = {},
     onNavigateToRoleHierarchy: () -> Unit = {},
     onNavigateToPermissionsMatrix: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     onLoggedOut: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
@@ -166,6 +168,8 @@ fun DashboardScreen(
                     onNavigateToWithdraws = onNavigateToWithdraws,
                     onNavigateToUsers = onNavigateToUsers,
                     onNavigateToLogs = onNavigateToLogs,
+                    onNavigateToNotifications = onNavigateToNotifications,
+                    onNavigateToProfile = onNavigateToProfile,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
@@ -219,6 +223,8 @@ private fun DashboardContent(
     onNavigateToWithdraws: () -> Unit,
     onNavigateToUsers: () -> Unit,
     onNavigateToLogs: () -> Unit,
+    onNavigateToNotifications: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AlifTheme.colors
@@ -249,6 +255,7 @@ private fun DashboardContent(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.clickable(onClick = onNavigateToProfile),
                         ) {
                             Box(
                                 modifier = Modifier
@@ -274,12 +281,17 @@ private fun DashboardContent(
                             }
                         }
 
-                        Icon(
-                            imageVector = Icons.Outlined.Notifications,
-                            contentDescription = "নোটিফিকেশন",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp),
-                        )
+                        IconButton(
+                            onClick = onNavigateToNotifications,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Notifications,
+                                contentDescription = "নোটিফিকেশন",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
                     }
 
                     Spacer(Modifier.height(4.dp))
@@ -408,13 +420,23 @@ private fun DashboardContent(
                         onClick = onNavigateToUsers,
                         modifier = Modifier.weight(1f),
                     )
-                    QuickActionCard(
-                        icon = Icons.Outlined.Send,
-                        title = "উত্তোলন",
-                        caption = "পে-আউট কিউ",
-                        onClick = onNavigateToWithdraws,
-                        modifier = Modifier.weight(1f),
-                    )
+                    if (role == "superadmin") {
+                        QuickActionCard(
+                            icon = Icons.Outlined.Send,
+                            title = "উত্তোলন",
+                            caption = "পে-আউট কিউ",
+                            onClick = onNavigateToWithdraws,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        QuickActionCard(
+                            icon = Icons.Outlined.Notifications,
+                            title = "নোটিফিকেশন",
+                            caption = "কিউ ও স্ট্যাটাস",
+                            onClick = onNavigateToNotifications,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }

@@ -16,6 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.outlined.Person
+import com.aliftools.admin.ui.navigation.Screen
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -88,6 +90,14 @@ fun AdminMoreSheet(
             HorizontalDivider(
                 modifier = Modifier.padding(top = 12.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            MoreRow(
+                label = "আমার প্রোফাইল",
+                icon = Icons.Outlined.Person,
+                onClick = {
+                    onDismiss()
+                    onNavigate(Screen.Profile.route)
+                },
             )
             MoreRow(
                 label = "লগআউট",

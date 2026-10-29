@@ -19,4 +19,5 @@ sealed class Screen(val route: String) {
     data object Referrals : Screen("referrals")
     data object RoleHierarchy : Screen("role_hierarchy")
     data object PermissionsMatrix : Screen("permissions_matrix")
+    data object Profile : Screen("profile")
 }

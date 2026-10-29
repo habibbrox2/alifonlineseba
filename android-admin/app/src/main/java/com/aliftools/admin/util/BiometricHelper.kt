@@ -12,21 +12,24 @@ class BiometricHelper @Inject constructor(@ApplicationContext private val contex
 
     fun isBiometricAvailable(): Int {
         val manager = BiometricManager.from(context)
-        return manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+        return manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK)
     }
 
     fun showPrompt(
         activity: FragmentActivity,
         onSuccess: () -> Unit,
-        onFailure: () -> Unit
+        onFailure: (String) -> Unit = {}
     ) {
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("অথেন্টিকেশন")
-            .setSubtitle("এই অপারেশন সক্রিয় করতে আপনার বিয়োমেট্রিক্স ব্যবহার করুন")
+            .setSubtitle("এই অপারেশন নিশ্চিত করতে আপনার বায়োমেট্রিক্স ব্যবহার করুন")
             .setNegativeButtonText("বাতিল")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK)
             .build()
 
-        val biometricPrompt = BiometricPrompt(activity, ContextCompat.getMainExecutor(context),
+        val biometricPrompt = BiometricPrompt(
+            activity,
+            ContextCompat.getMainExecutor(context),
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
@@ -35,14 +38,17 @@ class BiometricHelper @Inject constructor(@ApplicationContext private val contex
 
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
-                    onFailure()
+                    onFailure("বায়োমেট্রিক শনাক্তকরণ ব্যর্থ হয়েছে")
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
-                    onFailure()
+                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                        onFailure(errString.toString())
+                    }
                 }
-            })
+            }
+        )
 
         biometricPrompt.authenticate(promptInfo)
     }

@@ -106,6 +106,34 @@ interface AdminApiService {
         @Field("status") status: String
     ): Response<ApiResponse<ActionResponse>>
 
+    @GET("api/admin/orders/{id}")
+    suspend fun order(@Path("id") id: Int): Response<ApiResponse<OrderDetailEnvelope>>
+
+    @FormUrlEncoded
+    @POST("api/admin/orders/{id}")
+    suspend fun orderAction(
+        @Path("id") id: Int,
+        @Field("do") action: String,
+        @Field("status") status: String? = null,
+        @Field("reason") reason: String? = null,
+        @Field("admin_note") adminNote: String? = null
+    ): Response<ApiResponse<ActionResponse>>
+
+    @GET("api/admin/profile")
+    suspend fun profile(): Response<ApiResponse<AdminProfile>>
+
+    @FormUrlEncoded
+    @POST("api/admin/profile")
+    suspend fun updateProfile(
+        @Field("action") action: String? = null,
+        @Field("full_name") fullName: String? = null,
+        @Field("email") email: String? = null,
+        @Field("phone") phone: String? = null,
+        @Field("current_password") currentPass: String? = null,
+        @Field("new_password") newPass: String? = null,
+        @Field("confirm_password") confirmPass: String? = null
+    ): Response<ApiResponse<AdminProfile>>
+
     @GET("api/admin/topups")
     suspend fun topups(
         @Query("page") page: Int = 1,

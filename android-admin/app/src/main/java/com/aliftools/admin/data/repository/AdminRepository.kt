@@ -10,6 +10,7 @@ import com.aliftools.admin.data.model.*
 import com.aliftools.admin.BuildConfig
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,7 +38,9 @@ class AdminRepository @Inject constructor(
                     Result.failure(Exception(body?.message ?: "Login failed"))
                 }
             } else {
-                Result.failure(Exception(res.body()?.message ?: "Login failed"))
+                val errorStr = res.errorBody()?.string()
+                val serverMsg = parseErrorMessage(errorStr)
+                Result.failure(Exception(serverMsg ?: "Login failed"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -65,7 +68,9 @@ class AdminRepository @Inject constructor(
                     Result.failure(Exception(body?.message ?: "লগইন ফেইল হয়েছে।"))
                 }
             } else {
-                Result.failure(Exception(res.body()?.message ?: "লগইন ফেইল হয়েছে।"))
+                val errorStr = res.errorBody()?.string()
+                val serverMsg = parseErrorMessage(errorStr)
+                Result.failure(Exception(serverMsg ?: "লগইন ফেইল হয়েছে।"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -147,6 +152,39 @@ class AdminRepository @Inject constructor(
         return safeApiCall { adminApi.ordersBulk(ids = ids, status = status) }
     }
 
+    suspend fun order(id: Int): Result<OrderDetailEnvelope> {
+        return safeApiCall { adminApi.order(id) }
+    }
+
+    suspend fun orderAction(
+        id: Int,
+        action: String,
+        status: String? = null,
+        reason: String? = null,
+        adminNote: String? = null
+    ): Result<ActionResponse> {
+        return safeApiCall { adminApi.orderAction(id, action, status, reason, adminNote) }
+    }
+
+    suspend fun profile(): Result<AdminProfile> {
+        return safeApiCall { adminApi.profile() }
+    }
+
+    suspend fun updateProfile(fullName: String?, email: String?, phone: String?): Result<AdminProfile> {
+        return safeApiCall { adminApi.updateProfile(fullName = fullName, email = email, phone = phone) }
+    }
+
+    suspend fun changePassword(currentPass: String, newPass: String, confirmPass: String): Result<AdminProfile> {
+        return safeApiCall {
+            adminApi.updateProfile(
+                action = "password",
+                currentPass = currentPass,
+                newPass = newPass,
+                confirmPass = confirmPass
+            )
+        }
+    }
+
     // Topups / Recharges
 
     suspend fun topups(page: Int = 1, status: String? = null, query: String? = null): Result<PagedResponse<AdminTopup>> {
@@ -180,7 +218,9 @@ class AdminRepository @Inject constructor(
 
     suspend fun staffAction(action: String, id: Int): Result<ActionResponse> {
         return safeApiCall { adminApi.staffAction(action = action, id = id) }
-    }    // Settings — GET and POST both return the flat {key: value} map that
+    }
+
+    // Settings — GET and POST both return the flat {key: value} map that
     // SettingsRepository::all() builds, not a list of rows.
     suspend fun settings(): Result<Map<String, String>> {
         return safeApiCall { adminApi.settings() }
@@ -189,7 +229,9 @@ class AdminRepository @Inject constructor(
     suspend fun saveSettings(values: Map<String, String>): Result<Unit> {
         return safeApiCall { adminApi.saveSettings(values) }
             .map { }
-    }    // Logs
+    }
+
+    // Logs
     suspend fun logs(page: Int = 1, perPage: Int = 25, query: String? = null): Result<PagedResponse<ActivityLog>> {
         return safeApiCall { adminApi.logs(page, perPage, query) }
     }
@@ -311,7 +353,9 @@ class AdminRepository @Inject constructor(
                 }
             } else {
                 val code = res.code()
-                val msg = res.body()?.message ?: "HTTP $code"
+                val errorStr = res.errorBody()?.string()
+                val serverMsg = parseErrorMessage(errorStr)
+                val msg = serverMsg ?: "HTTP $code"
                 if (code == 401) {
                     runBlocking { tokenStorage.clearTokens() }
                 }
@@ -319,6 +363,16 @@ class AdminRepository @Inject constructor(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun parseErrorMessage(errorBody: String?): String? {
+        if (errorBody.isNullOrBlank()) return null
+        return try {
+            val json = JSONObject(errorBody)
+            json.optString("message").takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
         }
     }
 }

@@ -76,6 +76,13 @@ class MainActivity : FragmentActivity() {
             Screen.Logs.route,
             Screen.Notifications.route,
             Screen.Staff.route,
+            Screen.Categories.route,
+            Screen.Services.route,
+            Screen.Ledger.route,
+            Screen.Referrals.route,
+            Screen.RoleHierarchy.route,
+            Screen.PermissionsMatrix.route,
+            Screen.Profile.route,
         )
 
         private fun intentRoute(intent: Intent?): String? =

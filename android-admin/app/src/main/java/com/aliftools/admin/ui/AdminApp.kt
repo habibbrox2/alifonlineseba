@@ -36,6 +36,7 @@ import com.aliftools.admin.ui.screens.logs.LogsScreen
 import com.aliftools.admin.ui.screens.notifications.NotificationsScreen
 import com.aliftools.admin.ui.screens.orders.OrdersScreen
 import com.aliftools.admin.ui.screens.permissions.PermissionsMatrixScreen
+import com.aliftools.admin.ui.screens.profile.ProfileScreen
 import com.aliftools.admin.ui.screens.recharges.RechargesScreen
 import com.aliftools.admin.ui.screens.referrals.ReferralsScreen
 import com.aliftools.admin.ui.screens.rolehierarchy.RoleHierarchyScreen
@@ -151,6 +152,7 @@ fun AdminApp(
                         onNavigateToReferrals = { navController.navigate(Screen.Referrals.route) },
                         onNavigateToRoleHierarchy = { navController.navigate(Screen.RoleHierarchy.route) },
                         onNavigateToPermissionsMatrix = { navController.navigate(Screen.PermissionsMatrix.route) },
+                        onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
                         onLoggedOut = {
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(navController.graph.id) { inclusive = true }
@@ -213,6 +215,9 @@ fun AdminApp(
                 }
                 composable(Screen.PermissionsMatrix.route) {
                     PermissionsMatrixScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Screen.Profile.route) {
+                    ProfileScreen(onBack = { navController.popBackStack() })
                 }
             }
         }
