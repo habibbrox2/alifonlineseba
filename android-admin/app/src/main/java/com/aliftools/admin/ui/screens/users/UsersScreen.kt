@@ -146,7 +146,7 @@ private fun UserRow(user: User, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = user.username,
+                    text = user.username.ifBlank { "ইউজার #${user.id}" },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -159,7 +159,7 @@ private fun UserRow(user: User, onClick: () -> Unit) {
             ) {
                 Text(
                     text = listOfNotNull(
-                        user.phone.takeIf { it.isNotBlank() },
+                        user.phone?.takeIf { it.isNotBlank() },
                         roleLabel(user.role),
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
@@ -191,10 +191,10 @@ private fun UserActionsDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(user.username) },
+        title = { Text(user.username.ifBlank { "ইউজার #${user.id}" }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("মোবাইল: ${user.phone.ifBlank { "—" }}")
+                Text("মোবাইল: ${user.phone?.takeIf { it.isNotBlank() } ?: "—"}")
                 Text("ব্যালেন্স: ${Money.format(user.balance)}")
                 Text("রোল: ${roleLabel(user.role)}")
                 Text("স্ট্যাটাস: ${if (isActive) "সক্রিয়" else "নিষ্ক্রিয়"}")
@@ -370,4 +370,4 @@ private fun CreateUserDialog(
     )
 }
 
-private fun roleLabel(role: String): String = ROLES.firstOrNull { it.first == role }?.second ?: role
+private fun roleLabel(role: String?): String = ROLES.firstOrNull { it.first == role }?.second ?: (role ?: "ইউজার")

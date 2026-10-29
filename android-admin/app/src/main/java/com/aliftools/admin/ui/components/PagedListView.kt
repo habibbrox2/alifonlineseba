@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -177,7 +177,10 @@ fun <T : Any> PagedListView(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(state.rows, key = itemKey) { row ->
+                            itemsIndexed(
+                                items = state.rows,
+                                key = if (itemKey != null) { index, item -> "${itemKey(item)}_$index" } else null,
+                            ) { _, row ->
                                 itemContent(row)
                             }
                             if (state.hasMore) {

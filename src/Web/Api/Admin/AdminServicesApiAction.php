@@ -33,10 +33,25 @@ final readonly class AdminServicesApiAction
         }
 
         $params = $request->getQueryParams();
-        $trashed = ($params['trashed'] ?? '') === 'only' || ($params['trashed'] ?? '') === 'all';
+        $trashed = (string) ($params['trashed'] ?? ServiceRepository::DELETED_EXCLUDE);
+        if (!in_array($trashed, [ServiceRepository::DELETED_EXCLUDE, ServiceRepository::DELETED_ONLY, ServiceRepository::DELETED_ALL], true)) {
+            $trashed = ServiceRepository::DELETED_EXCLUDE;
+        }
+
+        $filter = [
+            'trashed' => $trashed,
+            'q' => trim((string) ($params['q'] ?? '')),
+            'category' => (string) ($params['category'] ?? ''),
+            'status' => (string) ($params['status'] ?? ''),
+        ];
+
+        $filtered = $this->services->adminFiltered($filter);
+
         return Api::ok([
-            'rows' => $this->services->allServices($trashed),
+            'rows' => $filtered['rows'],
             'categories' => $this->services->allCategories(false),
+            'total' => $filtered['total'],
+            'trashedCount' => $this->services->countTrashed(),
         ]);
     }
 
@@ -69,7 +84,9 @@ final readonly class AdminServicesApiAction
                 'metadata' => ['slug' => $slug],
             ]);
             return Api::ok(['message' => 'সার্ভিস তৈরি হয়েছে।']);
-        } elseif ($do === 'update') {
+        }
+
+        if ($do === 'update') {
             $id = (int) ($input['id'] ?? 0);
             if ($id <= 0) {
                 return Api::fail('আইডি প্রয়োজন।');
@@ -91,7 +108,9 @@ final readonly class AdminServicesApiAction
                 'metadata' => ['service_id' => $id],
             ]);
             return Api::ok(['message' => 'সার্ভিস আপডেট হয়েছে।']);
-        } elseif ($do === 'toggle') {
+        }
+
+        if ($do === 'toggle') {
             $id = (int) ($input['id'] ?? 0);
             $service = $this->services->findServiceById($id);
             if ($service !== null) {
@@ -100,9 +119,11 @@ final readonly class AdminServicesApiAction
                 ]);
             }
             return Api::ok(['message' => 'সার্ভিস স্ট্যাটাস পরিবর্তন হয়েছে।']);
-        } elseif ($do === 'delete') {
+        }
+
+        if ($do === 'delete') {
             $id = (int) ($input['id'] ?? 0);
-            $this->services->deleteService($id);
+            $this->services->softDelete($id);
             $this->logs->create([
                 'user_id' => $adminId,
                 'action' => 'admin.service.deleted',

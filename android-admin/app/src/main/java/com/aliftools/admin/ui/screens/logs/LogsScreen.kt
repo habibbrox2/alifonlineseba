@@ -58,7 +58,7 @@ private fun LogRow(log: ActivityLog) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = log.action,
+                    text = log.action.ifBlank { "—" },
                     style = MaterialTheme.typography.labelMedium,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.SemiBold,
@@ -70,11 +70,13 @@ private fun LogRow(log: ActivityLog) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                text = log.description,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+            log.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                Text(
+                    text = desc,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
             log.ipAddress?.takeIf { it.isNotBlank() && it != "-" }?.let {
                 Text(
                     text = it,

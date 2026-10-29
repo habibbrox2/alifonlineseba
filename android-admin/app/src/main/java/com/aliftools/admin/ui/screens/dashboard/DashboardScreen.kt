@@ -555,7 +555,7 @@ private fun ActivityRow(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = log.description.ifBlank { log.action },
+                    text = log.description?.takeIf { it.isNotBlank() } ?: log.action.ifBlank { "—" },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,

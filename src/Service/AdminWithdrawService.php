@@ -323,6 +323,11 @@ final readonly class AdminWithdrawService
         return $this->withdraws->hasOpenRequest($adminId);
     }
 
+    public function forAdmin(int $adminId, int $page = 1, int $perPage = 20): array
+    {
+        return $this->withdraws->forAdmin($adminId, $page, $perPage);
+    }
+
     private function log(int $actorId, string $action, string $description): void
     {
         $this->logs->create([

@@ -80,7 +80,8 @@ abstract class PagedViewModel<T : Any> : ActionViewModel() {
             fetch(page, _state.value.query, _state.value.filter)
                 .onSuccess { paged ->
                     _state.update { cur ->
-                        val merged = if (page == 1) paged.rows else cur.rows + paged.rows
+                        val newRows = paged.rows ?: emptyList()
+                        val merged = if (page == 1) newRows else cur.rows + newRows
                         cur.copy(
                             initialLoading = false,
                             refreshing = false,

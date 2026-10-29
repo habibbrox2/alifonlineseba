@@ -81,7 +81,7 @@ private fun NotificationRow(row: AdminNotification, busy: Boolean, onRetry: () -
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = STATUS_LABELS[row.status] ?: row.status,
+                    text = STATUS_LABELS[row.status] ?: row.status.ifBlank { "—" },
                     style = MaterialTheme.typography.labelMedium,
                     color = when (row.status) {
                         "sent" -> MaterialTheme.colorScheme.primary

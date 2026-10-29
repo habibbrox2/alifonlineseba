@@ -86,12 +86,12 @@ private fun StaffRow(member: User, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = member.fullName?.takeIf { it.isNotBlank() } ?: member.username,
+                    text = member.fullName?.takeIf { it.isNotBlank() } ?: member.username.ifBlank { "স্টাফ #${member.id}" },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = ROLE_LABELS[member.role] ?: member.role,
+                    text = ROLE_LABELS[member.role] ?: member.role.ifBlank { "স্টাফ" },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -101,7 +101,10 @@ private fun StaffRow(member: User, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "@${member.username} · ${member.phone}",
+                    text = listOfNotNull(
+                        "@${member.username.ifBlank { member.id.toString() }}",
+                        member.phone?.takeIf { it.isNotBlank() }
+                    ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -132,7 +135,7 @@ private fun StaffActionsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(user.username) },
+        title = { Text(user.username.ifBlank { "স্টাফ #${user.id}" }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("ফোন: ${user.phone}", style = MaterialTheme.typography.bodyMedium)

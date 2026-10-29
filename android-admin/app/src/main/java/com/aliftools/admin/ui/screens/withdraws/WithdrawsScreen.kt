@@ -160,7 +160,7 @@ private fun WithdrawDetailDialog(
                 Line("অ্যাডমিন", row.username ?: "#${row.adminId}")
                 Line("পরিমাণ", Money.format(row.amount))
                 Line("বর্তমান ব্যালেন্স", Money.format(row.adminBalance))
-                Line("স্ট্যাটাস", STATUS_LABELS[row.status] ?: row.status)
+                Line("স্ট্যাটাস", STATUS_LABELS[row.status] ?: row.status.ifBlank { "—" })
                 Line("তারিখ", row.createdAt ?: "-")
                 Line("রিভিউয়ার", row.reviewedBy?.let { "#$it" } ?: "-")
 
@@ -216,7 +216,7 @@ private fun WithdrawDetailDialog(
 }
 
 @Composable
-private fun Line(label: String, value: String) {
+private fun Line(label: String, value: String?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -226,6 +226,6 @@ private fun Line(label: String, value: String) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+        Text(text = value ?: "—", style = MaterialTheme.typography.bodyMedium)
     }
 }

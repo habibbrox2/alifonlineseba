@@ -138,7 +138,7 @@ private fun RechargeDetailDialog(
                 DetailLine("প্রেরক নম্বর", row.senderNumber ?: "-")
                 DetailLine("রেফারেন্স", row.reference ?: "-")
                 DetailLine("নোট", row.note ?: "-")
-                DetailLine("স্ট্যাটাস", STATUS_LABELS[row.status] ?: row.status)
+                DetailLine("স্ট্যাটাস", STATUS_LABELS[row.status] ?: row.status.ifBlank { "—" })
                 DetailLine("তারিখ", row.createdAt ?: "-")
 
                 if (row.status == "pending" || row.status == "review") {
@@ -195,13 +195,13 @@ private fun RechargeDetailDialog(
 }
 
 @Composable
-private fun DetailLine(label: String, value: String) {
+private fun DetailLine(label: String, value: String?) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+        Text(text = value ?: "—", style = MaterialTheme.typography.bodyMedium)
     }
 }

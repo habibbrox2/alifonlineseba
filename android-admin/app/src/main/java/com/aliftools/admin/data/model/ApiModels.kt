@@ -31,12 +31,12 @@ data class LoginResponse(
  * (id, username, phone, balance, role) with no status on it.
  */
 data class User(
-    val id: Int,
-    val username: String,
-    val phone: String,
-    val email: String?,
-    val role: String,
-    val balance: String,
+    val id: Int = 0,
+    val username: String = "",
+    val phone: String? = null,
+    val email: String? = null,
+    val role: String = "user",
+    val balance: String = "0.00",
     val status: String? = null,
     @SerializedName("full_name") val fullName: String? = null,
     @SerializedName("deleted_at") val deletedAt: String? = null
@@ -92,21 +92,21 @@ data class TopupStats(
 )
 
 data class ActivityLog(
-    val id: Int,
-    val action: String,
-    val description: String,
-    @SerializedName("ip_address") val ipAddress: String?,
-    @SerializedName("created_at") val createdAt: String?
+    val id: Int = 0,
+    val action: String = "",
+    val description: String? = null,
+    @SerializedName("ip_address") val ipAddress: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
 )
 
 /**
  * Paged list envelope used by list endpoints.
  */
 data class PagedResponse<T>(
-    val rows: List<T>,
-    val total: Int,
-    val page: Int,
-    @SerializedName("perPage") val perPage: Int,
+    val rows: List<T> = emptyList(),
+    val total: Int = 0,
+    val page: Int = 1,
+    @SerializedName("perPage") val perPage: Int = 20,
     @SerializedName("trashedCount") val trashedCount: Int? = null
 )
 
@@ -114,14 +114,14 @@ data class PagedResponse<T>(
  * Orders list row.
  */
 data class AdminOrder(
-    val id: Int,
-    val status: String,
+    val id: Int = 0,
+    val status: String = "pending",
     // The joined row aliases the service name as `service_name`.
-    @SerializedName("service_name") val service: String?,
-    val username: String?,
+    @SerializedName("service_name") val service: String? = null,
+    val username: String? = null,
     val phone: String? = null,
-    @SerializedName("user_id") val userId: Int,
-    @SerializedName("created_at") val createdAt: String?,
+    @SerializedName("user_id") val userId: Int = 0,
+    @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("claimed_by") val claimedBy: Int? = null,
     @SerializedName("claimed_by_name") val claimedByName: String? = null,
     val price: String? = null,
@@ -143,16 +143,16 @@ data class AdminProfile(
 )
 
 data class OrderDetailUser(
-    val id: Int,
+    val id: Int = 0,
     val name: String? = null,
     val phone: String? = null,
     val email: String? = null
 )
 
 data class OrderResultEntry(
-    val key: String,
-    val label: String,
-    val value: String
+    val key: String? = null,
+    val label: String? = null,
+    val value: String? = null
 )
 
 data class OrderDetailEnvelope(
@@ -170,48 +170,48 @@ data class OrderDetailEnvelope(
  * Topup / recharge row.
  */
 data class AdminTopup(
-    val id: Int,
-    val username: String?,
-    val phone: String?,
-    val amount: String,
-    val status: String,
-    val method: String?,
-    val reference: String?,
+    val id: Int = 0,
+    val username: String? = null,
+    val phone: String? = null,
+    val amount: String = "0.00",
+    val status: String = "pending",
+    val method: String? = null,
+    val reference: String? = null,
     @SerializedName("sender_number") val senderNumber: String? = null,
     val note: String? = null,
-    @SerializedName("created_at") val createdAt: String?
+    @SerializedName("created_at") val createdAt: String? = null
 )
 
 /**
  * Withdraw row.
  */
 data class AdminWithdraw(
-    val id: Int,
-    val username: String?,
-    val phone: String?,
-    val amount: String,
-    val status: String,
-    @SerializedName("admin_id") val adminId: Int,
-    @SerializedName("admin_balance") val adminBalance: String,
+    val id: Int = 0,
+    val username: String? = null,
+    val phone: String? = null,
+    val amount: String = "0.00",
+    val status: String = "pending",
+    @SerializedName("admin_id") val adminId: Int = 0,
+    @SerializedName("admin_balance") val adminBalance: String? = null,
     @SerializedName("reviewed_by") val reviewedBy: Int? = null,
-    @SerializedName("created_at") val createdAt: String?,
-    @SerializedName("reviewed_at") val reviewedAt: String?
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("reviewed_at") val reviewedAt: String? = null
 )
 
 /**
  * Admin notification queue row.
  */
 data class AdminNotification(
-    val id: Int,
+    val id: Int = 0,
     // notification_queue has no subject column: the event key is the label,
     // and the human text lives inside the JSON `payload` string.
     val event: String? = null,
     val channel: String? = null,
-    val status: String,
+    val status: String = "",
     val attempts: Int? = null,
     @SerializedName("last_error") val lastError: String? = null,
     val payload: String? = null,
-    @SerializedName("created_at") val createdAt: String?
+    @SerializedName("created_at") val createdAt: String? = null
 )
 
 /**

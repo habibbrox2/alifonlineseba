@@ -43,7 +43,7 @@ final readonly class AdminLedgerApiAction
         }
 
         if ($scope === 'all') {
-            $data = $this->ledger->paginateAll($page, self::PER_PAGE, $q === '' ? null : $q);
+            $data = $this->ledger->all($page, self::PER_PAGE, '', $q);
             return Api::ok([
                 'rows' => $data['rows'],
                 'total' => $data['total'],
@@ -54,15 +54,19 @@ final readonly class AdminLedgerApiAction
             ]);
         }
 
-        $data = $this->ledger->paginateForAdmin($adminId, $page, self::PER_PAGE);
+        $data = $this->ledger->forAdmin($adminId, $page, self::PER_PAGE);
+        $fresh = $this->users->findById($adminId);
+        $balance = (float) ($fresh['balance'] ?? 0.0);
+
         return Api::ok([
             'rows' => $data['rows'],
             'total' => $data['total'],
             'page' => $page,
             'perPage' => self::PER_PAGE,
             'scope' => 'me',
-            'balance' => $this->withdraws->balanceFor($adminId),
-            'pending' => $this->withdraws->pendingFor($adminId),
+            'balance' => $balance,
+            'pending' => $this->withdraws->hasOpenRequest($adminId) ? 1 : 0,
+            'minAmount' => $this->withdraws->minAmount(),
         ]);
     }
 }
