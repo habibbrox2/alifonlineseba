@@ -33,6 +33,10 @@ class DashboardViewModel @Inject constructor(
     private val _loggedOut = MutableStateFlow(false)
     val loggedOut: StateFlow<Boolean> = _loggedOut.asStateFlow()
 
+    /** True only for a pull-to-refresh, so the layout does not flash skeletons. */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
     /** App version offer from the admin update channel (default admin). */
     private val _update = MutableStateFlow<AppVersion?>(null)
     val update: StateFlow<AppVersion?> = _update.asStateFlow()
@@ -46,7 +50,6 @@ class DashboardViewModel @Inject constructor(
         checkUpdate()
     }
 
-    /** ... update logic doc ... */
     private fun checkUpdate() {
         viewModelScope.launch {
             repository.appVersion()
@@ -76,6 +79,22 @@ class DashboardViewModel @Inject constructor(
             repository.dashboard()
                 .onSuccess { _state.value = DashboardUiState.Success(it) }
                 .onFailure { _state.value = DashboardUiState.Error(it.message ?: "ত্রুটি হয়েছে") }
+        }
+    }
+
+    /**
+     * Pull-to-refresh keeps the current layout on screen: an operator should
+     * not lose the numbers they are reading because they tugged the list.
+     * A failure surfaces on the snackbar instead of blanking the screen.
+     */
+    public override fun refresh() {
+        if (_refreshing.value) return
+        viewModelScope.launch {
+            _refreshing.value = true
+            repository.dashboard()
+                .onSuccess { _state.value = DashboardUiState.Success(it) }
+                .onFailure { showSnack(it.message ?: "রিফ্রেশ ব্যর্থ হয়েছে") }
+            _refreshing.value = false
         }
     }
 }

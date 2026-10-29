@@ -1,6 +1,6 @@
 package com.aliftools.admin.ui.screens.orders
 
-import androidx.compose.foundation.clickable
+import androidx.biometric.BiometricManager
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,9 +28,9 @@ import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.data.model.AdminOrder
 import com.aliftools.admin.ui.components.PagedListView
+import com.aliftools.admin.ui.components.design.StatusPill
 import com.aliftools.admin.ui.viewmodel.OrdersViewModel
 import com.aliftools.admin.util.BiometricHelper
-import androidx.biometric.BiometricManager
 
 private val SCOPES = listOf("" to "সব অর্ডার", "mine" to "আমার", "taken" to "মুক্ত")
 
@@ -46,6 +46,7 @@ private val SETTLE_STATUSES = listOf(
 @Composable
 fun OrdersScreen(
     onBack: () -> Unit,
+    showBack: Boolean = true,
     viewModel: OrdersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -68,6 +69,7 @@ fun OrdersScreen(
         title = "অর্ডার",
         state = state,
         onBack = onBack,
+        showBack = showBack,
         onRefresh = viewModel::reload,
         onLoadMore = viewModel::loadMore,
         onSearch = viewModel::search,
@@ -121,7 +123,7 @@ private fun OrderRow(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        StatusChip(order.status)
+                        StatusPill(order.status)
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -147,35 +149,21 @@ private fun OrderRow(
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                androidx.compose.material3.OutlinedButton(onClick = { onAction("processing") }, enabled = !busy) {
+                OutlinedButton(onClick = { onAction("processing") }, enabled = !busy) {
                     Text("প্রসেসিং")
                 }
-                androidx.compose.material3.OutlinedButton(onClick = { onAction("completed") }, enabled = !busy) {
+                OutlinedButton(onClick = { onAction("completed") }, enabled = !busy) {
                     Text("সম্পন্ন")
                 }
-                androidx.compose.material3.OutlinedButton(onClick = { onAction("cancelled") }, enabled = !busy) {
+                OutlinedButton(onClick = { onAction("cancelled") }, enabled = !busy) {
                     Text("বাতিল")
                 }
-                androidx.compose.material3.OutlinedButton(onClick = { onAction("failed") }, enabled = !busy) {
+                OutlinedButton(onClick = { onAction("failed") }, enabled = !busy) {
                     Text("ব্যর্থ")
                 }
             }
         }
     }
-}
-
-@Composable
-private fun StatusChip(status: String) {
-    val label = SETTLE_STATUSES.firstOrNull { it.first == status }?.second ?: status
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium,
-        color = when (status) {
-            "completed" -> MaterialTheme.colorScheme.primary
-            "failed", "cancelled" -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.tertiary
-        },
-    )
 }
 
 /**

@@ -134,3 +134,6 @@ config/.freebuff/
 /android-admin/admin-release.jks
 /admin-release.jks
 /android-admin/admin-release.jks
+
+/android-admin/.kotlin/
+.kotlin/

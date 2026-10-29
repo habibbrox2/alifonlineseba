@@ -1,49 +1,85 @@
 package com.aliftools.admin.ui.screens.dashboard
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Payment
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.hilt.navigation.compose.hiltViewModel
-import android.content.Intent
-import android.net.Uri
+import com.aliftools.admin.data.model.ActivityLog
+import com.aliftools.admin.data.model.AdminDashboard
 import com.aliftools.admin.ui.components.AdminScaffold
+import com.aliftools.admin.ui.components.design.ErrorState
+import com.aliftools.admin.ui.components.design.QueueItem
+import com.aliftools.admin.ui.components.design.QueueRail
+import com.aliftools.admin.ui.components.design.RoleChip
+import com.aliftools.admin.ui.components.design.SectionHeader
+import com.aliftools.admin.ui.components.design.StatTile
+import com.aliftools.admin.ui.components.design.StatTone
+import com.aliftools.admin.ui.format.Dates
+import com.aliftools.admin.ui.format.Money
+import com.aliftools.admin.ui.theme.AlifTheme
 import com.aliftools.admin.ui.viewmodel.DashboardUiState
 import com.aliftools.admin.ui.viewmodel.DashboardViewModel
 
+/**
+ * The Home screen — "কর্মডেস্ক" (Work Desk).
+ *
+ * Implements the locked v1.0 design contract per §6.2:
+ * - Emerald hero banner with user greeting, role chip, and unresolved count/amount
+ * - Signature Queue Rail overlapping the hero (orders, recharges, withdraws)
+ * - 2x2 StatTile metric cards
+ * - Quick action cards
+ * - Recent activity audit trail with relative timestamps
+ */
 @Composable
 fun DashboardScreen(
     onNavigateToUsers: () -> Unit,
@@ -61,10 +97,11 @@ fun DashboardScreen(
     onNavigateToRoleHierarchy: () -> Unit = {},
     onNavigateToPermissionsMatrix: () -> Unit = {},
     onLoggedOut: () -> Unit,
-    viewModel: DashboardViewModel = hiltViewModel()
+    viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val busy by viewModel.busy.collectAsState()
+    val refreshing by viewModel.refreshing.collectAsState()
     val snack by viewModel.snack.collectAsState()
     val loggedOut by viewModel.loggedOut.collectAsState()
     val role by viewModel.role.collectAsState(initial = null)
@@ -73,357 +110,443 @@ fun DashboardScreen(
     val context = LocalContext.current
     var updateDismissed by remember { mutableStateOf(false) }
 
-    // Logout finished: leave the authed part of the graph behind entirely,
-    // so the back button cannot walk into a cleared session.
     LaunchedEffect(loggedOut) {
         if (loggedOut) onLoggedOut()
     }
 
     AdminScaffold(
-        title = "ড্যাশবোর্ড",
+        title = "হোম",
         onBack = {},
         showBack = false,
         snack = snack,
         onSnackShown = viewModel::clearSnack,
         actions = {
-            IconButton(onClick = viewModel::logout, enabled = !busy) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = "লগআউট",
-                )
-            }
-        },
-    ) { padding ->
-        when (state) {
-            is DashboardUiState.Loading -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize().padding(padding)
-                ) {
+            IconButton(onClick = { viewModel.refresh() }, enabled = !busy && !refreshing) {
+                if (refreshing) {
                     CircularProgressIndicator(
-                        // Accessible: spinner state for screen readers
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "রিফ্রেশ",
                     )
                 }
             }
-
-            is DashboardUiState.Error -> {
-                Card(
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                    ),
+        },
+    ) { padding ->
+        when (val s = state) {
+            is DashboardUiState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                    CircularProgressIndicator()
+                }
+            }
+            is DashboardUiState.Error -> {
+                ErrorState(
+                    message = s.message,
+                    onRetry = viewModel::load,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                )
+            }
+            is DashboardUiState.Success -> {
+                DashboardContent(
+                    data = s.data,
+                    role = role,
+                    onNavigateToOrders = onNavigateToOrders,
+                    onNavigateToRecharges = onNavigateToRecharges,
+                    onNavigateToWithdraws = onNavigateToWithdraws,
+                    onNavigateToUsers = onNavigateToUsers,
+                    onNavigateToLogs = onNavigateToLogs,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                )
+            }
+        }
+    }
+
+    // App update announcement
+    val offer = update
+    if (offer != null && !updateDismissed) {
+        AlertDialog(
+            onDismissRequest = { if (!updateRequired) updateDismissed = true },
+            title = { Text("নতুন সংস্করণ উপলব্ধ: v${offer.versionName}") },
+            text = {
+                Text(
+                    offer.releaseNotes?.ifBlank { null }
+                        ?: if (updateRequired) "এই সংস্করণটি চালানো চালিয়ে যাওয়ার জন্য অ্যাপটি আপডেট করতে হবে।"
+                        else "একটি নতুন সংস্করণ ডাউনলোড করার জন্য উপলব্ধ রয়েছে।"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val url = offer.downloadUrl
+                        if (!url.isNullOrBlank()) {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }
+                    }
+                ) {
+                    Text("আপডেট করুন")
+                }
+            },
+            dismissButton = if (!updateRequired) {
+                {
+                    TextButton(onClick = { updateDismissed = true }) {
+                        Text("পরে")
+                    }
+                }
+            } else null,
+        )
+    }
+}
+
+@Composable
+private fun DashboardContent(
+    data: AdminDashboard,
+    role: String?,
+    onNavigateToOrders: () -> Unit,
+    onNavigateToRecharges: () -> Unit,
+    onNavigateToWithdraws: () -> Unit,
+    onNavigateToUsers: () -> Unit,
+    onNavigateToLogs: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = AlifTheme.colors
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Emerald Hero Header
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(colors.heroStart, colors.heroEnd),
+                        )
+                    )
+                    .padding(horizontal = 16.dp, vertical = 20.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Top row: Greeting + RoleChip + Bell
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = (state as DashboardUiState.Error).message,
-                            color = MaterialTheme.colorScheme.onError,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(top = 8.dp),
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        // Accessible action buttons
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Button(onClick = { viewModel.load() }) {
-                                Text("পুনরায় চেষ্টা করুন")
-                            }
-                            Button(onClick = { /* Navigate to logs to see error details */ }) {
-                                Text("ত্রুটির বিচার")
-                            }
-                        }
-                    }
-                }
-            }
-
-            is DashboardUiState.Success -> {
-                val data = (state as DashboardUiState.Success).data
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    // Update card with accessibility
-                    update?.let { av ->
-                        item {
-                            Card(
-                                shape = MaterialTheme.shapes.large,
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(colors.gold, CircleShape),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Text(
-                                        text = "একটি নতুন আপডেট উপলব্ধ: ${av.versionName}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    if (!av.releaseNotes.isNullOrBlank()) {
-                                        Text(
-                                            text = av.releaseNotes,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    Button(
-                                        onClick = {
-                                            val url = av.downloadUrl ?: "https://your-domain.com/app/apk"
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        },
-                                        modifier = Modifier.padding(top = 8.dp),
-                                    ) {
-                                        Text("আপডেট করুন")
-                                    }
-                                }
+                                Text(
+                                    text = (role?.take(2)?.uppercase() ?: "AD"),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = colors.onGold,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "শুভ দিন",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                RoleChip(role = role ?: "admin")
                             }
                         }
-                    }
 
-                    item {
-                        MetricGrid(
-                            userCount = data.userCount,
-                            openOrders = data.openOrders.count,
-                            unresolvedCount = data.unresolvedCount,
-                            unresolvedAmount = data.unresolvedAmount,
+                        Icon(
+                            imageVector = Icons.Outlined.Notifications,
+                            contentDescription = "নোটিফিকেশন",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
                         )
                     }
 
-                    item {
-                        val isSuperAdmin = role?.contains("super", ignoreCase = true) == true
-                        QuickActions(
-                            showSuperAdmin = isSuperAdmin,
-                            onUsers = onNavigateToUsers,
-                            onOrders = onNavigateToOrders,
-                            onRecharges = onNavigateToRecharges,
-                            onWithdraws = onNavigateToWithdraws,
-                            onSettings = onNavigateToSettings,
-                            onLogs = onNavigateToLogs,
-                            onNotifications = onNavigateToNotifications,
-                            onStaff = onNavigateToStaff,
+                    Spacer(Modifier.height(4.dp))
+
+                    // Summary Line
+                    Column {
+                        Text(
+                            text = "আজকের কাজ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.8f),
+                        )
+                        Text(
+                            text = "${data.unresolvedCount}টি কাজ · ${Money.format(data.unresolvedAmount)} অপেক্ষায়",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
                         )
                     }
+                }
+            }
+        }
 
-                    if (updateRequired && update != null && !updateDismissed) {
-                        item {
-                            AlertDialog(
-                                onDismissRequest = { updateDismissed = true },
-                                title = { Text("আপডেট প্রয়োজন") },
-                                text = { Text(update?.releaseNotes ?: "") },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        val url = update?.downloadUrl ?: "https://your-domain.com/app/apk"
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                    }) { Text("ডাউনলোড করুন") }
-                                },
-                                dismissButton = { TextButton(onClick = { updateDismissed = true }) { Text("পরে") } }
-                            )
+        // Queue Rail
+        item {
+            val queueItems = listOf(
+                QueueItem("orders", "অর্ডার", data.openOrders.count),
+                QueueItem("recharges", "রিচার্জ", data.unresolvedCount),
+                QueueItem("withdraws", "উত্তোলন", 0),
+            )
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                QueueRail(
+                    items = queueItems,
+                    onSelect = { key ->
+                        when (key) {
+                            "orders" -> onNavigateToOrders()
+                            "recharges" -> onNavigateToRecharges()
+                            "withdraws" -> onNavigateToWithdraws()
                         }
-                    }
+                    },
+                )
+            }
+        }
+
+        // 2x2 Metric tiles
+        item {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SectionHeader(title = "সংক্ষিপ্ত হিসাব")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatTile(
+                        icon = Icons.Outlined.Group,
+                        value = "${data.userCount}",
+                        label = "মোট ইউজার",
+                        modifier = Modifier.weight(1f),
+                        tone = StatTone.Brand,
+                    )
+                    StatTile(
+                        icon = Icons.Outlined.Inbox,
+                        value = "${data.openOrders.count}",
+                        label = "সক্রিয় অর্ডার",
+                        modifier = Modifier.weight(1f),
+                        tone = StatTone.Info,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatTile(
+                        icon = Icons.Outlined.AccountBalanceWallet,
+                        value = Money.format("${data.txStats?.credit ?: 0.0}"),
+                        label = "মোট ক্রেডিট",
+                        modifier = Modifier.weight(1f),
+                        tone = StatTone.Gold,
+                    )
+                    StatTile(
+                        icon = Icons.Outlined.CheckCircle,
+                        value = "${data.topupStats?.approved ?: 0}",
+                        label = "অনুমোদিত রিচার্জ",
+                        modifier = Modifier.weight(1f),
+                        tone = StatTone.Success,
+                    )
                 }
             }
+        }
 
-            else -> { /* Idle */ }
+        // Quick Actions Grid
+        item {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SectionHeader(title = "দ্রুত কাজ")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QuickActionCard(
+                        icon = Icons.Outlined.Inbox,
+                        title = "অর্ডার",
+                        caption = "${data.openOrders.count}টি অপেক্ষমাণ",
+                        onClick = onNavigateToOrders,
+                        modifier = Modifier.weight(1f),
+                    )
+                    QuickActionCard(
+                        icon = Icons.Outlined.Payment,
+                        title = "রিচার্জ",
+                        caption = "${data.unresolvedCount}টি অনুরোধ",
+                        onClick = onNavigateToRecharges,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QuickActionCard(
+                        icon = Icons.Outlined.Group,
+                        title = "ইউজার",
+                        caption = "খুঁজুন ও পরিচালনা",
+                        onClick = onNavigateToUsers,
+                        modifier = Modifier.weight(1f),
+                    )
+                    QuickActionCard(
+                        icon = Icons.Outlined.Send,
+                        title = "উত্তোলন",
+                        caption = "পে-আউট কিউ",
+                        onClick = onNavigateToWithdraws,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        // Recent Activity
+        if (data.recentLogs.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    SectionHeader(
+                        title = "সাম্প্রতিক কার্যক্রম",
+                        actionLabel = "সব দেখুন",
+                        onAction = onNavigateToLogs,
+                    )
+                }
+            }
+            items(data.recentLogs.take(5)) { log ->
+                ActivityRow(
+                    log = log,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+
+        item {
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-private fun MetricGrid(
-    userCount: Int,
-    openOrders: Int,
-    unresolvedCount: Int,
-    unresolvedAmount: String,
+private fun QuickActionCard(
+    icon: ImageVector,
+    title: String,
+    caption: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                MetricCard(
-                    title = "মোট ইউজার",
-                    value = userCount.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-                MetricCard(
-                    title = "অ্যাক্টিভ অর্ডার",
-                    value = openOrders.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                MetricCard(
-                    title = "পেন্ডিং রিচার্জ",
-                    value = unresolvedCount.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-                MetricCard(
-                    title = "অনরক্ষিত Amount",
-                    value = unresolvedAmount,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-
-@Composable
-private fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
+    Surface(
+        onClick = onClick,
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier,
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            // The label sits above a hairline so the number reads as the
-            // subject of the card, which is how an operator scans it.
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 6.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary,
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
 }
 
 @Composable
-private fun QuickActions(
-    showSuperAdmin: Boolean,
-    onUsers: () -> Unit,
-    onOrders: () -> Unit,
-    onRecharges: () -> Unit,
-    onWithdraws: () -> Unit,
-    onSettings: () -> Unit,
-    onLogs: () -> Unit,
-    onNotifications: () -> Unit,
-    onStaff: () -> Unit,
+private fun ActivityRow(
+    log: ActivityLog,
+    modifier: Modifier = Modifier,
 ) {
-    // Filled for the two queues an operator checks most (users, orders),
-    // tonal for the rest — a wall of identical buttons hides the priority.
-    val primary = ButtonDefaults.buttonColors()
-    val tonal = ButtonDefaults.filledTonalButtonColors()
-
-    // Ensure minimum 48dp touch target accessibility
-    val minTouchTarget = 48.dp
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier.fillMaxWidth(),
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Button(
-                onClick = onUsers,
-                colors = primary,
+            Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .height(minTouchTarget)
-                ,shape = MaterialTheme.shapes.medium,
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
             ) {
-                Text("ইউজার")
+                Icon(
+                    imageVector = Icons.Outlined.ReceiptLong,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(16.dp),
+                )
             }
-            Button(
-                onClick = onOrders,
-                colors = primary,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(minTouchTarget)
-                ,shape = MaterialTheme.shapes.medium,
-            ) {
-                Text("অর্ডার")
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Button(
-                onClick = onRecharges,
-                colors = tonal,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(minTouchTarget)
-                ,shape = MaterialTheme.shapes.medium,
-            ) {
-                Text("রিচার্জ")
-            }
-            Button(
-                onClick = onLogs,
-                colors = tonal,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(minTouchTarget)
-                ,shape = MaterialTheme.shapes.medium,
-            ) {
-                Text("লগ")
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Button(
-                onClick = onNotifications,
-                colors = tonal,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(minTouchTarget)
-                ,shape = MaterialTheme.shapes.medium,
-            ) {
-                Text("নোটিফিকেশন")
-            }
-            if (showSuperAdmin) {
-                Button(
-                    onClick = onStaff,
-                    colors = tonal,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(minTouchTarget)
-                    ,shape = MaterialTheme.shapes.medium,
-                ) {
-                    Text("স্টাফ")
-                }
-            }
-        }
-        if (showSuperAdmin) {
-            Row(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Button(
-                    onClick = onWithdraws,
-                    colors = tonal,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(minTouchTarget)
-                    ,shape = MaterialTheme.shapes.medium,
-                ) {
-                    Text("উত্তোলন")
-                }
-                Button(
-                    onClick = onSettings,
-                    colors = tonal,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(minTouchTarget)
-                    ,shape = MaterialTheme.shapes.medium,
-                ) {
-                    Text("সেটিংস")
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = log.description.ifBlank { log.action },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+                Text(
+                    text = listOfNotNull(
+                        log.action,
+                        Dates.relative(log.createdAt) ?: log.createdAt,
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
 }
-

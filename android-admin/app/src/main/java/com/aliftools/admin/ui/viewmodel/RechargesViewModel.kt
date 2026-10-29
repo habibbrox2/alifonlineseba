@@ -25,7 +25,10 @@ class RechargesViewModel @Inject constructor(
     val detail: StateFlow<AdminTopup?> = _detail.asStateFlow()
 
     override suspend fun fetch(page: Int, query: String, filter: String): Result<PagedResponse<AdminTopup>> =
-        repository.topups(page = page, status = filter.ifBlank { null })
+        repository.topups(
+            page = page,
+            status = filter.ifBlank { null },
+        )
 
     fun openDetail(row: AdminTopup) {
         _detail.value = row

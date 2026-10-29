@@ -24,6 +24,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.data.model.AdminTopup
 import com.aliftools.admin.ui.components.PagedListView
+import com.aliftools.admin.ui.components.design.MoneyText
+import com.aliftools.admin.ui.components.design.StatusPill
+import com.aliftools.admin.ui.format.Dates
+import com.aliftools.admin.ui.format.Money
 import com.aliftools.admin.ui.viewmodel.RechargesViewModel
 
 private val STATUS_CHIPS = listOf(
@@ -39,6 +43,7 @@ private val STATUS_LABELS = STATUS_CHIPS.toMap()
 @Composable
 fun RechargesScreen(
     onBack: () -> Unit,
+    showBack: Boolean = true,
     viewModel: RechargesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -50,6 +55,7 @@ fun RechargesScreen(
         title = "রিচার্জ",
         state = state,
         onBack = onBack,
+        showBack = showBack,
         onRefresh = viewModel::reload,
         onLoadMore = viewModel::loadMore,
         onSearch = viewModel::search,
@@ -80,25 +86,17 @@ fun RechargesScreen(
 @Composable
 private fun RechargeRow(row: AdminTopup, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "${row.username ?: "-"} · ৳${row.amount}",
-                    style = MaterialTheme.typography.titleSmall,
+                    text = "${row.username ?: "-"} · ${Money.format(row.amount)}",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = STATUS_LABELS[row.status] ?: row.status,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = when (row.status) {
-                        "approved" -> MaterialTheme.colorScheme.primary
-                        "rejected" -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.tertiary
-                    },
-                )
+                StatusPill(row.status)
             }
             Text(
                 text = listOfNotNull(
@@ -110,7 +108,7 @@ private fun RechargeRow(row: AdminTopup, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = row.createdAt ?: "",
+                text = Dates.relative(row.createdAt) ?: (row.createdAt ?: ""),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -135,7 +133,7 @@ private fun RechargeDetailDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 DetailLine("ইউজার", row.username ?: "-")
-                DetailLine("পরিমাণ", "৳${row.amount}")
+                DetailLine("পরিমাণ", Money.format(row.amount))
                 DetailLine("মাধ্যম", row.method ?: "-")
                 DetailLine("প্রেরক নম্বর", row.senderNumber ?: "-")
                 DetailLine("রেফারেন্স", row.reference ?: "-")

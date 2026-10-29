@@ -1,7 +1,6 @@
 package com.aliftools.admin.ui.screens.login
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,8 +8,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -25,7 +26,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,27 +55,17 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.ui.auth.FirebasePhoneSignIn
 import com.aliftools.admin.ui.auth.FirebasePhoneSignIn.Companion.findActivity
-import com.aliftools.admin.ui.theme.AlifAdminTheme
 import com.aliftools.admin.ui.viewmodel.LoginUiState
 import com.aliftools.admin.ui.viewmodel.LoginViewModel
 
 /**
- * Login form.
- *
- * Three ways in, all landing on the same success path: username + password,
- * the same credentials with "remember me" so a shop phone does not retype the
- * username every shift, and a Firebase phone sign-in for operators who should
- * not hold a password at all.
- *
- * The Firebase path is only offered when the build actually has a Firebase app
- * (a `google-services.json`); without it the button is hidden rather than shown
- * and left to fail, because a dead control on a login screen reads as a broken
- * product.
+ * Login form restyled with emerald gradient and Bengali forms.
+ * Three ways in, all landing on the same success path.
  */
 @Composable
 fun LoginScreen(
     onLoginSuccess: (String) -> Unit,
-    viewModel: LoginViewModel = hiltViewModel()
+    viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val remembered by viewModel.rememberedIdentifier.collectAsState()
@@ -98,17 +89,11 @@ fun LoginScreen(
         val helper = phoneSignIn ?: return
         phoneError = null
         val raw = identifier.trim()
-        // The Firebase button shares the identifier field, which also accepts a
-        // username. Sending "admin" to Play Services produces an opaque SDK
-        // error, so reject anything that is not actually a phone number here
-        // and say why in the user's own words.
         val digits = raw.removePrefix("+").filter { it.isDigit() }
         if (digits.length < 9 || digits.length > 15 || digits.length != raw.removePrefix("+").length) {
-            phoneError = "ফোন সাইন ইনের জন্য সঠিক ফোন নম্বর দিন (যেমন 01712345678)।"
+            phoneError = "ফোন সাইন ইন করার জন্য সঠিক ফোন নম্বর দিন (যেমন 01712345678)।"
             return
         }
-        // Play Services needs a country code; a bare 01XXXXXXXXX reads as a
-        // local number, which is what a Bangladeshi operator will type.
         val e164 = if (raw.startsWith("+")) raw else "+880${raw.removePrefix("0")}".trimEnd('+')
         phoneBusy = true
         helper.start(
@@ -129,9 +114,6 @@ fun LoginScreen(
         }
     }
 
-    // Navigation is a side effect of reaching Success and must run in an
-    // effect: calling it directly in composition re-fires on every
-    // recomposition and can push the dashboard twice.
     LaunchedEffect(state) {
         if (state is LoginUiState.Success) {
             onLoginSuccess((state as LoginUiState.Success).role)
@@ -139,221 +121,224 @@ fun LoginScreen(
     }
 
     val busy = state is LoginUiState.Loading
+    val emerald = MaterialTheme.colorScheme.primary
+    val emeraldLight = emerald.copy(alpha = 0.08f)
 
-    AlifAdminTheme {
-        Box(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(emeraldLight, MaterialTheme.colorScheme.background),
+                )
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                            MaterialTheme.colorScheme.background,
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center,
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Spacer(Modifier.height(48.dp))
+            BrandMark()
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Alif Tools Admin",
+                style = MaterialTheme.typography.headlineMedium,
+                color = emerald,
+            )
+            Text(
+                text = "অ্যাডমিন কনসোলে সাইন ইন করুন",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(32.dp))
+
+            // Login card with emerald accent
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth(),
+                shadowElevation = 8.dp,
             ) {
-                Spacer(Modifier.height(56.dp))
-                BrandMark()
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "Alif Tools Admin",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = "অ্যাডমিন কনসোলে সাইন ইন করুন",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Spacer(Modifier.height(32.dp))
-
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        OutlinedTextField(
-                            value = identifier,
-                            onValueChange = { identifier = it },
-                            label = { Text("ইউজারনেম / ফোন") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Text,
-                                imeAction = ImeAction.Next,
-                            ),
-                            singleLine = true,
-                            shape = MaterialTheme.shapes.medium,
-                            enabled = !busy,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it },
-                            label = { Text("পাসওয়ার্ড") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                            // The toggle exists because the password field has
-                            // no autofill hint space here and a mistyped
-                            // character is the single most common support call.
-                            trailingIcon = {
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                    Icon(
-                                        imageVector = if (passwordVisible) {
-                                            Icons.Default.VisibilityOff
-                                        } else {
-                                            Icons.Default.Visibility
-                                        },
-                                        contentDescription = if (passwordVisible) {
-                                            "পাসওয়ার্ড লুকান"
-                                        } else {
-                                            "পাসওয়ার্ড দেখুন"
-                                        },
-                                    )
-                                }
-                            },
-                            visualTransformation = if (passwordVisible) {
-                                VisualTransformation.None
-                            } else {
-                                PasswordVisualTransformation()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Done,
-                            ),
-                            singleLine = true,
-                            shape = MaterialTheme.shapes.medium,
-                            enabled = !busy,
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Switch(
-                                checked = rememberMe,
-                                onCheckedChange = viewModel::setRememberMe,
-                                enabled = !busy,
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            // Password is deliberately never stored; the copy
-                            // says so, because users assume "remember me" means
-                            // the password and are surprised on the next phone.
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "আমাকে মনে রাখুন",
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                                Text(
-                                    text = "শুধু ইউজারনেম সেভ হবে, পাসওয়ার্ড নয়",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-                        Button(
-                            onClick = { viewModel.login(identifier, password, rememberMe) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            enabled = !busy,
-                            shape = MaterialTheme.shapes.medium,
-                        ) {
-                            if (busy) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text("লগইন হচ্ছে...")
-                            } else {
-                                Text("লগইন করুন", style = MaterialTheme.typography.labelLarge)
-                            }
-                        }
-
-                        if (state is LoginUiState.Error) {
-                            Text(
-                                text = (state as LoginUiState.Error).message,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(top = 10.dp),
-                            )
-                        }
-                    }
-                }
-
-                if (firebaseAvailable) {
-                    phoneError?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
-                    }
-                    Spacer(Modifier.height(24.dp))
-                    Row(
+                Column(modifier = Modifier.padding(24.dp)) {
+                    // Username field
+                    OutlinedTextField(
+                        value = identifier,
+                        onValueChange = { identifier = it },
+                        label = { Text("ইউজারনেম / ফোন") },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Next,
+                        ),
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        enabled = !busy,
+                    )
+                    Spacer(Modifier.height(16.dp))
+
+                    // Password field
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("পাসওয়ার্ড") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    imageVector = if (passwordVisible) {
+                                        Icons.Default.VisibilityOff
+                                    } else {
+                                        Icons.Default.Visibility
+                                    },
+                                    contentDescription = if (passwordVisible) {
+                                        "পাসওয়ার্ড লুকান"
+                                    } else {
+                                        "পাসওয়ার্ড দেখুন"
+                                    },
+                                )
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
+                        ),
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        enabled = !busy,
+                    )
+                    Spacer(Modifier.height(24.dp))
+
+                    // Remember me toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Divider(modifier = Modifier.weight(1f))
-                        Text(
-                            text = "অথবা",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 12.dp),
+                        Switch(
+                            checked = rememberMe,
+                            onCheckedChange = viewModel::setRememberMe,
+                            enabled = !busy,
                         )
-                        Divider(modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "আমাকে মনে রাখুন",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            Text(
+                                text = "শুধু ইউজারনেম সেভ হবে, পাসওয়ার্ড নয়",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // Login button with emerald background
+                    Button(
+                        onClick = { viewModel.login(identifier, password, rememberMe) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        enabled = !busy,
+                    ) {
+                        if (busy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text("লগইন হচ্ছে...")
+                        } else {
+                            Text("লগইন করুন", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+
                     Spacer(Modifier.height(16.dp))
-                    FirebasePhoneButton(
-                        enabled = !busy && !phoneBusy,
-                        loading = phoneBusy,
-                        onClick = ::beginPhoneSignIn,
+
+                    if (state is LoginUiState.Error) {
+                        Text(
+                            text = (state as LoginUiState.Error).message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                }
+            }
+
+            if (firebaseAvailable) {
+                phoneError?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 12.dp),
                     )
                 }
-
-                Spacer(Modifier.height(32.dp))
-            }
-        }
-
-        // SMS fallback: shown only when Play Services could not auto-verify.
-        if (otpDialog) {
-            OtpDialog(
-                code = otpCode,
-                onCodeChange = { otpCode = it },
-                onConfirm = {
-                    otpDialog = false
-                    phoneBusy = true
-                    phoneSignIn?.signInWithCode(
-                        code = otpCode.trim(),
-                        onToken = { token ->
-                            phoneBusy = false
-                            viewModel.loginWithFirebase(token, provider = "phone")
-                        },
-                        onError = { msg -> phoneBusy = false; phoneError = msg },
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "অথবা",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp),
                     )
-                },
-                onDismiss = { otpDialog = false; phoneSignIn?.reset() },
-            )
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(16.dp))
+                FirebasePhoneButton(
+                    enabled = !busy && !phoneBusy,
+                    loading = phoneBusy,
+                    onClick = ::beginPhoneSignIn,
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
         }
+    }
+
+    // SMS fallback: shown only when Play Services could not auto-verify.
+    if (otpDialog) {
+        OtpDialog(
+            code = otpCode,
+            onCodeChange = { otpCode = it },
+            onConfirm = {
+                otpDialog = false
+                phoneBusy = true
+                phoneSignIn?.signInWithCode(
+                    code = otpCode.trim(),
+                    onToken = { token ->
+                        phoneBusy = false
+                        viewModel.loginWithFirebase(token, provider = "phone")
+                    },
+                    onError = { msg -> phoneBusy = false; phoneError = msg }
+                )
+            },
+            onDismiss = { otpDialog = false; phoneSignIn?.reset() },
+        )
     }
 }
 
@@ -432,8 +417,6 @@ private fun OtpDialog(
                 OutlinedTextField(
                     value = code,
                     onValueChange = { input ->
-                        // Digits only, capped at six — the field otherwise
-                        // accepts a paste of the whole SMS.
                         onCodeChange(input.filter { it.isDigit() }.take(6))
                     },
                     label = { Text("কোড") },
@@ -463,4 +446,3 @@ private fun OtpDialog(
         shape = MaterialTheme.shapes.large,
     )
 }
-

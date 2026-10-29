@@ -138,7 +138,7 @@ States per screen: Loading (skeleton) → Success / Empty / Error (retry) / Offl
 
 ## 1.7 UI/UX (spec §17–18)
 
-Material 3, dark mode (follow system), Bengali strings already arrive from the server (JSON_UNESCAPED_UNICODE) — the app UI itself is English-first with server-provided Bengali labels where the backend sends them (e.g. `ROLE_LABELS`, status labels). Pull-to-refresh, pagination (perPage values from each action), search, filters, confirmation dialogs for every mutating action, status badges matching backend status enums. No decorative animation.
+Material 3, dark mode (follow system), **Bengali-first UI** rendered in a bundled Hind Siliguri; server-provided labels (e.g. `ROLE_LABELS`, status labels) still win where they arrive. The visual system — tokens, component kit, role-aware bottom navigation and screen layouts — is locked in `docs/ADMIN_ANDROID_UI_PLAN.md` (§0 contract), and implementation progress is tracked in `docs/ADMIN_ANDROID_UI_CHANGELOG.md`. Pull-to-refresh, pagination (perPage values from each action), search, filters, confirmation dialogs for every mutating action, status badges matching backend status enums. No decorative animation.
 
 ---
 

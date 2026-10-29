@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alif Tools Admin — UI Layout Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brand-900:#083F31; --brand-800:#0A5540; --brand-700:#0B6E51; --brand-600:#0D8F68;
+    --brand-100:#D1FAE5; --brand-50:#ECFDF5;
+    --gold-500:#F5B301; --gold-200:#FDE68A; --gold-50:#FFFBEB; --gold-ink:#8A5F00; --on-gold:#2B1D00;
+    --surface:#FFFFFF; --page:#F4F7F6; --sunken:#E8EEEC; --line:#E5E7EB;
+    --ink:#1F2A26; --ink-2:#525252; --muted:#737373;
+    --warning:#D97706; --warning-ink:#B45309; --warning-bg:#FFFBEB;
+    --info:#2563EB; --info-ink:#1D4ED8; --info-bg:#EFF6FF;
+    --success:#059669; --success-ink:#047857; --success-bg:#ECFDF5;
+    --danger:#DC2626; --danger-ink:#B91C1C; --danger-bg:#FEF2F2;
+    --r-card:18px; --r-rail:20px;
+    --shadow-frame:0 26px 60px -30px rgba(8,63,49,.55), 0 2px 8px rgba(8,63,49,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif;
+    background:#EDF2F0; color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    padding:48px 32px 80px;
+  }
+  .wrap{max-width:1560px;margin:0 auto}
+
+  /* ---------- board header ---------- */
+  .board-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:24px;
+    padding-bottom:28px;border-bottom:1px solid #D8E3DF;margin-bottom:40px}
+  .board-head h1{font-size:38px;line-height:1.2;font-weight:700;margin:0;letter-spacing:0;color:var(--brand-900)}
+  .board-head h1 span{display:block;font-size:15px;font-weight:500;color:var(--ink-2);margin-top:6px}
+  .board-meta{display:flex;gap:28px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+  .board-meta b{display:block;color:var(--brand-900);font-size:14px;font-weight:600;margin-bottom:2px}
+  .board-meta div{min-width:104px}
+
+  /* ---------- frames ---------- */
+  .frames{display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start}
+  figure{margin:0}
+  figcaption{margin-top:16px;font-size:13.5px;font-weight:600;color:var(--brand-900);display:flex;gap:8px;align-items:baseline}
+  figcaption span{font-weight:500;color:var(--ink-2);font-size:12.5px}
+  .device{width:380px;padding:10px;border-radius:36px;background:#0C1F19;box-shadow:var(--shadow-frame)}
+  .phone{position:relative;width:360px;height:800px;border-radius:27px;overflow:hidden;background:var(--page);
+    display:flex;flex-direction:column;font-size:14px;line-height:1.45}
+  .phone.tint{background:#EFF5F2}
+
+  /* status bar */
+  .statusbar{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;
+    font-size:10.5px;font-weight:600;letter-spacing:.02em;flex:none}
+  .statusbar.on-dark{color:rgba(255,255,255,.92)}
+  .statusbar .sys{display:flex;gap:5px;align-items:center;opacity:.9}
+  .statusbar .sys i{display:block;width:3px;height:8px;background:currentColor;border-radius:1px;opacity:.7}
+  .statusbar .sys i:nth-child(2){height:10px}
+  .statusbar .sys i:nth-child(3){height:12px}
+  .statusbar .batt{width:18px;height:9px;border:1px solid currentColor;border-radius:2px;position:relative;opacity:.85}
+  .statusbar .batt::after{content:'';position:absolute;inset:1.5px 5px 1.5px 1.5px;background:currentColor;border-radius:1px}
+
+  /* icons */
+  .i{width:20px;height:20px;display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .i.sm{width:16px;height:16px}
+  .i.xs{width:13px;height:13px}
+  .i.lg{width:24px;height:24px}
+
+  /* ---------- home hero ---------- */
+  .hero{flex:none;padding:0 16px 0;background:linear-gradient(135deg,#083F31 0%,#0A5540 58%,#0B6E51 100%);color:#fff;position:relative}
+  .hero-top{display:flex;align-items:center;gap:10px;padding-top:6px}
+  .avatar{width:36px;height:36px;border-radius:999px;background:var(--gold-500);color:var(--on-gold);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
+  .greet{flex:1;min-width:0}
+  .greet strong{display:block;font-size:15px;font-weight:600;line-height:1.3}
+  .greet small{display:flex;align-items:center;gap:5px;font-size:12px;color:rgba(255,255,255,.82);margin-top:1px}
+  .rolechip{display:inline-flex;align-items:center;gap:3px;background:rgba(255,255,255,.14);color:#fff;
+    border-radius:999px;padding:1px 7px;font-size:12px;font-weight:600}
+  .rolechip .i{width:10px;height:10px}
+  .bellbox{position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+    border-radius:999px;background:rgba(255,255,255,.10);color:#fff;flex:none}
+  .bellbox .dot{position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:999px;background:var(--gold-500);
+    box-shadow:0 0 0 2px #0A5540}
+  .hero-eyebrow{font-size:12px;font-weight:500;color:rgba(255,255,255,.8);margin:14px 0 2px}
+  .hero h2{font-size:22px;line-height:1.3;font-weight:700;margin:0}
+  .hero-sub{margin:2px 0 0;font-size:12.5px;color:rgba(255,255,255,.78);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .hero-sub b{font-size:15px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums}
+
+  /* queue rail */
+  .rail{position:relative;z-index:3;display:flex;background:#fff;border:1px solid var(--line);
+    border-radius:20px;margin:14px 0 -30px;box-shadow:0 10px 24px -18px rgba(8,63,49,.6);overflow:hidden}
+  .qtile{flex:1;padding:11px 12px 12px;position:relative;border-right:1px solid var(--line)}
+  .qtile:last-child{border-right:0}
+  .qtile .q{font-size:26px;line-height:1.1;font-weight:700;color:var(--brand-900);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:4px}
+  .qtile .q .dot{width:6px;height:6px;border-radius:999px;background:var(--gold-500);display:inline-block}
+  .qtile.zero .q{color:#C5D0CB}
+  .qtile.zero .q .i{color:var(--success);width:15px;height:15px}
+  .qtile small{display:block;font-size:12px;font-weight:500;color:var(--ink-2);margin-top:2px}
+  .qtile.zero small{color:var(--muted)}
+
+  /* page body */
+  .page{flex:1;min-height:0;padding:44px 16px 8px;overflow:hidden;background:var(--page)}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 0 8px}
+  .sec-head h3{font-size:15px;font-weight:600;margin:0;color:var(--ink)}
+  .sec-head a{font-size:12px;font-weight:600;color:var(--brand-700);text-decoration:none;display:flex;align-items:center;gap:2px}
+  .sec-head a .i{width:12px;height:12px}
+  .gap{height:18px}
+
+  /* stat tiles */
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tile{background:#fff;border:1px solid var(--line);border-radius:16px;padding:11px 12px;display:flex;gap:9px;align-items:center;min-height:66px}
+  .tile .ico{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none}
+  .tile .ico .i{width:17px;height:17px}
+  .tile .ico.b{background:var(--brand-50);color:var(--brand-700)}
+  .tile .ico.i{background:var(--info-bg);color:var(--info)}
+  .tile .ico.g{background:var(--gold-50);color:var(--gold-ink)}
+  .tile .ico.s{background:var(--success-bg);color:var(--success)}
+  .tile b{display:block;font-size:18px;line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .tile span{display:block;font-size:12px;color:var(--ink-2);margin-top:1px}
+
+  /* quick actions */
+  .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .qcard{background:#fff;border:1px solid var(--line);border-radius:16px;padding:11px 12px;display:flex;gap:9px;align-items:center}
+  .qcard .ico{width:32px;height:32px;border-radius:10px;background:var(--brand-50);color:var(--brand-700);display:flex;align-items:center;justify-content:center;flex:none}
+  .qcard b{display:block;font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.3}
+  .qcard small{display:block;font-size:12px;color:var(--ink-2);margin-top:1px}
+  .qcard .chev{margin-left:auto;color:#B6C3BE}
+
+  /* activity */
+  .act{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .arow{display:flex;gap:9px;padding:9px 12px;border-bottom:1px solid #F0F4F3;align-items:flex-start}
+  .arow:last-child{border-bottom:0}
+  .arow .ico{width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px}
+  .arow .ico .i{width:12px;height:12px}
+  .arow b{display:block;font-size:12px;font-weight:600;color:var(--ink)}
+  .arow small{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+
+  /* bottom nav */
+  .nav{flex:none;height:60px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:stretch;padding-bottom:4px}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    color:var(--ink-2);font-size:12px;font-weight:500;position:relative;text-decoration:none}
+  .tab .i{width:20px;height:20px}
+  .tab.on{color:var(--brand-700);font-weight:600}
+  .tab.on::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;
+    background:var(--brand-600);border-radius:0 0 3px 3px}
+
+  /* ---------- app bar screens ---------- */
+  .appbar{flex:none;background:linear-gradient(120deg,#083F31 0%,#0A5540 60%,#0B6E51 100%);color:#fff;
+    padding:0 8px 0 6px;height:54px;display:flex;align-items:center;gap:4px}
+  .appbar .iconbtn{width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:999px;color:#fff;flex:none}
+  .appbar h1{font-size:17px;font-weight:600;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .appbar .spacer{flex:1}
+
+  /* search + chips */
+  .listpage{flex:1;min-height:0;padding:10px 16px 0;background:var(--page);overflow:hidden;display:flex;flex-direction:column}
+  .search{height:48px;border:1px solid var(--line);border-radius:12px;background:#fff;display:flex;align-items:center;
+    gap:8px;padding:0 12px;color:var(--muted);font-size:12px}
+  .search .i{color:var(--ink-2);width:16px;height:16px}
+  .chips{display:flex;gap:6px;margin:10px 0 12px;overflow:hidden}
+  .chip{flex:none;height:36px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);
+    background:#fff;padding:0 11px;font-size:12px;font-weight:500;color:var(--ink-2);white-space:nowrap}
+  .chip b{font-weight:600;margin-left:4px;font-variant-numeric:tabular-nums}
+  .chip.on{background:var(--brand-700);border-color:var(--brand-700);color:#fff;font-weight:600}
+
+  /* queue rows */
+  .rows{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden}
+  .qrow{background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px 12px 11px;position:relative}
+  .qrow.attention{padding-left:14px}
+  .qrow.attention::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--warning)}
+  .qrow.attention.info::before{background:var(--info)}
+  .qr-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:1px}
+  .qid{font-size:12px;font-weight:500;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .amt{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.35}
+  .amt.held{color:var(--gold-ink)}
+  .qmeta{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-2);margin-top:1px}
+  .qmeta .who{font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qsub{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);margin-top:2px}
+  .qsub .ref{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* status pills */
+  .pill{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 9px;border-radius:999px;
+    font-size:12px;font-weight:600;white-space:nowrap;flex:none}
+  .pill.warn{background:var(--warning-bg);color:var(--warning-ink)}
+  .pill.info{background:var(--info-bg);color:var(--info-ink)}
+  .pill.ok{background:var(--success-bg);color:var(--success-ink)}
+  .pill.bad{background:var(--danger-bg);color:var(--danger-ink)}
+  .pill.neutral{background:#F5F5F5;color:var(--ink-2)}
+  .spinner{width:8px;height:8px;border:1.6px solid currentColor;border-right-color:transparent;border-radius:999px;
+    display:inline-block;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .listfoot{flex:none;text-align:center;font-size:12px;color:var(--ink-2);padding:10px 0 40px}
+
+  /* ---------- sheet screen ---------- */
+  .scene{position:relative;flex:1;min-height:0;overflow:hidden}
+  .scrim{position:absolute;inset:0;background:rgba(8,63,49,.5);z-index:2}
+  .sheet{position:absolute;left:0;right:0;bottom:0;z-index:3;background:#fff;border-radius:24px 24px 0 0;
+    box-shadow:0 -22px 50px -18px rgba(8,63,49,.5);padding:8px 16px 12px;display:flex;flex-direction:column}
+  .handle{width:34px;height:4px;border-radius:999px;background:#DCE4E1;margin:2px auto 12px}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+  .sheet-head h2{font-size:16px;font-weight:600;margin:0}
+  .amountband{background:var(--brand-50);border:1px solid var(--brand-100);border-radius:14px;padding:11px 14px;margin-bottom:10px}
+  .amountband .big{font-size:28px;font-weight:700;line-height:1.15;color:var(--brand-800);font-variant-numeric:tabular-nums}
+  .amountband small{display:block;font-size:12px;color:var(--brand-700);margin-top:2px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #F0F4F3;font-size:12px}
+  .kv:last-of-type{border-bottom:0}
+  .kv span{color:var(--ink-2);flex:none}
+  .kv b{font-weight:500;color:var(--ink);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .thumbrow{display:flex;align-items:center;gap:10px;margin:10px 0 12px}
+  .thumb{width:56px;height:56px;border-radius:10px;border:1px solid var(--line);background:var(--sunken);
+    display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none}
+  .thumbrow small{font-size:12px;color:var(--ink-2);line-height:1.4}
+  .actions{display:flex;flex-direction:column;gap:7px;padding-top:2px}
+  .btn{height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:6px;
+    font-size:13px;font-weight:600;border:1px solid transparent}
+  .btn.primary{background:var(--brand-700);color:#fff}
+  .btn.outline{background:#fff;border-color:#E3D3D3;color:var(--danger-ink)}
+  .btn.ghost{background:#fff;border-color:var(--line);color:var(--ink-2)}
+  .btn.gold{background:var(--gold-500);color:var(--on-gold)}
+
+  /* ---------- login ---------- */
+  .login{position:relative;flex:1;background:linear-gradient(150deg,#083F31 0%,#0A5540 62%,#0B6E51 100%);overflow:hidden;display:flex;flex-direction:column}
+  .login .glow{position:absolute;width:320px;height:320px;border-radius:999px;right:-140px;top:-120px;
+    background:radial-gradient(circle,rgba(245,179,1,.16),rgba(245,179,1,0) 68%)}
+  .brandrow{display:flex;align-items:center;gap:9px;padding:16px 20px 0;position:relative;z-index:2;color:#fff}
+  .mark{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.18);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:var(--gold-200)}
+  .brandrow b{display:block;font-size:16px;font-weight:600;letter-spacing:0}
+  .brandrow small{display:block;font-size:12px;color:rgba(255,255,255,.76);margin-top:-1px}
+  .login-copy{padding:30px 20px 0;position:relative;z-index:2;color:#fff;flex:none}
+  .login-copy p{font-size:12px;color:rgba(255,255,255,.76);margin:0 0 5px}
+  .login-copy h2{font-size:25px;line-height:1.35;font-weight:700;margin:0;max-width:290px}
+  .login-feats{margin-top:auto;display:flex;flex-direction:column;gap:9px;padding:0 22px 22px;position:relative;z-index:2}
+  .login-feats span{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:rgba(255,255,255,.84)}
+  .login-feats .i{width:14px;height:14px;color:var(--gold-200)}
+  .login-sheet{background:#fff;border-radius:24px 24px 0 0;padding:20px 20px 22px;position:relative;z-index:2;
+    box-shadow:0 -20px 40px -24px rgba(0,0,0,.45)}
+  .login-sheet h3{font-size:16px;font-weight:600;margin:0 0 14px}
+  .field{margin-bottom:11px}
+  .field label{display:block;font-size:12px;font-weight:500;color:var(--ink-2);margin-bottom:4px}
+  .input{height:48px;border:1px solid var(--line);background:var(--page);border-radius:12px;display:flex;align-items:center;
+    gap:8px;padding:0 12px;font-size:12.5px;color:var(--muted)}
+  .input .i{width:16px;height:16px;color:#9AA8A3}
+  .input .eye{margin-left:auto;color:#9AA8A3}
+  .login-sheet .btn.primary{height:48px;margin-top:4px;font-size:13.5px}
+  .alt{text-align:center;font-size:12px;font-weight:500;color:var(--brand-700);margin-top:11px}
+  .secure{display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;color:var(--muted);margin-top:12px}
+
+  /* ---------- more sheet ---------- */
+  .moresheet{position:absolute;left:0;right:0;top:52px;bottom:0;background:#fff;border-radius:22px 22px 0 0;
+    padding:8px 16px 16px;z-index:3;overflow:hidden;box-shadow:0 -18px 44px -22px rgba(8,63,49,.45)}
+  .moresheet h2{font-size:17px;font-weight:700;margin:4px 0 6px}
+  .mgroup{font-size:12px;font-weight:600;color:var(--muted);margin:8px 0 0}
+  .mrow{display:flex;align-items:center;gap:9px;height:48px;border-bottom:1px solid #F3F6F5;font-size:13px;color:var(--ink)}
+  .mrow:last-child{border-bottom:0}
+  .mrow .ico{width:26px;height:26px;border-radius:8px;background:var(--brand-50);color:var(--brand-700);
+    display:flex;align-items:center;justify-content:center;flex:none}
+  .mrow .ico .i{width:13px;height:13px}
+  .mrow .count{font-size:12px;font-weight:600;color:var(--gold-ink);background:var(--gold-50);border:1px solid var(--gold-200);
+    border-radius:999px;padding:0 6px}
+  .mrow .chev{margin-left:auto;color:#B6C3BE}
+  .mrow.danger{color:var(--danger-ink);margin-top:6px;border-top:1px solid var(--line)}
+  .mrow.danger .ico{background:var(--danger-bg);color:var(--danger)}
+
+  /* ---------- tokens section ---------- */
+  .tokens{margin-top:72px;padding-top:36px;border-top:1px solid #D8E3DF}
+  .tokens h2{font-size:22px;font-weight:700;color:var(--brand-900);margin:0 0 4px}
+  .tokens .lede{font-size:13px;color:var(--ink-2);margin:0 0 26px}
+  .tokgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px}
+  .panel{background:#fff;border:1px solid #DDE7E3;border-radius:18px;padding:20px 22px}
+  .panel h4{font-size:11px;font-weight:600;color:var(--muted);margin:0 0 12px}
+  .swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px}
+  .sw{border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .sw .c{height:44px}
+  .sw .t{padding:5px 7px;background:#fff}
+  .sw .t b{display:block;font-size:10.5px;font-weight:600;color:var(--ink)}
+  .sw .t span{display:block;font-size:9.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .typescale{display:flex;flex-direction:column;gap:10px}
+  .ts{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid #F0F4F3;padding-bottom:8px}
+  .ts:last-child{border:0;padding:0}
+  .ts .name{width:112px;flex:none;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .ts .sample{color:var(--ink)}
+  .kit{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .kit .pill{height:26px;font-size:11px;padding:0 10px}
+  .kit .btn{height:36px;padding:0 14px;font-size:12px}
+  .note{font-size:12px;color:var(--ink-2);line-height:1.6;margin:10px 0 0}
+  .note b{color:var(--ink)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:var(--page);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M8 8h8M8 12h8"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-badge" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="12" r="2"/><path d="M15 9h3M15 12h3M15 15h3"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1a7 7 0 0 1 14 0v1"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a2 2 0 1 1 0 4h-3a2 2 0 1 0 0 4h4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M12 8v5M12 16h.01"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+
+  <header class="board-head">
+    <h1>কর্মডেস্ক — অ্যাডমিন অ্যাপ
+      <span>Alif Tools Admin · UI layout board · 360 × 800 dp</span>
+    </h1>
+    <div class="board-meta">
+      <div><b>Hind Siliguri</b>বাংলা টাইপফেস</div>
+      <div><b>#083F31 → #0B6E51</b>ব্র্যান্ড গ্রেডিয়েন্ট</div>
+      <div><b>#F5B301</b>গোল্ড · শুধু মনোযোগের জন্য</div>
+    </div>
+  </header>
+
+  <section class="frames">
+
+    <!-- ============ 1. HOME ============ -->
+    <figure>
+      <div class="device">
+        <div class="phone">
+          <div class="statusbar on-dark" style="background:#083F31">
+            <span>9:41</span>
+            <span class="sys"><i></i><i></i><i></i><span class="batt"></span></span>
+          </div>
+
+          <div class="hero">
+            <div class="hero-top">
+              <div class="avatar">রহ</div>
+              <div class="greet">
+                <strong>শুভ সন্ধ্যা</strong>
+                <small>রফিক হাসান <span class="rolechip"><svg class="i"><use href="#i-shield"/></svg>অ্যাডমিন</span></small>
+              </div>
+              <div class="bellbox"><svg class="i"><use href="#i-bell"/></svg><span class="dot"></span></div>
+            </div>
+
+            <p class="hero-eyebrow">আজকের কাজ</p>
+            <h2>5টি কাজ অপেক্ষা করছে</h2>
+            <p class="hero-sub"><b>৳ 12,400.00</b> যাচাইয়ের অপেক্ষায়</p>
+
+            <div class="rail">
+              <div class="qtile">
+                <div class="q">4 <span class="dot"></span></div>
+                <small>অর্ডার</small>
+              </div>
+              <div class="qtile">
+                <div class="q">2 <span class="dot"></span></div>
+                <small>রিচার্জ</small>
+              </div>
+              <div class="qtile zero">
+                <div class="q">0 <svg class="i"><use href="#i-check"/></svg></div>
+                <small>উত্তোলন</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="page">
+            <div class="sec-head"><h3>সংক্ষিপ্ত হিসাব</h3><a href="#">সব দেখুন <svg class="i"><use href="#i-chev"/></svg></a></div>
+            <div class="tiles">
+              <div class="tile"><div class="ico b"><svg class="i"><use href="#i-users"/></svg></div><div><b>1,284</b><span>মোট ইউজার</span></div></div>
+              <div class="tile"><div class="ico i"><svg class="i"><use href="#i-inbox"/></svg></div><div><b>12</b><span>সক্রিয় অর্ডার</span></div></div>
+              <div class="tile"><div class="ico g"><svg class="i"><use href="#i-coin"/></svg></div><div><b>৳ 8,900.00</b><span>অপেক্ষমাণ ব্যালেন্স</span></div></div>
+              <div class="tile"><div class="ico s"><svg class="i"><use href="#i-check"/></svg></div><div><b>৳ 24,500.00</b><span>আজ অনুমোদিত</span></div></div>
+            </div>
+
+            <div class="gap"></div>
+            <div class="sec-head"><h3>দ্রুত কাজ</h3></div>
+            <div class="quick">
+              <div class="qcard">
+                <div class="ico"><svg class="i"><use href="#i-inbox"/></svg></div>
+                <div><b>অর্ডার</b><small>4টি অপেক্ষমাণ</small></div>
+                <svg class="i sm chev"><use href="#i-chev"/></svg>
+              </div>
+              <div class="qcard">
+                <div class="ico"><svg class="i"><use href="#i-users"/></svg></div>
+                <div><b>ইউজার</b><small>খুঁজুন, রোল বদলান</small></div>
+                <svg class="i sm chev"><use href="#i-chev"/></svg>
+              </div>
+            </div>
+
+            <div class="gap"></div>
+            <div class="sec-head"><h3>সাম্প্রতিক কার্যক্রম</h3><a href="#">সব দেখুন <svg class="i"><use href="#i-chev"/></svg></a></div>
+            <div class="act">
+              <div class="arow">
+                <div class="ico" style="background:var(--success-bg);color:var(--success)"><svg class="i"><use href="#i-check"/></svg></div>
+                <div><b>রিচার্জ অনুমোদিত · ৳ 500.00</b><small>রফিক হাসান · 2 মিনিট আগে</small></div>
+              </div>
+              <div class="arow">
+                <div class="ico" style="background:var(--info-bg);color:var(--info)"><svg class="i"><use href="#i-shield"/></svg></div>
+                <div><b>ইউজার ব্লক করা হয়েছে · #1204</b><small>সুমাইয়া আক্তার · 18 মিনিট আগে</small></div>
+              </div>
+            </div>
+          </div>
+
+          <nav class="nav">
+            <a class="tab on"><svg class="i"><use href="#i-home"/></svg>হোম</a>
+            <a class="tab"><svg class="i"><use href="#i-inbox"/></svg>অর্ডার</a>
+            <a class="tab"><svg class="i"><use href="#i-wallet"/></svg>রিচার্জ</a>
+            <a class="tab"><svg class="i"><use href="#i-users"/></svg>ইউজার</a>
+            <a class="tab"><svg class="i"><use href="#i-more"/></svg>আরও</a>
+          </nav>
+        </div>
+      </div>
+      <figcaption>হোম <span>কিউ ডেস্ক — কাজ, টাকা, তারপর নেভিগেশন</span></figcaption>
+    </figure>
+
+    <!-- ============ 2. ORDERS ============ -->
+    <figure>
+      <div class="device">
+        <div class="phone tint">
+          <div class="statusbar on-dark" style="background:#083F31">
+            <span>9:41</span>
+            <span class="sys"><i></i><i></i><i></i><span class="batt"></span></span>
+          </div>
+          <div class="appbar">
+            <div class="iconbtn"><svg class="i"><use href="#i-back"/></svg></div>
+            <h1>রিচার্জ</h1>
+            <div class="iconbtn"><svg class="i"><use href="#i-search"/></svg></div>
+            <div class="iconbtn"><svg class="i"><use href="#i-refresh"/></svg></div>
+            <div class="iconbtn"><svg class="i"><use href="#i-more"/></svg></div>
+          </div>
+
+          <div class="listpage">
+            <div class="search"><svg class="i"><use href="#i-search"/></svg>ইউজার, রেফারেন্স বা নম্বর খুঁজুন</div>
+
+            <div class="chips">
+              <div class="chip on">সব <b>12</b></div>
+              <div class="chip">পেন্ডিং <b>4</b></div>
+              <div class="chip">রিভিউ <b>2</b></div>
+              <div class="chip">অনুমোদিত</div>
+            </div>
+
+            <div class="rows">
+              <div class="qrow attention">
+                <div class="qr-top">
+                  <span class="qid">#482</span>
+                  <span class="pill warn"><span class="spinner"></span>পেন্ডিং</span>
+                </div>
+                <div class="amt held">৳ 500.00</div>
+                <div class="qmeta"><span class="who">রফিক হাসান</span><span>017•••••678</span></div>
+                <div class="qsub"><span class="ref">বিকাশ · TXN9F2K</span><span>2 মিনিট আগে</span></div>
+              </div>
+
+              <div class="qrow attention info">
+                <div class="qr-top">
+                  <span class="qid">#481</span>
+                  <span class="pill info"><span class="spinner"></span>যাচাই ধরা</span>
+                </div>
+                <div class="amt held">৳ 1,200.00</div>
+                <div class="qmeta"><span class="who">সুমাইয়া আক্তার</span><span>019•••••021</span></div>
+                <div class="qsub"><span class="ref">নগদ · প্রেরক 018•••••033</span><span>11 মিনিট আগে</span></div>
+              </div>
+
+              <div class="qrow">
+                <div class="qr-top">
+                  <span class="qid">#479</span>
+                  <span class="pill ok">অনুমোদিত</span>
+                </div>
+                <div class="amt">৳ 300.00</div>
+                <div class="qmeta"><span class="who">তানভীর আহমেদ</span><span>016•••••045</span></div>
+                <div class="qsub"><span class="ref">রকেট · RCK22A</span><span>42 মিনিট আগে</span></div>
+              </div>
+
+              <div class="qrow">
+                <div class="qr-top">
+                  <span class="qid">#476</span>
+                  <span class="pill bad">বাতিলকৃত</span>
+                </div>
+                <div class="amt">৳ 750.00</div>
+                <div class="qmeta"><span class="who">মেহেদী হাসান</span><span>015•••••090</span></div>
+                <div class="qsub"><span class="ref">বিকাশ · TXN77Q</span><span>2 ঘণ্টা আগে</span></div>
+              </div>
+            </div>
+
+            <div class="listfoot">সব দেখানো হয়েছে · মোট 124</div>
+          </div>
+
+          <nav class="nav">
+            <a class="tab"><svg class="i"><use href="#i-home"/></svg>হোম</a>
+            <a class="tab"><svg class="i"><use href="#i-inbox"/></svg>অর্ডার</a>
+            <a class="tab on"><svg class="i"><use href="#i-wallet"/></svg>রিচার্জ</a>
+            <a class="tab"><svg class="i"><use href="#i-users"/></svg>ইউজার</a>
+            <a class="tab"><svg class="i"><use href="#i-more"/></svg>আরও</a>
+          </nav>
+        </div>
+      </div>
+      <figcaption>রিচার্জ কিউ <span>ট্যাব রুট · সার্চ, কাউন্টসহ ফিল্টার, অ্যাকশনেবল রেল</span></figcaption>
+    </figure>
+
+    <!-- ============ 3. APPROVAL SHEET ============ -->
+    <figure>
+      <div class="device">
+        <div class="phone tint">
+          <div class="statusbar on-dark" style="background:#083F31">
+            <span>9:41</span>
+            <span class="sys"><i></i><i></i><i></i><span class="batt"></span></span>
+          </div>
+
+          <div class="scene">
+            <div class="appbar" style="position:absolute;top:0;left:0;right:0;z-index:1">
+              <div class="iconbtn"><svg class="i"><use href="#i-back"/></svg></div>
+              <h1>রিচার্জ</h1>
+              <div class="iconbtn"><svg class="i"><use href="#i-search"/></svg></div>
+            </div>
+            <div class="listpage" style="padding-top:62px">
+              <div class="search"><svg class="i"><use href="#i-search"/></svg>ইউজার, রেফারেন্স বা নম্বর খুঁজুন</div>
+              <div class="chips">
+                <div class="chip on">সব <b>12</b></div>
+                <div class="chip">পেন্ডিং <b>4</b></div>
+                <div class="chip">রিভিউ <b>2</b></div>
+              </div>
+              <div class="rows">
+                <div class="qrow attention">
+                  <div class="qr-top"><span class="qid">#482</span><span class="pill warn">পেন্ডিং</span></div>
+                  <div class="amt held">৳ 500.00</div>
+                  <div class="qmeta"><span class="who">রফিক হাসান</span><span>017•••••678</span></div>
+                </div>
+                <div class="qrow attention info">
+                  <div class="qr-top"><span class="qid">#481</span><span class="pill info">যাচাই ধরা</span></div>
+                  <div class="amt held">৳ 1,200.00</div>
+                  <div class="qmeta"><span class="who">সুমাইয়া আক্তার</span><span>019•••••021</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="scrim"></div>
+
+            <div class="sheet" style="max-height:640px">
+              <div class="handle"></div>
+              <div class="sheet-head">
+                <h2>রিচার্জ #482</h2>
+                <span class="pill warn">পেন্ডিং</span>
+              </div>
+              <div class="amountband">
+                <div class="big">৳ 500.00</div>
+                <small>রফিক হাসান · বিকাশ</small>
+              </div>
+              <div class="kv"><span>প্রেরক নম্বর</span><b>017•••••678</b></div>
+              <div class="kv"><span>রেফারেন্স</span><b>TXN9F2K</b></div>
+              <div class="kv"><span>মাধ্যম</span><b>বিকাশ</b></div>
+              <div class="kv"><span>জমা দেওয়ার সময়</span><b>29 অক্টো · 6:42 PM</b></div>
+              <div class="kv"><span>নোট</span><b>—</b></div>
+
+              <div class="thumbrow">
+                <div class="thumb"><svg class="i"><use href="#i-image"/></svg></div>
+                <small>রসিদের ছবি<br>ট্যাপ করে বড় দেখুন</small>
+              </div>
+
+              <div class="actions">
+                <div class="btn primary">অনুমোদন করুন</div>
+                <div class="btn outline">বাতিল করুন</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <figcaption>অনুমোদন শিট <span>টাকার পরিমাণ আগে, তারপর তথ্য, তারপর সিদ্ধান্ত</span></figcaption>
+    </figure>
+
+    <!-- ============ 4. LOGIN ============ -->
+    <figure>
+      <div class="device">
+        <div class="phone">
+          <div class="statusbar on-dark" style="background:#083F31">
+            <span>9:41</span>
+            <span class="sys"><i></i><i></i><i></i><span class="batt"></span></span>
+          </div>
+          <div class="login">
+            <div class="glow"></div>
+
+            <div class="brandrow">
+              <div class="mark">আ</div>
+              <div><b>Alif Tools</b><small>অ্যাডমিন প্যানেল</small></div>
+            </div>
+
+            <div class="login-copy">
+              <p>ডিজিটাল সেবা, এক জায়গায়</p>
+              <h2>অর্ডার, রিচার্জ আর ইউজার — আপনার হাতের মুঠোয়।</h2>
+            </div>
+
+            <div class="login-feats">
+              <span><svg class="i"><use href="#i-shield"/></svg>শুধু অনুমোদিত স্টাফ অ্যাক্সেস করতে পারেন</span>
+              <span><svg class="i"><use href="#i-inbox"/></svg>কিউ, অর্ডার আর ব্যালেন্স — লাইভ</span>
+              <span><svg class="i"><use href="#i-bell"/></svg>নতুন কাজ এলে পুশ নোটিফিকেশন</span>
+            </div>
+
+            <div class="login-sheet">
+              <h3>লগইন</h3>
+              <div class="field">
+                <label>ইউজারনেম বা মোবাইল</label>
+                <div class="input"><svg class="i"><use href="#i-user"/></svg>আপনার আইডি লিখুন</div>
+              </div>
+              <div class="field">
+                <label>পাসওয়ার্ড</label>
+                <div class="input"><svg class="i"><use href="#i-lock"/></svg>••••••••<svg class="i eye"><use href="#i-eye"/></svg></div>
+              </div>
+              <div class="btn primary">লগইন করুন</div>
+              <div class="alt">ফোন দিয়ে সাইন ইন করুন</div>
+              <div class="secure"><svg class="i xs"><use href="#i-lock"/></svg>নিরাপদ সংযোগ · v1.0.0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption>লগইন <span>সাইটের auth কম্পোজিশন — গ্রেডিয়েন্ট, তারপর সাদা শিট</span></figcaption>
+    </figure>
+
+    <!-- ============ 5. MORE ============ -->
+    <figure>
+      <div class="device">
+        <div class="phone tint">
+          <div class="statusbar on-dark" style="background:#083F31">
+            <span>9:41</span>
+            <span class="sys"><i></i><i></i><i></i><span class="batt"></span></span>
+          </div>
+          <div class="scene">
+            <div class="hero" style="height:186px">
+              <div class="hero-top">
+                <div class="avatar">রহ</div>
+                <div class="greet"><strong>শুভ সন্ধ্যা</strong><small>রফিক হাসান <span class="rolechip"><svg class="i"><use href="#i-shield"/></svg>অ্যাডমিন</span></small></div>
+                <div class="bellbox"><svg class="i"><use href="#i-bell"/></svg><span class="dot"></span></div>
+              </div>
+              <p class="hero-eyebrow">আজকের কাজ</p>
+              <h2>5টি কাজ অপেক্ষা করছে</h2>
+            </div>
+
+            <div class="scrim"></div>
+
+            <div class="moresheet">
+              <div class="handle"></div>
+              <h2>আরও</h2>
+
+              <div class="mgroup">পরিচালনা</div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-layers"/></svg></div>সার্ভিস<svg class="i xs chev"><use href="#i-chev"/></svg></div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-grid"/></svg></div>বিভাগ<svg class="i xs chev"><use href="#i-chev"/></svg></div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-badge"/></svg></div>স্টাফ<span class="count">3 জন</span><svg class="i xs chev"><use href="#i-chev"/></svg></div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-users"/></svg></div>ইউজার<svg class="i xs chev"><use href="#i-chev"/></svg></div>
+
+              <div class="mgroup">অর্থনীতি</div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-receipt"/></svg></div>আমার হিসাব<svg class="i xs chev"><use href="#i-chev"/></svg></div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-wallet"/></svg></div>রিচার্জ<span class="count">2</span><svg class="i xs chev"><use href="#i-chev"/></svg></div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-gift"/></svg></div>রেফারেল<svg class="i xs chev"><use href="#i-chev"/></svg></div>
+
+              <div class="mgroup">নিরীক্ষণ</div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-history"/></svg></div>অ্যাক্টিভিটি লগ<svg class="i xs chev"><use href="#i-chev"/></svg></div>
+              <div class="mrow"><div class="ico"><svg class="i"><use href="#i-bell"/></svg></div>নোটিফিকেশন কিউ<svg class="i xs chev"><use href="#i-chev"/></svg></div>
+
+              <div class="mrow danger"><div class="ico"><svg class="i"><use href="#i-logout"/></svg></div>লগআউট<svg class="i xs chev" style="color:#D9A3A3"><use href="#i-chev"/></svg></div>
+            </div>
+          </div>
+
+          <nav class="nav">
+            <a class="tab"><svg class="i"><use href="#i-home"/></svg>হোম</a>
+            <a class="tab"><svg class="i"><use href="#i-inbox"/></svg>অর্ডার</a>
+            <a class="tab"><svg class="i"><use href="#i-wallet"/></svg>রিচার্জ</a>
+            <a class="tab"><svg class="i"><use href="#i-users"/></svg>ইউজার</a>
+            <a class="tab on"><svg class="i"><use href="#i-more"/></svg>আরও</a>
+          </nav>
+        </div>
+      </div>
+      <figcaption>আরও <span>ওয়েব সাইডবারের গ্রুপিং, পারমিশন-ফিল্টারড (admin ভিউ)</span></figcaption>
+    </figure>
+
+  </section>
+
+  <!-- ============ TOKENS ============ -->
+  <section class="tokens">
+    <h2>টোকেন ও কম্পোনেন্ট</h2>
+    <p class="lede">ওয়েবের রঙ ও টাইপ থেকে নেওয়া; কনট্রাস্ট ও টাচের জন্য সংশোধিত। বিস্তারিত: <code>docs/ADMIN_ANDROID_UI_PLAN.md</code></p>
+
+    <div class="tokgrid">
+      <div class="panel">
+        <h4>ব্র্যান্ড</h4>
+        <div class="swatches">
+          <div class="sw"><div class="c" style="background:#083F31"></div><div class="t"><b>brand900</b><span>#083F31</span></div></div>
+          <div class="sw"><div class="c" style="background:#0A5540"></div><div class="t"><b>brand800</b><span>#0A5540</span></div></div>
+          <div class="sw"><div class="c" style="background:#0B6E51"></div><div class="t"><b>brand700</b><span>#0B6E51</span></div></div>
+          <div class="sw"><div class="c" style="background:#0D8F68"></div><div class="t"><b>brand600</b><span>#0D8F68</span></div></div>
+          <div class="sw"><div class="c" style="background:#D1FAE5"></div><div class="t"><b>brand100</b><span>#D1FAE5</span></div></div>
+          <div class="sw"><div class="c" style="background:#ECFDF5"></div><div class="t"><b>brand50</b><span>#ECFDF5</span></div></div>
+        </div>
+        <h4 style="margin-top:16px">গোল্ড ও সারফেস</h4>
+        <div class="swatches">
+          <div class="sw"><div class="c" style="background:#F5B301"></div><div class="t"><b>gold500</b><span>#F5B301</span></div></div>
+          <div class="sw"><div class="c" style="background:#FDE68A"></div><div class="t"><b>gold200</b><span>#FDE68A</span></div></div>
+          <div class="sw"><div class="c" style="background:#8A5F00"></div><div class="t"><b>goldInk</b><span>#8A5F00</span></div></div>
+          <div class="sw"><div class="c" style="background:#FFFFFF"></div><div class="t"><b>surface</b><span>#FFFFFF</span></div></div>
+          <div class="sw"><div class="c" style="background:#F4F7F6"></div><div class="t"><b>page</b><span>#F4F7F6</span></div></div>
+          <div class="sw"><div class="c" style="background:#E5E7EB"></div><div class="t"><b>line</b><span>#E5E7EB</span></div></div>
+        </div>
+        <p class="note"><b>ব্যবহারের নিয়ম:</b> সবুজ = ক্রোম + স্ক্রিনে একটাই প্রাইমারি অ্যাকশন। গোল্ড = শুধু মনোযোগের চিহ্ন, স্ক্রিনে সর্বোচ্চ দুইবার। স্ট্যাটাস রঙ শুধু পিলে।</p>
+      </div>
+
+      <div class="panel">
+        <h4>টাইপ স্কেল</h4>
+        <div class="typescale">
+          <div class="ts"><span class="name">display 30/36</span><span class="sample" style="font-size:30px;font-weight:700;line-height:1.2">৳ 12,400.00</span></div>
+          <div class="ts"><span class="name">headline 23/30</span><span class="sample" style="font-size:23px;font-weight:700">আজকের কাজ</span></div>
+          <div class="ts"><span class="name">title 17/24</span><span class="sample" style="font-size:17px;font-weight:600">রফিক হাসান · বিকাশ</span></div>
+          <div class="ts"><span class="name">body 15/22</span><span class="sample" style="font-size:15px">রিচার্জ অনুমোদনের আগে রেফারেন্স মিলিয়ে নিন।</span></div>
+          <div class="ts"><span class="name">meta 12/17</span><span class="sample" style="font-size:12px;color:#525252">2 মিনিট আগে · TXN9F2K</span></div>
+        </div>
+        <p class="note"><b>Hind Siliguri</b> — ওয়েবের প্রথম ফ্যামিলি, অ্যাপে বান্ডল করা। লেটার-স্পেসিং শূন্য; বাংলা মাত্রার জন্য লাইন-হাইট 1.45–1.5। 12sp-এর নিচে কোনো বাংলা টেক্সট নয়। সব সংখ্যা ল্যাটিন অঙ্কে — সার্ভারের money আউটপুটের সাথে মিল রাখতে।</p>
+      </div>
+
+      <div class="panel">
+        <h4>স্ট্যাটাস পিল</h4>
+        <div class="kit">
+          <span class="pill warn"><span class="spinner"></span>পেন্ডিং</span>
+          <span class="pill info"><span class="spinner"></span>প্রসেসিং</span>
+          <span class="pill ok">সম্পন্ন</span>
+          <span class="pill bad">ব্যর্থ</span>
+          <span class="pill neutral">নিষ্ক্রিয়</span>
+          <span class="pill ok">অনুমোদিত</span>
+          <span class="pill bad">বাতিলকৃত</span>
+        </div>
+        <p class="note">রঙ কখনো একা অর্থ বহন করে না — লেবেল সবসময় থাকে। ইন-ফ্লাইট স্টেটে রিং ঘোরে, শুধু pending / processing / review-তে।</p>
+
+        <h4 style="margin-top:18px">অ্যাকশন</h4>
+        <div class="kit">
+          <span class="btn primary">অনুমোদন করুন</span>
+          <span class="btn outline">বাতিল করুন</span>
+          <span class="btn ghost">বাতিল</span>
+          <span class="btn gold">আপডেট করুন</span>
+        </div>
+        <p class="note">প্রাইমারি ফিল <b>brand700</b> — সাদা লেখার সাথে ৬.৪:১। ওয়েবের brand600 (৪.১:১) শুধু গ্রাফিক্স ও বড় টেক্সটে।</p>
+
+        <h4 style="margin-top:18px">ফিল্টার চিপ</h4>
+        <div class="kit">
+          <span class="chip on">পেন্ডিং <b>৪</b></span>
+          <span class="chip">রিভিউ <b>২</b></span>
+          <span class="chip">অনুমোদিত</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h4>লেআউট নিয়ম</h4>
+        <div class="kv"><span>স্ক্রিন গাটার</span><b>16dp</b></div>
+        <div class="kv"><span>কার্ড প্যাডিং</span><b>16dp</b></div>
+        <div class="kv"><span>সেকশন রিদম</span><b>24dp</b></div>
+        <div class="kv"><span>টাচ টার্গেট</span><b>≥48dp</b></div>
+        <div class="kv"><span>কার্ড রেডিয়াস</span><b>18dp · রেল 20dp</b></div>
+        <div class="kv"><span>শ্যাডো</span><b>শুধু নেভ, স্টিকি বার, শিট</b></div>
+        <div class="kv"><span>হোমে গোল্ড</span><b>সর্বোচ্চ ২টি চিহ্ন</b></div>
+        <div class="kv"><span>মিনিমাম বাংলা টেক্সট</span><b>12sp</b></div>
+        <p class="note">সাদা কার্ড + ১dp হেয়ারলাইন ই কার্ড আলাদা করে; এলিভেশন নয়। শিট বাদে কোনো স্ক্রিনে বড় শ্যাডো নেই।</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

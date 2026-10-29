@@ -61,7 +61,8 @@ android {
     signingConfigs {
         if (releaseStoreFile != null) {
             create("release") {
-                storeFile = file(releaseStoreFile)
+                val candidate = file(releaseStoreFile)
+                storeFile = if (candidate.exists()) candidate else rootProject.file(releaseStoreFile)
                 storePassword = secret("ADMIN_STORE_PASSWORD", "storePassword")
                 keyAlias = secret("ADMIN_KEY_ALIAS", "keyAlias")
                 keyPassword = secret("ADMIN_KEY_PASSWORD", "keyPassword")

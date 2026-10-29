@@ -62,6 +62,8 @@ fun <T : Any> PagedListView(
     filters: List<Pair<String, String>> = emptyList(),
     /** False for endpoints whose list route has no `q` parameter. */
     showSearch: Boolean = true,
+    /** False when the list is a tab root: the bottom bar is the navigation. */
+    showBack: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
     itemKey: ((T) -> Any)? = null,
     emptyText: String = "কোনো ডেটা পাওয়া যায়নি",
@@ -73,6 +75,7 @@ fun <T : Any> PagedListView(
         onBack = onBack,
         snack = snack,
         onSnackShown = onSnackShown,
+        showBack = showBack,
         actions = {
             actions()
             IconButton(onClick = onRefresh, enabled = !state.initialLoading) {

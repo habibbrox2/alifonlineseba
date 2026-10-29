@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.data.model.User
 import com.aliftools.admin.ui.components.PagedListView
+import com.aliftools.admin.ui.components.design.StatusPill
+import com.aliftools.admin.ui.format.Money
 import com.aliftools.admin.ui.viewmodel.UsersViewModel
 
 private val ROLES = listOf("user" to "ইউজার", "staff" to "স্টাফ", "admin" to "অ্যাডমিন")
@@ -37,6 +39,7 @@ private val ROLES = listOf("user" to "ইউজার", "staff" to "স্টা
 @Composable
 fun UsersScreen(
     onBack: () -> Unit,
+    showBack: Boolean = true,
     viewModel: UsersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -49,8 +52,6 @@ fun UsersScreen(
     var rolePicker by remember { mutableStateOf<User?>(null) }
     var showCreate by remember { mutableStateOf(false) }
 
-    // A successful create closes the dialog; a failed one keeps it open so
-    // the fields the user typed survive the error snackbar.
     LaunchedEffect(created) {
         if (created) {
             showCreate = false
@@ -62,6 +63,7 @@ fun UsersScreen(
         title = "ইউজার",
         state = state,
         onBack = onBack,
+        showBack = showBack,
         onRefresh = viewModel::reload,
         onLoadMore = viewModel::loadMore,
         onSearch = viewModel::search,
@@ -81,7 +83,6 @@ fun UsersScreen(
             }
         },
         itemKey = { it.id },
-        // Accessible: each row is a selectable item with full user info
     ) { user ->
         UserRow(user = user, onClick = { selected = user })
     }
@@ -136,53 +137,39 @@ fun UsersScreen(
 private fun UserRow(user: User, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = user.fullName?.takeIf { it.isNotBlank() } ?: user.username,
+                    text = user.username,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = roleLabel(user.role),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                StatusPill(user.status ?: "active")
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "@${user.username} · ${user.phone}",
+                    text = listOfNotNull(
+                        user.phone.takeIf { it.isNotBlank() },
+                        roleLabel(user.role),
+                    ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "৳${user.balance}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = Money.format(user.balance),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
-            }
-            val flags = buildList {
-                if (user.status != null && user.status != "active") add("ব্লকড" to MaterialTheme.colorScheme.error)
-                if (user.deletedAt != null) add("ট্র্যাশে" to MaterialTheme.colorScheme.tertiary)
-            }
-            if (flags.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    flags.forEach { (label, color) ->
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = color,
-                        )
-                    }
-                }
             }
         }
     }
@@ -199,49 +186,45 @@ private fun UserActionsDialog(
     onDelete: () -> Unit,
     onRestore: () -> Unit,
 ) {
+    val isTrashed = !user.deletedAt.isNullOrBlank()
+    val isActive = user.status == "active"
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(user.username) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("ফোন: ${user.phone}", style = MaterialTheme.typography.bodyMedium)
-                Text("ইমেইল: ${user.email ?: "-"}", style = MaterialTheme.typography.bodyMedium)
-                Text("রোল: ${roleLabel(user.role)}", style = MaterialTheme.typography.bodyMedium)
-                Text("ব্যালেন্স: ৳${user.balance}", style = MaterialTheme.typography.bodyMedium)
-
-                Column(
-                    modifier = Modifier.padding(top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp),
-                ) {
-                    TextButton(onClick = onToggle, enabled = !busy) {
-                        Text(if (user.status == "active") "ব্লক করুন" else "আনব্লক করুন")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("মোবাইল: ${user.phone.ifBlank { "—" }}")
+                Text("ব্যালেন্স: ${Money.format(user.balance)}")
+                Text("রোল: ${roleLabel(user.role)}")
+                Text("স্ট্যাটাস: ${if (isActive) "সক্রিয়" else "নিষ্ক্রিয়"}")
+                if (isTrashed) Text("অবস্থা: ট্র্যাশে আছে", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (!isTrashed) {
+                    TextButton(onClick = { onToggle(); onDismiss() }, enabled = !busy) {
+                        Text(if (isActive) "নিষ্ক্রিয় করুন" else "সক্রিয় করুন")
                     }
                     TextButton(onClick = onChangeRole, enabled = !busy) {
                         Text("রোল পরিবর্তন")
                     }
-                    TextButton(onClick = onReset, enabled = !busy) {
+                    TextButton(onClick = { onReset(); onDismiss() }, enabled = !busy) {
                         Text("পাসওয়ার্ড রিসেট")
                     }
-                    if (user.deletedAt != null) {
-                        TextButton(onClick = onRestore, enabled = !busy) {
-                            Text("ফিরিয়ে আনুন")
-                        }
-                    } else {
-                        TextButton(
-                            onClick = onDelete,
-                            enabled = !busy,
-                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                        ) {
-                            Text("ট্র্যাশে পাঠান")
-                        }
+                    TextButton(onClick = { onDelete(); onDismiss() }, enabled = !busy) {
+                        Text("ট্র্যাশে পাঠান", color = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    TextButton(onClick = { onRestore(); onDismiss() }, enabled = !busy) {
+                        Text("ফিরিয়ে আনুন")
                     }
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("বন্ধ") }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("বাতিল") }
         },
     )
 }
@@ -257,13 +240,13 @@ private fun RoleDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("রোল — ${user.username}") },
+        title = { Text("রোল বেছে নিন") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ROLES.forEach { (value, label) ->
                     TextButton(
                         onClick = { picked = value },
-                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
                             text = (if (picked == value) "● " else "○ ") + label,

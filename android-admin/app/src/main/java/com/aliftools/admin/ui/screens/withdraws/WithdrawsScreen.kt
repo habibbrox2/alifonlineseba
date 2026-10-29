@@ -1,5 +1,6 @@
 package com.aliftools.admin.ui.screens.withdraws
 
+import androidx.biometric.BiometricManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,9 +28,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aliftools.admin.data.model.AdminWithdraw
 import com.aliftools.admin.ui.components.PagedListView
+import com.aliftools.admin.ui.components.design.StatusPill
+import com.aliftools.admin.ui.format.Dates
+import com.aliftools.admin.ui.format.Money
 import com.aliftools.admin.ui.viewmodel.WithdrawsViewModel
 import com.aliftools.admin.util.BiometricHelper
-import androidx.biometric.BiometricManager
 
 private val STATUS_CHIPS = listOf(
     "" to "সব",
@@ -44,6 +47,7 @@ private val STATUS_LABELS = STATUS_CHIPS.toMap()
 @Composable
 fun WithdrawsScreen(
     onBack: () -> Unit,
+    showBack: Boolean = true,
     viewModel: WithdrawsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -55,6 +59,7 @@ fun WithdrawsScreen(
         title = "উত্তোলন",
         state = state,
         onBack = onBack,
+        showBack = showBack,
         onRefresh = viewModel::reload,
         onLoadMore = viewModel::loadMore,
         onSearch = viewModel::search,
@@ -79,7 +84,7 @@ fun WithdrawsScreen(
             onDismiss = viewModel::closeDetail,
             onApprove = {
                 val activity = context2 as? FragmentActivity
-                if (activity != null && biometric.isBiometricAvailable() == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
+                if (activity != null && biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
                     biometric.showPrompt(activity, onSuccess = { viewModel.approve(row) }, onFailure = {})
                 } else {
                     viewModel.approve(row)
@@ -95,34 +100,26 @@ fun WithdrawsScreen(
 @Composable
 private fun WithdrawRow(row: AdminWithdraw, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "${row.username ?: "অ্যাডমিন #${row.adminId}"} · ৳${row.amount}",
-                    style = MaterialTheme.typography.titleSmall,
+                    text = "${row.username ?: "অ্যাডমিন #${row.adminId}"} · ${Money.format(row.amount)}",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = STATUS_LABELS[row.status] ?: row.status,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = when (row.status) {
-                        "approved" -> MaterialTheme.colorScheme.primary
-                        "rejected" -> MaterialTheme.colorScheme.error
-                        "review" -> MaterialTheme.colorScheme.tertiary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+                StatusPill(row.status)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = row.createdAt ?: "",
+                    text = Dates.relative(row.createdAt) ?: (row.createdAt ?: ""),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -157,8 +154,8 @@ private fun WithdrawDetailDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Line("অ্যাডমিন", row.username ?: "#${row.adminId}")
-                Line("পরিমাণ", "৳${row.amount}")
-                Line("বর্তমান ব্যালেন্স", "৳${row.adminBalance}")
+                Line("পরিমাণ", Money.format(row.amount))
+                Line("বর্তমান ব্যালেন্স", Money.format(row.adminBalance))
                 Line("স্ট্যাটাস", STATUS_LABELS[row.status] ?: row.status)
                 Line("তারিখ", row.createdAt ?: "-")
                 Line("রিভিউয়ার", row.reviewedBy?.let { "#$it" } ?: "-")

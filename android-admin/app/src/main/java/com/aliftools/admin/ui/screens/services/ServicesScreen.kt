@@ -64,19 +64,30 @@ fun ServicesScreen(
                     val price = row["price"]?.toString() ?: ""
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column {
                                 Text(text = title, style = MaterialTheme.typography.titleSmall)
-                                Text(text = "মূল্য: $price | স্ট্যাটাস: $status", style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    text = "মূল্য: $price | স্ট্যাটাস: $status",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
                             Row {
-                                IconButton(onClick = { if (id > 0) viewModel.toggle(id) }, enabled = !busy) {
+                                IconButton(
+                                    onClick = { if (id > 0) viewModel.toggle(id) },
+                                    enabled = !busy
+                                ) {
                                     Icon(Icons.Default.ToggleOff, contentDescription = "টগল")
                                 }
-                                IconButton(onClick = { if (id > 0) viewModel.delete(id) }, enabled = !busy) {
+                                IconButton(
+                                    onClick = { if (id > 0) viewModel.delete(id) },
+                                    enabled = !busy
+                                ) {
                                     Icon(Icons.Default.Delete, contentDescription = "মুছুন")
                                 }
                             }
