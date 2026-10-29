@@ -37,7 +37,30 @@ fun localProperty(key: String): String? =
 val releaseStoreFile = secret("ADMIN_STORE_FILE", "storeFile")
 val baseUrl = secret("ADMIN_BASE_URL")
     ?: localProperty("ADMIN_BASE_URL")
-    ?: "https://your-domain.com/"
+    ?: "https://allseba.online/"
+
+val rawVersionName = System.getenv("APP_VERSION_NAME")
+    ?: System.getenv("GITHUB_REF_NAME")?.removePrefix("android-admin-v")?.removePrefix("v")
+    ?: (project.findProperty("versionName") as? String)
+    ?: "1.0.0"
+
+val appVersionName = if (rawVersionName.matches(Regex("^[0-9]+(\\.[0-9]+)+.*$"))) rawVersionName else "1.0.0"
+
+val appVersionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull()
+    ?: (project.findProperty("versionCode") as? String)?.toIntOrNull()
+    ?: run {
+        val digits = appVersionName.split(".").mapNotNull { part ->
+            part.takeWhile { it.isDigit() }.toIntOrNull()
+        }
+        if (digits.isNotEmpty()) {
+            val major = digits.getOrElse(0) { 1 }
+            val minor = digits.getOrElse(1) { 0 }
+            val patch = digits.getOrElse(2) { 0 }
+            major * 10000 + minor * 100 + patch
+        } else {
+            1
+        }
+    }
 
 android {
     namespace = "com.aliftools.admin"
@@ -47,8 +70,8 @@ android {
         applicationId = "com.aliftools.admin"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
 

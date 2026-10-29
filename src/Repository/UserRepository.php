@@ -661,6 +661,13 @@ final class UserRepository
      *
      * @return array<int, array<string, mixed>>
      */
+
+    /** Alias for listStaff() */
+    public function allAdmins(): array
+    {
+        return $this->listStaff();
+    }
+
     public function listStaff(): array
     {
         return $this->db

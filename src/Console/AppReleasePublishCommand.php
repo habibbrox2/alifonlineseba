@@ -139,11 +139,19 @@ final class AppReleasePublishCommand extends Command
 
         $gradle = dirname(__DIR__, 2) . '/android-admin/app/build.gradle.kts';
         $source = is_file($gradle) ? (string) file_get_contents($gradle) : '';
-        if ($code === null) {
-            $code = $this->parseGradle($source, 'versionCode', true);
-        }
         if ($name === null) {
-            $name = $this->parseGradle($source, 'versionName', false);
+            $name = $this->parseGradle($source, 'versionName', false)
+                ?: (getenv('APP_VERSION_NAME') ?: null)
+                ?: (getenv('GITHUB_REF_NAME') ? ltrim(preg_replace('/^android-admin-v?/', '', getenv('GITHUB_REF_NAME')), 'v') : null)
+                ?: '1.1.2';
+        }
+        if ($code === null) {
+            $code = $this->parseGradle($source, 'versionCode', true)
+                ?: (getenv('APP_VERSION_CODE') ? (int) getenv('APP_VERSION_CODE') : null);
+            if ($code === null && $name !== null) {
+                $digits = array_map('intval', explode('.', preg_replace('/[^0-9.]/', '', $name)));
+                $code = ($digits[0] ?? 1) * 10000 + ($digits[1] ?? 0) * 100 + ($digits[2] ?? 0);
+            }
         }
 
         return [$code, $name];

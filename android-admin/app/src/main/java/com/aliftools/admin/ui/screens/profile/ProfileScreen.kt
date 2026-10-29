@@ -77,10 +77,11 @@ fun ProfileScreen(
         onBack = onBack,
         snack = snack,
         onSnackShown = viewModel::clearSnack,
-    ) {
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

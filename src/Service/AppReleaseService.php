@@ -233,13 +233,12 @@ final readonly class AppReleaseService
         return is_string($hash) ? $hash : '';
     }
 
-    private function downloadUrl(string $channel): ?string
+        private function downloadUrl(string $channel): ?string
     {
-        if ($channel === 'twa') {
-            return '/app/apk';
-        }
+        $appUrl = rtrim((string) Env::get('APP_URL', ''), '/');
+        $path = $channel === 'twa' ? '/app/apk' : '/app/apk?channel=' . rawurlencode($channel);
 
-        return '/app/apk?channel=' . rawurlencode($channel);
+        return $appUrl !== '' ? $appUrl . $path : $path;
     }
 
     /** Whether downloads are enabled at all (an operator switch). */

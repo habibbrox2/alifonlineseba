@@ -50,7 +50,7 @@ final readonly class AdminLedgerApiAction
                 'page' => $page,
                 'perPage' => self::PER_PAGE,
                 'scope' => 'all',
-                'users' => $this->users->allAdmins(),
+                'users' => $this->users->listStaff(),
             ]);
         }
 

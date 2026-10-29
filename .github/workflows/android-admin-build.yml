@@ -120,10 +120,22 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
           gradle-home-cache-cleanup: true
 
+      - name: Determine debug version
+        id: version_info
+        run: |
+          ref="${{ github.ref_name }}"
+          clean_ver=$(echo "$ref" | sed -E 's/^(android-admin-)?v//')
+          if [ -z "$clean_ver" ] || [ "$clean_ver" = "main" ]; then
+            clean_ver="1.1.2"
+          fi
+          echo "VERSION_NAME=$clean_ver" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION_NAME=$clean_ver" >> "$GITHUB_ENV"
+
       - name: Build Debug APK
         run: cd android-admin && ./gradlew assembleDebug --no-daemon
         env:
           ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
+          APP_VERSION_NAME: ${{ steps.version_info.outputs.VERSION_NAME }}
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -194,6 +206,28 @@ jobs:
           echo "ADMIN_STORE_FILE=$key" >> "$GITHUB_ENV"
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
+      - name: Determine release version
+        id: version_info
+        run: |
+          ref="${{ github.ref_name }}"
+          clean_ver=$(echo "$ref" | sed -E 's/^(android-admin-)?v//')
+          if [ -z "$clean_ver" ] || [ "$clean_ver" = "main" ]; then
+            clean_ver="1.1.2"
+          fi
+          echo "VERSION_NAME=$clean_ver" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION_NAME=$clean_ver" >> "$GITHUB_ENV"
+
+          major=$(echo "$clean_ver" | cut -d. -f1)
+          minor=$(echo "$clean_ver" | cut -d. -f2)
+          patch=$(echo "$clean_ver" | cut -d. -f3 | sed -E 's/[^0-9].*//')
+          major=${major:-1}
+          minor=${minor:-0}
+          patch=${patch:-0}
+          code=$((major * 10000 + minor * 100 + patch))
+          echo "VERSION_CODE=$code" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION_CODE=$code" >> "$GITHUB_ENV"
+          echo "Building version $clean_ver (code $code)"
+
       - name: Create keystore.properties from secrets
         if: steps.signing.outputs.signed == 'true'
         run: |
@@ -209,6 +243,8 @@ jobs:
         run: cd android-admin && ./gradlew assembleRelease --no-daemon
         env:
           ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
+          APP_VERSION_NAME: ${{ steps.version_info.outputs.VERSION_NAME }}
+          APP_VERSION_CODE: ${{ steps.version_info.outputs.VERSION_CODE }}
           ADMIN_STORE_FILE: ${{ env.ADMIN_STORE_FILE }}
           ADMIN_STORE_PASSWORD: ${{ secrets.ADMIN_STORE_PASSWORD }}
           ADMIN_KEY_ALIAS: ${{ secrets.ADMIN_KEY_ALIAS }}
@@ -233,6 +269,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          name: Alif Admin v${{ steps.version_info.outputs.VERSION_NAME }}
           files: |
             android-admin/app/build/outputs/apk/release/*.apk
             android-admin/app/build/outputs/bundle/release/*.aab

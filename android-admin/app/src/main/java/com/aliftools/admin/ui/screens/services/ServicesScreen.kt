@@ -56,7 +56,7 @@ fun ServicesScreen(
                 }
             }
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rows) { row ->
                     val id = (row["id"] as? Number)?.toInt() ?: (row["id"] as? String)?.toIntOrNull() ?: 0
                     val title = row["name"]?.toString() ?: ""

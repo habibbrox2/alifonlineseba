@@ -50,7 +50,7 @@ fun LedgerScreen(
                     CircularProgressIndicator()
                 }
             }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rows.size) { idx ->
                     val row = rows[idx]
                     Card(modifier = Modifier.fillMaxWidth()) {

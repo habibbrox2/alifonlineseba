@@ -62,6 +62,11 @@ final readonly class ApiAuthMiddleware implements MiddlewareInterface
     public static function bearer(ServerRequestInterface $request): ?string
     {
         $header = trim($request->getHeaderLine('Authorization'));
+        if ($header === '') {
+            $params = $request->getServerParams();
+            $header = trim((string) ($params['HTTP_AUTHORIZATION'] ?? $params['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+        }
+
         if ($header === '' || !str_starts_with(strtolower($header), 'bearer ')) {
             return null;
         }

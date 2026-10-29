@@ -83,7 +83,7 @@ class DashboardViewModelTest {
 
     @Test
     fun `required flag from minVersionCode`() = runTest {
-        coEvery { repository.appVersion() } returns Result.success(appVersion(BuildConfig.VERSION_CODE, 999))
+        coEvery { repository.appVersion() } returns Result.success(appVersion(BuildConfig.VERSION_CODE, BuildConfig.VERSION_CODE + 1))
         every { repository.userRoleFlow() } returns flowOf<String?>(null)
         coEvery { repository.dashboard() } returns Result.failure(Exception("boom"))
 
