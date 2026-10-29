@@ -1,5 +1,6 @@
 package com.aliftools.admin.util
 
+import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -29,6 +30,7 @@ object AppUpdateHelper {
         }
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     fun downloadAndInstall(
         context: Context,
         downloadUrl: String?,
@@ -79,18 +81,12 @@ object AppUpdateHelper {
                 }
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                    Context.RECEIVER_NOT_EXPORTED,
-                )
-            } else {
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                )
-            }
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                ContextCompat.RECEIVER_EXPORTED,
+            )
         } catch (e: Exception) {
             onError(e.message ?: "ডাউনলোড শুরু করা যায়নি")
             openInBrowser(context, fullUrl)
