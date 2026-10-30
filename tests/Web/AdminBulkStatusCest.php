@@ -644,8 +644,9 @@ final class AdminBulkStatusCest
         return (int) $this->db()->getLastInsertID();
     }
 
-    private function signIn(WebTester $I, string $user = self::ADMIN_USER, string $password = self::adminPassword()): void
+    private function signIn(WebTester $I, string $user = self::ADMIN_USER, ?string $password = null): void
     {
+        $password ??= self::adminPassword();
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => $user,

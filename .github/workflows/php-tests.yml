@@ -78,5 +78,10 @@ jobs:
           php yii migrate:up --no-interaction
           php yii app:seed -n
 
+      - name: Validate PHP syntax
+        run: |
+          set -euo pipefail
+          find src tests config migrations -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
       - name: Run Codeception suite
         run: vendor/bin/codecept run --no-interaction
