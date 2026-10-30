@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Web;
 
+use App\Env;
 use App\Tests\Support\WebTester;
 use PHPUnit\Framework\Assert;
 
@@ -21,7 +22,10 @@ use PHPUnit\Framework\Assert;
 final class NotificationDropdownCest
 {
     private const DEMO_USER = 'demo';
-    private const DEMO_PASSWORD = 'Demo1234!';
+    private static function demoPassword(): string
+    {
+        return Env::get('SEED_DEMO_PASSWORD', 'Demo1234!') ?? 'Demo1234!';
+    }
 
     public function dropdownIsAnApiBackedAlpineComponent(WebTester $I): void
     {
@@ -29,7 +33,7 @@ final class NotificationDropdownCest
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => self::DEMO_USER,
-            'password' => self::DEMO_PASSWORD,
+            'password' => self::demoPassword(),
         ]);
 
         $html = $I->grabPageSource();
@@ -63,7 +67,7 @@ final class NotificationDropdownCest
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => self::DEMO_USER,
-            'password' => self::DEMO_PASSWORD,
+            'password' => self::demoPassword(),
         ]);
 
         $html = $I->grabPageSource();
@@ -93,7 +97,7 @@ final class NotificationDropdownCest
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => self::DEMO_USER,
-            'password' => self::DEMO_PASSWORD,
+            'password' => self::demoPassword(),
         ]);
 
         // @submit.prevent only intercepts when Alpine boots; the plain form post
@@ -113,7 +117,7 @@ final class NotificationDropdownCest
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => self::DEMO_USER,
-            'password' => self::DEMO_PASSWORD,
+            'password' => self::demoPassword(),
         ]);
 
         $html = $I->grabPageSource();

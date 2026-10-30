@@ -14,7 +14,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Yiisoft\Db\Connection\ConnectionInterface;
 
-#[AsCommand('app:seed', 'Seeds sample categories, services and users.')]
+#[AsCommand('app:seed', 'Seeds the sample catalog; optional non-production demo users.')]
 final class SeedCommand extends Command
 {
     /**

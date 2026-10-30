@@ -91,7 +91,7 @@ final class SuperAdminCommand extends Command
             ->addOption('email', null, InputOption::VALUE_REQUIRED, 'Optional email address for the new account.')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Show what would change without writing.')
             ->setHelp(
-                "`app:seed` names the first super-admin (the `admin` account);\n"
+                "`app:seed` never creates default administrator credentials;\n"
                 . "use this to create another or promote an existing account. On the\n"
                 . "web /admin/staff is guarded by SuperAdminMiddleware, so nobody can\n"
                 . "appoint one before one exists.\n\n"

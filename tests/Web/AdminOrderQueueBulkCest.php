@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Web;
 
 use App\Service\StatusPresenter;
+use App\Env;
 use App\Tests\Support\WebTester;
 use PHPUnit\Framework\Assert;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -41,7 +42,10 @@ use Yiisoft\Di\ContainerConfig;
 final class AdminOrderQueueBulkCest
 {
     private const ADMIN_USER = 'admin';
-    private const ADMIN_PASSWORD = 'Admin1234!';
+    private static function adminPassword(): string
+    {
+        return Env::get('SEED_ADMIN_PASSWORD', 'Admin1234!') ?? 'Admin1234!';
+    }
 
     /**
      * The requester name every row this file plants carries.
@@ -619,7 +623,7 @@ final class AdminOrderQueueBulkCest
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => self::ADMIN_USER,
-            'password' => self::ADMIN_PASSWORD,
+            'password' => self::adminPassword(),
         ]);
         Assert::assertStringContainsString(
             'লগআউট',

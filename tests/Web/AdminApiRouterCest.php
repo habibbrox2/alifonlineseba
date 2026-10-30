@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Web;
 
+use App\Env;
 use App\Tests\Support\WebTester;
 use PHPUnit\Framework\Assert;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -24,7 +25,10 @@ use Yiisoft\Di\ContainerConfig;
 final class AdminApiRouterCest
 {
     private const ADMIN_USER = 'admin';
-    private const ADMIN_PASSWORD = 'Admin1234!';
+    private static function adminPassword(): string
+    {
+        return Env::get('SEED_ADMIN_PASSWORD', 'Admin1234!') ?? 'Admin1234!';
+    }
 
     /**
      * The dedupe key every queue row this file plants carries.
@@ -289,7 +293,7 @@ final class AdminApiRouterCest
         $I->haveHttpHeader('Authorization', 'Bearer android-admin');
         $I->sendAjaxPostRequest('/api/auth/login', [
             'identifier' => self::ADMIN_USER,
-            'password' => self::ADMIN_PASSWORD,
+            'password' => self::adminPassword(),
         ]);
 
         $payload = $this->decode($I);
