@@ -140,7 +140,7 @@ final class ApiTokenRepository
                 ->bindValue(':id', $userId)
                 ->queryScalar();
 
-            if ($activeUser === false) {
+            if ($activeUser === false || $activeUser === null) {
                 return null;
             }
 

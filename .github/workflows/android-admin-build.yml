@@ -282,17 +282,17 @@ jobs:
         id: release_tag
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         env:
-          VERSION_NAME: \${{ steps.version_info.outputs.VERSION_NAME }}
+          VERSION_NAME: ${{ steps.version_info.outputs.VERSION_NAME }}
         run: |
           set -euo pipefail
-          tag="v\${VERSION_NAME}"
+          tag="v${VERSION_NAME}"
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "::error::Release tag $tag already exists; refusing to overwrite."
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" "$GITHUB_SHA" -m "Alif Admin v\${VERSION_NAME}"
+          git tag -a "$tag" "$GITHUB_SHA" -m "Alif Admin v${VERSION_NAME}"
           git push origin "$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
@@ -316,8 +316,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: steps.signing.outputs.signed == 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/'))
         with:
-          tag_name: \${{ steps.release_tag.outputs.tag || github.ref_name }}
-          name: Alif Admin v\${{ steps.version_info.outputs.VERSION_NAME }}
+          tag_name: ${{ steps.release_tag.outputs.tag || github.ref_name }}
+          name: Alif Admin v${{ steps.version_info.outputs.VERSION_NAME }}
           files: |
             android-admin/app/build/outputs/apk/release/*.apk
             android-admin/app/build/outputs/bundle/release/*.aab
