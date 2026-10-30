@@ -5,7 +5,9 @@
 #   bash scripts/setup.sh
 #
 # Copies the .env template, generates APP_KEY, creates the database, runs the
-# migrations and seeds the demo catalogue. Safe to re-run: an existing .env is
+# migrations and seeds the sample catalogue. No default administrator is
+# created; bootstrap the first super-admin with "php yii app:super-admin".
+# Safe to re-run: an existing .env is
 # never overwritten, CREATE DATABASE is IF NOT EXISTS, `migrate:up` is
 # idempotent and `app:seed` skips rows that already exist.
 #
@@ -170,7 +172,8 @@ cat <<'DONE'
 
 Setup finished. Before you call it done:
 
-  1. Log in with the seeded admin (admin / Admin1234!) and change that password.
+  1. Bootstrap the first administrator once: php yii app:super-admin
+     (the generated password is printed once; store it securely).
   2. .env → APP_DEBUG=false, APP_URL and the DB_* values must match this host.
   3. runtime/ must be writable by the web user, and must not be web-reachable.
   4. Add the two notification cron jobs (docs/deployment.md §5):

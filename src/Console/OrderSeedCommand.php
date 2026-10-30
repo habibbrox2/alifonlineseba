@@ -199,8 +199,8 @@ final class OrderSeedCommand extends Command
         $customers = $this->customers((string) ($input->getOption('user') ?? ''));
         if ($customers === []) {
             $io->error(
-                'No usable customer accounts. `php yii app:seed` creates one (demo) '
-                . 'when the user table is empty.',
+                'No usable customer accounts. Register a customer account, or configure '
+                . 'SEED_DEMO_PASSWORD in a non-production environment and run `php yii app:seed`.',
             );
             return Command::FAILURE;
         }

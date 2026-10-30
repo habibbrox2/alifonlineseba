@@ -22,6 +22,7 @@ npm install
 cp .env.example .env
 php yii migrate:up --no-interaction
 php yii app:seed
+php yii app:super-admin
 npm run build
 php -S 127.0.0.1:8080 -t public public/index.php
 ```
@@ -43,13 +44,17 @@ php -S 127.0.0.1:8080 -t public public/index.php
 
 ## Credentials
 
-| ইউজারনেম | পাসওয়ার্ড | রোল |
-|---|---|---|
-| `admin` | `Admin1234!` | superadmin (ব্যালেন্স ৳5,000) |
-| `demo` | `Demo1234!` | user — কাস্টমার (ব্যালেন্স ৳250) |
-| `superadmin` | `php yii app:super-admin` দিয়ে তৈরি হওয়া/generated পাসওয়ার্ড | superadmin |
+`app:seed` sample catalog তৈরি করে; এটি কোনো known/default admin credential তৈরি করে না।
+প্রথম super-admin নিরাপদভাবে তৈরি করুন:
 
-> `app:seed` ডিফল্টভাবে দুটি অ্যাকাউন্ট তৈরি করে — `admin` (superadmin) ও `demo` (কাস্টমার)। অতিরিক্ত সুপারএডমিন তৈরি করতে বা প্রমোট করতে `php yii app:super-admin` চালাতে হবে।
+```bash
+php yii app:super-admin
+```
+
+কমান্ডটি একবারের জন্য generated password দেখাবে। সেটি নিরাপদে সংরক্ষণ করে প্রথম লগইনের পর পরিবর্তন করুন।
+শুধু non-production environment-এ demo account চাইলে `.env`-এ আলাদা
+`SEED_ADMIN_PASSWORD` ও `SEED_DEMO_PASSWORD` দিন (প্রতিটি অন্তত ১২ অক্ষর); production-এ এগুলো উপেক্ষা করা হয়।
+
 
 ## Admin Access
 
@@ -120,26 +125,21 @@ php -S 127.0.0.1:8080 -t public public/index.php
 
 ### সিড করা অ্যাকাউন্ট
 
-| ইউজারনেম | পাসওয়ার্ড | রোল |
-|---|---|---|
-| `admin` | `Admin1234!` | superadmin (ব্যালেন্স ৳5,000) |
-| `superadmin` | `php yii app:super-admin` কমান্ডের মাধ্যমে তৈরি হওয়া/generated পাসওয়ার্ড | superadmin |
-| `demo` | `Demo1234!` | user — কাস্টমার (ব্যালেন্স ৳250) |
-
-> `app:seed` ডিফল্টভাবে শুধু দুটি অ্যাকাউন্ট তৈরি করে — `admin` (superadmin) ও `demo` (কাস্টমার)। অতিরিক্ট `superadmin` তৈরি করতে `php yii app:super-admin` চালাতে হবে; যদি প্রয়োজন হয়, `--promote=admin` দিয়ে বিদ্যমান অ্যাকাউন্টকেও সুপারএডমিন বানানো যেতে পারে।
+`app:seed` ডিফল্টভাবে কোনো user account তৈরি করে না। Non-production demo setup-এ
+`SEED_ADMIN_PASSWORD` ও `SEED_DEMO_PASSWORD` স্পষ্টভাবে সেট করলে কেবল তখনই demo accounts তৈরি হয়।
+Production bootstrap-এর জন্য generated one-time password-সহ CLI ব্যবহার করুন।
 
 ### সুপারএডমিন
 
 `/admin/staff`, `/admin/withdraws` এবং প্ল্যাটফর্ম-ওয়াইড লেজার একচেটিয়াভাবে `superadmin` রোল-ধারী ব্যবহারকারীর জন্য খোলা থাকে।
-`app:seed` প্রথম সুপারএডমিন হিসেবে `admin` অ্যাকাউন্ট তৈরি করে। ওয়েব প্যানেল থেকে সুপারএডমিন তৈরি করা সম্ভব নয়, কারণ ওই পেজগুলো নিজেই সুপারএডমিন-সুরক্ষিত — তাই অতিরিক্ত বা নতুন সুপারএডমিনের জন্য একমাত্র কার্যকর উপায় হলো CLI:
+প্রথম super-admin-সহ সব bootstrap/promote operation CLI-তে করতে হবে; web panel থেকে প্রথম super-admin তৈরি করা যায়:
 
 ```bash
-php yii app:super-admin                     # নতুন `superadmin` অ্যাকাউন্ট তৈরি + একবার দেখানো জেনারেটেড পাসওয়ার্ড
-php yii app:super-admin --promote=admin     # বিদ্যমান অ্যাকাউন্টকে সুপারএডমিন বানান (পাসওয়ার্ড অপরিবর্তিত)
-php yii app:super-admin --dry-run          # কী পরিবর্তন হবে তা দেখুন, কিন্তু কোনো লেখা হবে না
+php yii app:super-admin
+php yii app:super-admin --promote=admin
+php yii app:super-admin --dry-run
 ```
 
-প্রতিটি পরিবর্তন `activity_log`-এ `admin.superadmin_created` / `admin.superadmin_promoted` হিসেবে নথিভুক্ত হয়।
 
 ## টেস্ট
 

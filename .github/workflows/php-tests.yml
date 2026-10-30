@@ -1,0 +1,80 @@
+name: PHP Backend Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'migrations/**'
+      - 'config/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'codeception.yml'
+      - '.github/workflows/php-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'migrations/**'
+      - 'config/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'codeception.yml'
+      - '.github/workflows/php-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  php-tests:
+    name: PHP / Codeception
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: alif_tools_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: test
+      APP_DEBUG: false
+      DB_DSN: mysql:host=127.0.0.1;port=3306;dbname=alif_tools_test;charset=utf8mb4
+      DB_USERNAME: root
+      DB_PASSWORD: root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, fileinfo, gd, intl, mbstring, openssl, pdo_mysql, zip, xml
+          coverage: none
+          tools: composer:v2
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Migrate and seed isolated test database
+        run: |
+          set -euo pipefail
+          export APP_KEY="$(php -r 'echo bin2hex(random_bytes(32));')"
+          echo "APP_KEY=$APP_KEY" >> "$GITHUB_ENV"
+          export SEED_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          export SEED_DEMO_PASSWORD="$(openssl rand -hex 24)"
+          php yii migrate:up --no-interaction
+          php yii app:seed -n
+
+      - name: Run Codeception suite
+        run: vendor/bin/codecept run --no-interaction

@@ -159,7 +159,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: lint-and-test
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'release') || startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -205,12 +205,12 @@ jobs:
           ADMIN_KEYSTORE_BASE64: ${{ secrets.ADMIN_KEYSTORE_BASE64 }}
           ADMIN_STORE_PASSWORD: ${{ secrets.ADMIN_STORE_PASSWORD }}
           ADMIN_KEY_ALIAS: ${{ secrets.ADMIN_KEY_ALIAS }}
+          ADMIN_KEY_PASSWORD: ${{ secrets.ADMIN_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${ADMIN_KEYSTORE_BASE64}" ]; then
-            echo "No ADMIN_KEYSTORE_BASE64 secret: release will build UNSIGNED."
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ -z "${ADMIN_KEYSTORE_BASE64}" ] || [ -z "${ADMIN_STORE_PASSWORD}" ] || [ -z "${ADMIN_KEY_ALIAS}" ] || [ -z "${ADMIN_KEY_PASSWORD}" ]; then
+            echo "::error::Release signing secrets are incomplete. Refusing to publish an unsigned APK."
+            exit 1
           fi
           key="$RUNNER_TEMP/admin-release.jks"
           printf '%s' "$ADMIN_KEYSTORE_BASE64" | base64 --decode > "$key"
@@ -223,15 +223,23 @@ jobs:
         id: version_info
         run: |
           ref="${{ github.ref_name }}"
-          clean_ver=$(echo "$ref" | sed -E 's/^(android-admin-)?v//')
-          if ! printf '%s' "$clean_ver" | grep -Eq '^[0-9]+(\.[0-9]+)+'; then
-            # Branch and PR refs carry no version: use the newest version tag so
-            # a build never reports a version older than a shipped release.
+          if { [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; } && [ "$GITHUB_REF" = "refs/heads/main" ]; then
             latest=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)
-            if [ -z "$latest" ]; then
-              latest=$(git tag --list 'android-admin-v[0-9]*' --sort=-v:refname | head -n1)
+            latest="${latest#v}"
+            IFS='.' read -r major minor patch <<< "${latest:-0.0.0}"
+            major=${major:-0}
+            minor=${minor:-0}
+            patch=${patch:-0}
+            clean_ver="$major.$minor.$((patch + 1))"
+          else
+            clean_ver=$(echo "$ref" | sed -E 's/^(android-admin-)?v//')
+            if ! printf '%s' "$clean_ver" | grep -Eq '^[0-9]+(\.[0-9]+)+'; then
+              latest=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)
+              if [ -z "$latest" ]; then
+                latest=$(git tag --list 'android-admin-v[0-9]*' --sort=-v:refname | head -n1)
+              fi
+              clean_ver=$(printf '%s' "$latest" | sed -E 's/^(android-admin-)?v//')
             fi
-            clean_ver=$(printf '%s' "$latest" | sed -E 's/^(android-admin-)?v//')
           fi
           if [ -z "$clean_ver" ]; then clean_ver="0.0.0"; fi
           echo "VERSION_NAME=$clean_ver" >> "$GITHUB_OUTPUT"
@@ -270,7 +278,26 @@ jobs:
           ADMIN_KEY_ALIAS: ${{ secrets.ADMIN_KEY_ALIAS }}
           ADMIN_KEY_PASSWORD: ${{ secrets.ADMIN_KEY_PASSWORD }}
 
+      - name: Create and push release tag
+        id: release_tag
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        env:
+          VERSION_NAME: \${{ steps.version_info.outputs.VERSION_NAME }}
+        run: |
+          set -euo pipefail
+          tag="v\${VERSION_NAME}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Release tag $tag already exists; refusing to overwrite."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" "$GITHUB_SHA" -m "Alif Admin v\${VERSION_NAME}"
+          git push origin "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Upload Release APK
+        if: steps.signing.outputs.signed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release
@@ -278,8 +305,8 @@ jobs:
           retention-days: 30
 
       - name: Upload Release AAB (for Play Console)
+        if: steps.signing.outputs.signed == 'true'
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: app-release-aab
           path: android-admin/app/build/outputs/bundle/release/*.aab
@@ -287,9 +314,10 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.signing.outputs.signed == 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/'))
         with:
-          name: Alif Admin v${{ steps.version_info.outputs.VERSION_NAME }}
+          tag_name: \${{ steps.release_tag.outputs.tag || github.ref_name }}
+          name: Alif Admin v\${{ steps.version_info.outputs.VERSION_NAME }}
           files: |
             android-admin/app/build/outputs/apk/release/*.apk
             android-admin/app/build/outputs/bundle/release/*.aab

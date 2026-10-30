@@ -106,7 +106,7 @@ bash scripts/setup.sh
 | `APP_KEY` | ইতোমধ্যে থাকলে অপরিবর্তিত — টোকেন invalid হয় না |
 | ডাটাবেস | `CREATE DATABASE IF NOT EXISTS` — নো-অপ |
 | `migrate:up` | *No new migrations found* |
-| `app:seed` | আগের থাকা সার্ভিস/ইউজার স্কিপ করে |
+| `app:seed` | ক্যাটালগ seed করে; known/default admin password তৈরি করে না |
 | `app:super-admin` | কোনো পরিবর্তন লেখে না ("Already an active super-admin") |
 
 অপশন:
@@ -155,20 +155,16 @@ DB_PASSWORD=strong-secret
 
 ```bash
 php yii migrate:up --no-interaction   # সব কোর টেবিল + নোটিফিকেশন স্কিমা তৈরি করে
-php yii app:seed -n                   # ঐচ্ছিক — নমুনা ক্যাটালগ ও ইউজার (admin/Admin1234!)
+php yii app:seed -n                   # নমুনা ক্যাটালগ; default admin credentials তৈরি করে না
+php yii app:super-admin               # প্রথম super-admin; generated password একবার দেখায়
 rm -rf runtime/cache                  # কনফিগ ক্যাশ রিফ্রেশ
 ```
 
 - `migrate:up` আইডেম্পোটেন্ট — একই কমান্ড আবার চালালে বলে *Nothing to migrate*; ভয় নেই।
-- `app:seed` শুধু **খালি/নতুন** ক্যাটালগে রো যোগ করে; আগে থেকে থাকা সার্ভিস/ইউজার স্কিপ হয় (ট্রানজেকশন হিস্ট্রি অক্ষত থাকে)। সিড করা অ্যাডমিনের পাসওয়ার্ড প্রথম লগইনের পরপরই বদলে ফেলুন।
-- `app:seed` শুধু **admin** রোলের একটা অ্যাকাউন্ট দেয়, **সুপারএডমিন নয়**। `/admin/staff`, `/admin/withdraws` ও প্ল্যাটফর্ম-ওয়াইড লেজার শুধু `superadmin` রোল ধরে খোলে, আর ওই পেজ থেকেই প্রথম সুপারএডমিন নিয়োগ করা যায় — তাই ডিপ্লয়ের পর একবার চালাতেই হবে:
+- `app:seed` শুধু sample catalog-এ missing row যোগ করে; আগে থেকে থাকা সার্ভিস/ইউজার ও তাদের transaction history অক্ষত থাকে। কোনো hardcoded/default administrator password আর তৈরি হয় না।
+- প্রথম production administrator তৈরি করতে `php yii app:super-admin` চালান। এটি cryptographically random password একবার দেখায়; নিরাপদে সংরক্ষণ করুন। আগে থেকে থাকা account-কে promote করতে `php yii app:super-admin --promote=<username-or-phone>` ব্যবহার করুন। প্রতিটি পরিবর্তন `activity_log`-এ লেখা হয়।
+- Non-production demo user চাইলে `SEED_ADMIN_PASSWORD` ও `SEED_DEMO_PASSWORD` environment variable স্পষ্টভাবে দিন (প্রতিটি ১২+ অক্ষর); `APP_ENV=prod`-এ demo user seed বন্ধ থাকে।
 
-  ```bash
-  php yii app:super-admin --promote=admin    # সিড করা admin-কেই সুপারএডমিন বানান (পাসওয়ার্ড অপরিবর্তিত)
-  php yii app:super-admin                    # অথবা আলাদা `superadmin` অ্যাকাউন্ট + জেনারেটেড পাসওয়ার্ড
-  ```
-
-  দুটোই আইডেম্পোটেন্ট — দুবার চালালে দ্বিতীয়বার কিছু লেখে না। পরিবর্তন `activity_log`-এ `admin.superadmin_promoted` হিসেবে জমা হয়।
 
 SSH না থাকলে: লোকালে উপরের কমান্ডগুলো চালিয়ে পুরো ফোল্ডার আপলোড করুন; `runtime/cache/` খালি করে আপলোড করুন।
 
@@ -178,7 +174,7 @@ SSH না থাকলে: লোকালে উপরের কমান্�
 php yii migrate:up --no-interaction   # "Nothing to migrate" দেখালে স্কিমা সম্পূর্ণ
 ```
 
-ব্রাউজারে `https://your-domain.com/` খুলুন — হোমপেজ ও লগইন কাজ করলে ডাটাবেস কানেকশন ঠিক আছে। সিড করা ইউজার দিয়ে লগইন করে একটি সার্ভিস অর্ডার পেজ (যেমন Official Server Copy) খুললে ভ্যারিয়েন্ট সিলেক্টর ও মূল্য দেখা যাবে।
+ব্রাউজারে `https://your-domain.com/` খুলুন — হোমপেজ ও লগইন কাজ করলে ডাটাবেস কানেকশন ঠিক আছে। CLI দিয়ে তৈরি করা super-admin account দিয়ে লগইন করে একটি সার্ভিস অর্ডার পেজ (যেমন Official Server Copy) খুললে ভ্যারিয়েন্ট সিলেক্টর ও মূল্য দেখা যাবে।
 
 ## ৫. নোটিফিকেশন ক্রন জব
 
