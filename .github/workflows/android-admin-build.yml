@@ -238,9 +238,9 @@ jobs:
           keyPassword=${{ secrets.ADMIN_KEY_PASSWORD }}
           EOF
 
-      - name: Build Release APK
+      - name: Build Release APK and AAB
         if: steps.signing.outputs.signed == 'true'
-        run: cd android-admin && ./gradlew assembleRelease --no-daemon
+        run: cd android-admin && ./gradlew assembleRelease bundleRelease --no-daemon
         env:
           ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
           APP_VERSION_NAME: ${{ steps.version_info.outputs.VERSION_NAME }}
