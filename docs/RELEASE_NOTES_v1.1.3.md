@@ -2,6 +2,7 @@
 
 **Tag:** `v1.1.3` → https://github.com/habibbrox2/alifonlineseba/releases/tag/v1.1.3
 **Direct APK:** https://github.com/habibbrox2/alifonlineseba/releases/download/v1.1.3/app-release.apk
+**Direct AAB (Play Console):** https://github.com/habibbrox2/alifonlineseba/releases/download/v1.1.3/app-release.aab
 **Base:** `v1.1.2` … `main` @ `871026e`
 **Verified by:** GitHub Actions run [41042467928](https://github.com/habibbrox2/alifonlineseba/actions/runs/41042467928) (tag build) — Lint & Unit Tests ✅, Build Debug APK ✅, Build Release APK ✅ (signed, versionName `1.1.3`, versionCode `10103`)
 
@@ -41,7 +42,12 @@ and an unreadable timestamp reads as "already expired" instead of throwing.
 | `./gradlew testDebugUnitTest` | ✅ passed |
 | CI `Lint & Unit Tests` (run 41042467928) | ✅ passed |
 | CI `Build Debug APK` / `Build Release APK` | ✅ passed (release APK signed, `app-release.apk` 6.4 MB attached to the release) |
+| Play Console AAB (`app-release.aab`, 11.3 MB) | ✅ attached — signed, versionName `1.1.3` |
 | On-device smoke test (login, session expiry, push retry, in-app update) | ⬜ not yet run |
+
+> The `bundleRelease` workflow step landed after this tag (`6e7ca68`), so the v1.1.3 AAB was
+> built locally with the same `APP_VERSION_NAME=1.1.3` / `APP_VERSION_CODE=10103` env and release
+> keystore CI uses. Every tag built from `6e7ca68` onward attaches the AAB automatically.
 
 ## Upgrade notes
 
