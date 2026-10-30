@@ -137,3 +137,6 @@ config/.freebuff/
 
 /android-admin/.kotlin/
 .kotlin/
+
+# Local-only isolated Codeception environment
+.env.test.local
