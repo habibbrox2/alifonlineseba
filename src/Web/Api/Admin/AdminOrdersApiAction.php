@@ -11,6 +11,7 @@ use App\Service\Api;
 use App\Service\BulkJobService;
 use App\Service\ServiceRequestAdminService;
 use App\Service\StatusPresenter;
+use App\Service\PermissionService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Yiisoft\Router\CurrentRoute;
@@ -28,13 +29,14 @@ final readonly class AdminOrdersApiAction
         private BulkJobService $bulk,
         private ServiceRequestAdminService $service,
         private UserRepository $users,
+        private PermissionService $permissions,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, CurrentRoute $route): ResponseInterface
     {
         /** @var Identity $identity */
         $identity = $request->getAttribute('identity');
-        if (!$identity->canAccessAdmin()) {
+        if (!$this->permissions->canAccessRoute($identity, 'admin-orders')) {
             return Api::forbidden();
         }
 
@@ -112,6 +114,24 @@ final readonly class AdminOrdersApiAction
     private function handlePost(array $input, int $routeId, Identity $identity): ResponseInterface
     {
         $do = (string) ($input['do'] ?? '');
+        $status = (string) ($input['status'] ?? '');
+        $permissionRoute = match ($do) {
+            'claim', 'release', 'approve' => 'admin-order-approve',
+            'reject' => 'admin-order-reject',
+            'status' => in_array($status, [StatusPresenter::CANCELLED, StatusPresenter::FAILED], true)
+                ? 'admin-order-reject'
+                : 'admin-order-approve',
+            'bulk_status' => 'admin-order-bulk',
+            default => null,
+        };
+
+        if ($permissionRoute === null) {
+            return Api::fail('অজানা অ্যাকশন।', [], 400);
+        }
+        if (!$this->permissions->canAccessRoute($identity, $permissionRoute)) {
+            return Api::forbidden();
+        }
+
         $id = $routeId > 0 ? $routeId : (int) ($input['id'] ?? 0);
 
         if ($id > 0) {

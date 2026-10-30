@@ -11,6 +11,7 @@ use App\Repository\ActivityLogRepository;
 use App\Repository\AdminWithdrawRepository;
 use App\Repository\SettingsRepository;
 use App\Repository\ServiceOrderRepository;
+use App\Repository\ServiceRepository;
 use App\Repository\TopupRepository;
 use App\Repository\RoleRankRepository;
 use App\Repository\UserRepository;
@@ -19,10 +20,14 @@ use App\Service\Api;
 use App\Service\BulkJobService;
 use App\Service\PermissionService;
 use App\Service\ReceiptStorage;
+use App\Service\ServiceRequestAdminService;
+use App\Service\TopupService;
 use App\Web\Api\Admin\AdminDashboardApiAction;
 use App\Web\Api\Admin\AdminLogsApiAction;
 use App\Web\Api\Admin\AdminNotificationsApiAction;
 use App\Web\Api\Admin\AdminOrdersApiAction;
+use App\Web\Api\Admin\AdminServicesApiAction;
+use App\Web\Api\Admin\AdminCategoriesApiAction;
 use App\Web\Api\Admin\AdminRechargeReceiptApiAction;
 use App\Web\Api\Admin\AdminRechargesApiAction;
 use App\Web\Api\Admin\AdminSettingsApiAction;
@@ -55,11 +60,14 @@ final class AdminApiTest extends \Codeception\Test\Unit
     private UserRepository $users;
     private TopupRepository $topups;
     private ServiceOrderRepository $orders;
+    private ServiceRepository $services;
     private ActivityLogRepository $logs;
     private SettingsRepository $settings;
     private AdminWithdrawRepository $withdraws;
     private AdminWithdrawService $withdrawService;
     private BulkJobService $bulk;
+    private ServiceRequestAdminService $settle;
+    private TopupService $topupService;
     private QueueRepository $queue;
     private PermissionService $permissions;
     private ReceiptStorage $receipts;
@@ -102,8 +110,8 @@ final class AdminApiTest extends \Codeception\Test\Unit
         $notify = new \App\Notification\NotificationManager($notifications, $queue, $templates, $this->users, $this->db, $bots);
         $this->withdrawService = new AdminWithdrawService($this->db, $this->withdraws, $ledger, $notify, $this->logs);
         $deliverables = \App\Service\DeliverableStorage::fromProjectRoot();
-        $settle = new \App\Service\ServiceRequestAdminService($this->orders, $ledger, $this->users, $deliverables, $notify, $this->logs);
-        $this->bulk = new \App\Service\BulkJobService(new \App\Repository\BulkJobRepository($this->db), $settle);
+        $this->settle = new ServiceRequestAdminService($this->orders, $ledger, $this->users, $deliverables, $notify, $this->logs);
+        $this->bulk = new \App\Service\BulkJobService(new \App\Repository\BulkJobRepository($this->db), $this->settle);
         $this->queue = $queue;
         $this->services = new \App\Repository\ServiceRepository($this->db);
         $this->receipts = ReceiptStorage::fromProjectRoot();
@@ -349,7 +357,13 @@ final class AdminApiTest extends \Codeception\Test\Unit
             return new AdminUsersApiAction($this->users, $this->permissions);
         }
         if (preg_match('#^/api/admin/orders$#', $uri)) {
-            return new AdminOrdersApiAction($this->orders, $this->bulk);
+            return new AdminOrdersApiAction($this->orders, $this->bulk, $this->settle, $this->users, $this->permissions);
+        }
+        if (preg_match('#^/api/admin/services$#', $uri)) {
+            return new AdminServicesApiAction($this->services, $this->permissions, $this->logs);
+        }
+        if (preg_match('#^/api/admin/categories$#', $uri)) {
+            return new AdminCategoriesApiAction($this->services, $this->permissions, $this->logs);
         }
         if (preg_match('#^/api/admin/topups$#', $uri)) {
             return new AdminTopupsApiAction($this->topups);
@@ -435,6 +449,73 @@ final class AdminApiTest extends \Codeception\Test\Unit
             'staff GET settings' => [$tag, 'staff', 'GET', '/api/admin/settings'],
             'user POST withdraws/1' => [$tag, 'user', 'POST', '/api/admin/withdraws/1'],
         ];
+    }
+
+    public function testStaffCannotRejectOrderThroughAdminApi(): void
+    {
+        $staff = $this->makeUser('rejectstaff', 'staff');
+        $customer = $this->makeUser('rejectcustomer', 'user');
+        $orderId = $this->makeOrder($customer->id);
+
+        $response = $this->call($staff, 'POST', '/api/admin/orders', [], [
+            'do' => 'reject',
+            'id' => $orderId,
+            'status' => 'cancelled',
+        ]);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertSame('pending', (string) $this->orders->findById($orderId)['status']);
+    }
+
+    public function testStaffCannotBulkSettleOrdersThroughAdminApi(): void
+    {
+        $staff = $this->makeUser('bulkstaff', 'staff');
+        $customer = $this->makeUser('bulkcustomer', 'user');
+        $orderId = $this->makeOrder($customer->id);
+
+        $response = $this->call($staff, 'POST', '/api/admin/orders', [], [
+            'do' => 'bulk_status',
+            'ids' => [$orderId],
+            'status' => 'completed',
+        ]);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertSame('pending', (string) $this->orders->findById($orderId)['status']);
+    }
+
+    public function testStaffCannotCreateServicesOrCategoriesThroughAdminApi(): void
+    {
+        $staff = $this->makeUser('catalogstaff', 'staff');
+
+        $service = $this->call($staff, 'POST', '/api/admin/services', [], [
+            'do' => 'create',
+            'category_id' => '',
+            'name' => 'Blocked service ' . $this->suffix,
+            'slug' => 'blocked-service-' . $this->suffix,
+        ]);
+        $category = $this->call($staff, 'POST', '/api/admin/categories', [], [
+            'do' => 'create',
+            'name' => 'Blocked category ' . $this->suffix,
+            'slug' => 'blocked-category-' . $this->suffix,
+        ]);
+
+        $this->assertSame(403, $service->getStatusCode());
+        $this->assertSame(403, $category->getStatusCode());
+    }
+
+    public function testStaffCannotRetryFailedNotificationsThroughAdminApi(): void
+    {
+        $staff = $this->makeUser('notifstaff', 'staff');
+
+        $response = $this->call(
+            $staff,
+            'POST',
+            '/api/admin/notifications/1/retry',
+            ['id' => '1', 'action' => 'retry'],
+            [],
+        );
+
+        $this->assertSame(403, $response->getStatusCode());
     }
 
     public function testRegularUserIsRejectedFromDashboard(): void
