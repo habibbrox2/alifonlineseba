@@ -44,6 +44,66 @@ class ServicesViewModel @Inject constructor(
         }
     }
 
+    /** Create a new service, then reload the list. */
+    fun create(
+        name: String,
+        slug: String,
+        categoryId: Int?,
+        price: String?,
+        unit: String?,
+        description: String?,
+        sortOrder: Int?,
+        status: String?,
+    ) {
+        runAction(
+            refreshList = false,
+            messageOf = { it.message ?: "তৈরি হয়েছে" },
+            block = { repo.servicesAction(
+                "create",
+                name = name,
+                slug = slug,
+                categoryId = categoryId,
+                price = price,
+                unit = unit,
+                description = description,
+                sortOrder = sortOrder,
+                status = status,
+            ) },
+            onSuccess = { load() },
+        )
+    }
+
+    /** Edit an existing service, then reload the list. */
+    fun edit(
+        id: Int,
+        name: String,
+        slug: String,
+        categoryId: Int?,
+        price: String?,
+        unit: String?,
+        description: String?,
+        sortOrder: Int?,
+        status: String?,
+    ) {
+        runAction(
+            refreshList = false,
+            messageOf = { it.message ?: "হালনাগাদ হয়েছে" },
+            block = { repo.servicesAction(
+                "edit",
+                id = id,
+                name = name,
+                slug = slug,
+                categoryId = categoryId,
+                price = price,
+                unit = unit,
+                description = description,
+                sortOrder = sortOrder,
+                status = status,
+            ) },
+            onSuccess = { load() },
+        )
+    }
+
     fun toggle(id: Int) {
         runAction(
             refreshList = false,

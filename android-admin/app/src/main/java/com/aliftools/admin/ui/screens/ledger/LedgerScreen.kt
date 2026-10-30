@@ -55,7 +55,8 @@ fun LedgerScreen(
                     val row = rows[idx]
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text(text = row["description"]?.toString() ?: row["type"]?.toString() ?: "#${row["id"]}", style = MaterialTheme.typography.titleSmall)
+                            val rowId = (row["id"] as? Number)?.toInt() ?: (row["id"] as? String)?.toIntOrNull() ?: 0
+                            Text(text = row["description"]?.toString() ?: row["type"]?.toString() ?: if (rowId > 0) "#$rowId" else "লেজার এন্ট্রি", style = MaterialTheme.typography.titleSmall)
                             Text(text = "পরিমাণ: ${row["amount"] ?: "-"}", style = MaterialTheme.typography.bodySmall)
                         }
                     }

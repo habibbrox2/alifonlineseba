@@ -193,7 +193,7 @@
                         <label for="ar_reason" class="form-label">
                             বাতিলের কারণ <span class="text-danger-600">*</span>
                         </label>
-                        <textarea id="ar_reason" name="reason" rows="2" class="form-input" maxlength="500"
+                        <textarea id="ar_reason" name="reason" rows="2" class="form-input" maxlength="500" required
                                   placeholder="যেমন: রশিদে পরিমাণ ৫০০ দেখাচ্ছে, অনুরোধে ১০০০ দেওয়া আছে"></textarea>
                         <p class="form-help">ইউজার এই কারণটি দেখতে পাবেন — তাই স্পষ্ট লিখুন।</p>
                     </div>
@@ -210,7 +210,15 @@
                                 }|json_encode }}">
                             {{ icon('check', 'w-4 h-4') }} অনুমোদন করুন
                         </button>
-                        <button type="submit" name="do" value="reject" class="btn btn-ghost flex-1 text-danger-600">
+                        <button type="submit" name="do" value="reject" class="btn btn-ghost flex-1 text-danger-600"
+                                data-confirm="{{ {
+                                    title: 'রিচার্জ অনুরোধ বাতিল করবেন?',
+                                    tone: 'money',
+                                    amount: topup.amount|money,
+                                    amountLabel: 'ইজারের ব্যালেন্সে টাকা যোগ হবে না',
+                                    message: 'বাতিল করলে অনুরোধটি বন্ধ হয়ে যাবে এবং টাকা ফেরত দিতেই হবে।',
+                                    confirm: 'বাতিল করুন',
+                                }|json_encode }}">
                             {{ icon('alert-circle', 'w-4 h-4') }} বাতিল করুন
                         </button>
                     </div>

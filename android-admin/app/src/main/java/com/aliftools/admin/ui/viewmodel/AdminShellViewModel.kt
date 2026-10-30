@@ -23,25 +23,29 @@ class AdminShellViewModel @Inject constructor(
     private val repository: AdminRepository,
 ) : ViewModel() {
 
-    /** Null while the token store has not answered yet. */
+    /** Null while the token store has not answered yet; true/false once known. */
     val authed: StateFlow<Boolean?> = repository.accessTokenFlow()
         .map { !it.isNullOrBlank() }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    /** The role stored at login, or null while unknown. */
     val role: StateFlow<String?> = repository.userRoleFlow()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    /** One-shot logout flag. Set by [logout], consumed by [AdminApp]. */
     private val _loggedOut = MutableStateFlow(false)
     val loggedOut: StateFlow<Boolean> = _loggedOut.asStateFlow()
 
+    /** Call after the shell has reacted to logout, to re-arm the flag. */
+    fun consumeLoggedOut() {
+        _loggedOut.value = false
+    }
+
+    /** Clears stored tokens and signals the shell to navigate to login. */
     fun logout() {
         viewModelScope.launch {
             repository.logout()
-            _loggedOut.value = true
         }
-    }
-
-    fun consumeLoggedOut() {
-        _loggedOut.value = false
+        _loggedOut.value = true
     }
 }

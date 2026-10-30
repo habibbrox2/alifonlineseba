@@ -207,7 +207,7 @@
                                                 <input type="hidden" name="do" value="role">
                                                 <input type="hidden" name="user_id" value="{{ user.id }}">
                                                 <input type="hidden" name="role" value="admin">
-                                                <button type="submit" class="btn btn-primary btn-xs px-2 py-1" title="এডমিন হিসেবেfilled">
+                                                <button type="submit" class="btn btn-primary btn-xs px-2 py-1" title="এডমিন হিসেব করুন">
                                                     {{ icon('shield-check', 'w-3.5 h-3.5') }} এডমিন
                                                 </button>
                                             </form>
@@ -216,7 +216,7 @@
                                                 <input type="hidden" name="do" value="role">
                                                 <input type="hidden" name="user_id" value="{{ user.id }}">
                                                 <input type="hidden" name="role" value="staff">
-                                                <button type="submit" class="btn btn-info btn-xs px-2 py-1" title="স্টাফ হিসেবেfilled">
+                                                <button type="submit" class="btn btn-info btn-xs px-2 py-1" title="স্টাফ হিসেব করুন">
                                                     {{ icon('user-plus', 'w-3.5 h-3.5') }} স্টাফ
                                                 </button>
                                             </form>
@@ -228,7 +228,7 @@
                                             <input type="hidden" name="do" value="role">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
                                             <input type="hidden" name="role" value="admin">
-                                            <button type="submit" class="btn btn-primary btn-xs px-2 py-1" title="এডমিন হিসেবেfilled">
+                                            <button type="submit" class="btn btn-primary btn-xs px-2 py-1" title="এডমিন হিসেব করুন">
                                                 {{ icon('shield-check', 'w-3.5 h-3.5') }} এডমিন
                                             </button>
                                         </form>
@@ -239,7 +239,7 @@
                                             <input type="hidden" name="do" value="role">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
                                             <input type="hidden" name="role" value="staff">
-                                            <button type="submit" class="btn btn-warning btn-xs px-2 py-1" title="স্টাফ হিসেবেfilled">
+                                            <button type="submit" class="btn btn-warning btn-xs px-2 py-1" title="স্টাফ হিসেব করুন">
                                                 {{ icon('user-minus', 'w-3.5 h-3.5') }} স্টাফ
                                             </button>
                                         </form>
@@ -293,8 +293,13 @@
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="toggle">
                                             <input type="hidden" name="user_id" value="{{ user.id }}">
-                                            <button type="submit" class="btn btn-ghost btn-sm {{ user.status == 'active' ? 'text-danger-600' : 'text-success-600' }}">
-                                                {{ user.status == 'active' ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন' }}
+                                            <button type="submit"
+                                                    role="switch"
+                                                    aria-checked="{{ user.status == 'active' ? 'true' : 'false' }}"
+                                                    aria-label="{{ user.username }} স্ট্যাটাস পরিবর্তন করুন"
+                                                    title="{{ user.status == 'active' ? 'সক্রিয় থেকে নিষ্ক্রিয় করুন' : 'নিষ্ক্রিয় থেকে সক্রিয় করুন' }}"
+                                                    class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 {{ user.status == 'active' ? 'bg-success-600' : 'bg-neutral-300' }}">
+                                                <span class="pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform {{ user.status == 'active' ? 'translate-x-5' : 'translate-x-1' }}"></span>
                                             </button>
                                         </form>
                                         {% endif %}

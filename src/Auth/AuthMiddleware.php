@@ -61,13 +61,22 @@ final class AuthMiddleware implements MiddlewareInterface
 
         if ($userId !== null) {
             // findById() hides trashed accounts, so deleting a user logs their
-            // live session out on the very next request.
+            // live session out on the very next request. Inactive users are
+            // logged out the same way.
             $row = $this->users->findById((int) $userId);
             if ($row !== null && $row['status'] === 'active') {
                 $identity = Identity::fromRow($row);
             } else {
+                $this->logs->create([
+                    'action' => 'auth.session_removed',
+                    'description' => 'Session cleared for user_id ' . (int) $userId . ' (deleted or deactivated)',
+                    'ip_address' => $request->getServerParams()['REMOTE_ADDR'] ?? null,
+                    'user_id' => $userId,
+                ]);
                 $this->session->remove('user_id');
-                $this->session->regenerateID();
+                // Delete the old session cookie so the revoked session cannot be
+                // replayed. regenerateId(true) removes the old session file.
+                $this->session->regenerateId(true);
             }
         }
 

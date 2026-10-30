@@ -55,7 +55,8 @@ fun ReferralsScreen(
                     val row = rows[idx]
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            val referrer = row["referrer_name"]?.toString() ?: row["referrer"]?.toString() ?: row["username"]?.toString() ?: "রেফারেল #${row["id"]}"
+                            val referrerId = (row["id"] as? Number)?.toInt() ?: (row["id"] as? String)?.toIntOrNull() ?: 0
+                            val referrer = row["referrer_name"]?.toString() ?: row["referrer"]?.toString() ?: row["username"]?.toString() ?: if (referrerId > 0) "রেফারেল #$referrerId" else "রেফারেল"
                             val referee = row["referee_name"]?.toString() ?: ""
                             val status = row["status"]?.toString() ?: ""
                             val code = row["code"]?.toString() ?: ""

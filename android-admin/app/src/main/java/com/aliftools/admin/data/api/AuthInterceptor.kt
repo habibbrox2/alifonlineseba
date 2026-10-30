@@ -3,6 +3,7 @@ package com.aliftools.admin.data.api
 import com.aliftools.admin.data.local.TokenStorage
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Authenticator
 import okhttp3.Request
 import okhttp3.Response
@@ -12,6 +13,10 @@ import javax.inject.Inject
 /**
  * Attaches the access token to every request and, on 401, tries one refresh
  * before handing control back to Retrofit (which will surface the error).
+ *
+ * `authenticate()` runs on OkHttp's dispatcher thread, so the token reads are
+ * wrapped in `runBlocking` with a short timeout — a stalled DataStore read
+ * must never hang the whole HTTP client.
  */
 class AuthInterceptor @Inject constructor(
     private val tokenStorage: TokenStorage,
@@ -19,11 +24,15 @@ class AuthInterceptor @Inject constructor(
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
-        val access = runBlocking { tokenStorage.accessTokenFlow.first() } ?: return null
-        val refresh = runBlocking { tokenStorage.refreshTokenFlow.first() } ?: return null
-
         // Don't retry more than once for the same request.
         if (responseCount(response) >= 2) return null
+
+        val access = runBlocking {
+            withTimeoutOrNull(5000) { tokenStorage.accessTokenFlow.first() }
+        } ?: return null
+        val refresh = runBlocking {
+            withTimeoutOrNull(5000) { tokenStorage.refreshTokenFlow.first() }
+        } ?: return null
 
         val rotated = runBlocking {
             try {
@@ -56,7 +65,9 @@ class AuthInterceptor @Inject constructor(
     }
 
     fun attach(request: Request): Request {
-        val token = runBlocking { tokenStorage.accessTokenFlow.first() }
+        val token = runBlocking {
+            withTimeoutOrNull(5000) { tokenStorage.accessTokenFlow.first() }
+        }
         return if (token != null) {
             request.newBuilder()
                 .header("Authorization", "Bearer $token")

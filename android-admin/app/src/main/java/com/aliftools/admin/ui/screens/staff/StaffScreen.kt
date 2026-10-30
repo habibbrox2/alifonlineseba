@@ -138,7 +138,7 @@ private fun StaffActionsDialog(
         title = { Text(user.username.ifBlank { "স্টাফ #${user.id}" }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("ফোন: ${user.phone}", style = MaterialTheme.typography.bodyMedium)
+                Text("ফোন: ${user.phone ?: "—"}", style = MaterialTheme.typography.bodyMedium)
                 Text("রোল: ${ROLE_LABELS[user.role] ?: user.role}", style = MaterialTheme.typography.bodyMedium)
                 Text(
                     text = "পাসওয়ার্ড রিসেট করলে ইউজারকে নতুন অস্থায়ী পাসওয়ার্ড দেওয়া হবে।",

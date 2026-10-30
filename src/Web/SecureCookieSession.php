@@ -35,7 +35,15 @@ final class SecureCookieSession implements SessionInterface
     private function isRequestSecure(): bool
     {
         try {
-            return $this->requestProvider->get()->getUri()->getScheme() === 'https';
+            $uri = $this->requestProvider->get()->getUri();
+            // Behind a reverse proxy (Cloudflare tunnel), the URI scheme may
+            // report `http` even when the original request was HTTPS. Honor
+            // `X-Forwarded-Proto` so the Secure cookie flag is set correctly.
+            $forwardedProto = $this->requestProvider->get()->getHeaderLine('X-Forwarded-Proto');
+            if ($forwardedProto !== '') {
+                return str_contains(strtolower($forwardedProto), 'https');
+            }
+            return $uri->getScheme() === 'https';
         } catch (Throwable) {
             // No request bound yet (console / early bootstrap): fall back to the origin scheme.
             return false;

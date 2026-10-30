@@ -185,7 +185,13 @@
                                             </button>
                                         </form>
 
-                                        <form method="post" action="/admin/referrals" class="reject-form">
+                                        <form method="post" action="/admin/referrals" class="reject-form"
+                                              data-confirm="{{ {
+                                                  title: 'রেফারেলটি বাতিল করবেন?',
+                                                  tone: 'danger',
+                                                  message: 'রেফারেল বোনাস বাতিল করা যাবে এবং ইউজারকে কারণে জানানো হবে।',
+                                                  confirm: 'বাতিল করুন',
+                                              }|json_encode }}">
                                             <input type="hidden" name="_csrf" value="{{ csrf }}">
                                             <input type="hidden" name="do" value="reject">
                                             <input type="hidden" name="referral_id" value="{{ r.id }}">

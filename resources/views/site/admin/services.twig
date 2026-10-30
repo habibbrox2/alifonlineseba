@@ -631,8 +631,18 @@
                                                 <input type="hidden" name="_csrf" value="{{ csrf }}">
                                                 <input type="hidden" name="do" value="toggle">
                                                 <input type="hidden" name="id" value="{{ service.id }}">
-                                                <button type="submit" class="btn btn-ghost btn-sm">
-                                                    {{ service.status == 'active' ? 'নিষ্ক্রিয়' : 'সক্রিয়' }}
+                                                {# The status is one control, not two: a real on/off
+                                                   switch. The visual state is the service's own
+                                                   status and the posted state is the same thing, so
+                                                   the server still owns the transition (and the log)
+                                                   and the markup only decides how it is shown. #}
+                                                <button type="submit"
+                                                        role="switch"
+                                                        aria-checked="{{ service.status == 'active' ? 'true' : 'false' }}"
+                                                        aria-label="{{ service.name }} স্ট্যাটাস পরিবর্তন করুন"
+                                                        title="{{ service.status == 'active' ? 'সক্রিয় থেকে নিষ্ক্রিয় করুন' : 'নিষ্ক্রিয় থেকে সক্রিয় করুন' }}"
+                                                        class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 {{ service.status == 'active' ? 'bg-success-600' : 'bg-neutral-300' }}">
+                                                    <span class="pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform {{ service.status == 'active' ? 'translate-x-5' : 'translate-x-1' }}"></span>
                                                 </button>
                                             </form>
                                             <form method="post" action="/admin/services" data-confirm="{{ { title: ('"' ~ service.name ~ '"' ~ ' ট্র্যাশে পাঠাবেন?'), tone: 'warn', bullets: ['ইজারতে আর দেখা যাবে না', 'পুরনো লেনদেন রেকর্ড সংরক্ষিত থাকবে', 'পরে রিস্টোর করা যাবে'], confirm: 'ট্র্যাশে পাঠান' }|json_encode }}">

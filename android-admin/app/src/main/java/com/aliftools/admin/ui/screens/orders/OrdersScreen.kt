@@ -386,7 +386,7 @@ private fun OrderDetailDialog(
                             )
                             envelope.resultEntries.forEach { entry ->
                                 Text(
-                                    text = "${entry.label}: ${entry.value}",
+                                    text = "${entry.label}: ${entry.value ?: "—"}",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }

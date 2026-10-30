@@ -15,13 +15,13 @@ return [
     YiiSession::class => [
         '__construct()' => [
             [
-                'cookie_httponly' => '1',
+                'cookie_httponly' => true,
                 'cookie_samesite' => 'Lax',
                 // The Secure flag is decided per request by SecureCookieSession, because
                 // the loopback origin is plain HTTP while the tunnel terminates HTTPS.
-                'cookie_secure' => '0',
+                'cookie_secure' => false,
                 'name' => (string) Env::get('SESSION_NAME', 'ALIF_SESSION'),
-                'use_strict_mode' => '1',
+                'use_strict_mode' => true,
             ],
             null,
         ],

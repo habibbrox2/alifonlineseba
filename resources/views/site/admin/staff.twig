@@ -210,12 +210,14 @@
                                         <input type="hidden" name="id" value="{{ member.id }}">
                                         <input type="hidden" name="status"
                                                value="{{ member.status == 'active' ? 'suspended' : 'active' }}">
-                                        <button type="submit" name="do" value="status" class="btn btn-ghost btn-sm">
-                                            {% if member.status == 'active' %}
-                                                {{ icon('user-x', 'w-3.5 h-3.5') }} নিষ্ক্রিয় করুন
-                                            {% else %}
-                                                {{ icon('user-check', 'w-3.5 h-3.5') }} সক্রিয় করুন
-                                            {% endif %}
+                                        <input type="hidden" name="do" value="status">
+                                        <button type="submit"
+                                                role="switch"
+                                                aria-checked="{{ member.status == 'active' ? 'true' : 'false' }}"
+                                                aria-label="{{ member.username }} স্ট্যাটাস পরিবর্তন করুন"
+                                                title="{{ member.status == 'active' ? 'সক্রিয় থেকে নিষ্ক্রিয় করুন' : 'নিষ্ক্রিয় থেকে সক্রিয় করুন' }}"
+                                                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 {{ member.status == 'active' ? 'bg-success-600' : 'bg-neutral-300' }}">
+                                            <span class="pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform {{ member.status == 'active' ? 'translate-x-5' : 'translate-x-1' }}"></span>
                                         </button>
                                     </form>
                                     {% else %}
