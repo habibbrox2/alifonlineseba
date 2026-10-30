@@ -106,7 +106,11 @@ class NotificationRetryHandler @Inject constructor(
         var i = queue.size - 1
 
         while (i >= 0) {
-            val entry = queue[i].toMutableMap()
+            // Step down before anything below can `continue`: skipping the
+            // decrement would pin the index and spin this loop forever.
+            val index = i
+            i--
+            val entry = queue[index].toMutableMap()
             val id = (entry["id"] as? Number)?.toInt() ?: continue
             val payload = entry["payload"] as? String ?: continue
             val attempt = ((entry["attempt"] as? Number)?.toInt() ?: 1).coerceAtMost(MAX_NOTIFICATION_RETRIES)
@@ -122,7 +126,7 @@ class NotificationRetryHandler @Inject constructor(
             try {
                 onRetry?.invoke(id, payload)
                 // Remove successfully retried notification
-                queue.removeAt(i)
+                queue.removeAt(index)
                 context.dataStore.edit { prefs ->
                     prefs[retryQueue] = serializeJsonArray(queue)
                 }
@@ -136,7 +140,7 @@ class NotificationRetryHandler @Inject constructor(
                 if (attempt >= MAX_NOTIFICATION_RETRIES) {
                     // Max retries exceeded
                     onMaxRetriesExceeded?.invoke(id, payload, entry["lastError"] as? String ?: "Unknown")
-                    queue.removeAt(i)
+                    queue.removeAt(index)
                     context.dataStore.edit { prefs ->
                         prefs[retryQueue] = serializeJsonArray(queue)
                     }
@@ -145,12 +149,11 @@ class NotificationRetryHandler @Inject constructor(
                     // Save with incremented attempt
                     context.dataStore.edit { prefs ->
                         val updatedQueue = queue.toMutableList()
-                        updatedQueue.set(i, entry)
+                        updatedQueue.set(index, entry)
                         prefs[retryQueue] = serializeJsonArray(updatedQueue)
                     }
                 }
             }
-            i--
         }
     }
 

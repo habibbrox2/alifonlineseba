@@ -1,7 +1,5 @@
 package com.aliftools.admin.ui.screens.dashboard
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -197,10 +195,16 @@ fun DashboardScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val url = offer.downloadUrl
-                        if (!url.isNullOrBlank()) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        }
+                        // The API hands back a relative path whenever APP_URL is unset,
+                        // and an intent built from a relative Uri has no handler —
+                        // startActivity would throw ActivityNotFoundException here.
+                        AppUpdateHelper.downloadAndInstall(
+                            // App context: the download outlives this dialog and the
+                            // receiver must not be pinned to a finishing Activity.
+                            context = context.applicationContext,
+                            downloadUrl = offer.downloadUrl,
+                            versionName = offer.versionName,
+                        )
                     }
                 ) {
                     Text("আপডেট করুন")

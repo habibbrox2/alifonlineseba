@@ -129,10 +129,24 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
     suspend fun timeUntilExpiry(): Long {
         val expiresAtStr = _expiresAt.value
         if (expiresAtStr.isNullOrBlank()) return -1L
-        val expiresAt = java.time.Instant.parse(expiresAtStr)
-        val now = java.time.Instant.now()
-        return java.time.Duration.between(now, expiresAt).toMillis()
+        val expiresAt = parseExpiry(expiresAtStr) ?: return -1L
+        return java.time.Duration.between(java.time.Instant.now(), expiresAt).toMillis()
     }
+
+    /**
+     * The API stamps `expires_at` as `Y-m-d H:i:s`, which `Instant.parse`
+     * rejects outright. An unreadable timestamp has to read as "already
+     * expired" rather than throw a DateTimeParseException out of a session
+     * check, so both shapes are tried and neither may escape.
+     */
+    private fun parseExpiry(raw: String): java.time.Instant? =
+        runCatching { java.time.Instant.parse(raw) }.getOrNull()
+            ?: runCatching {
+                java.time.LocalDateTime.parse(
+                    raw,
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                ).atZone(java.time.ZoneId.systemDefault()).toInstant()
+            }.getOrNull()
 
     /**
      * Returns whether the token is close to expiry (within the timeout window).
