@@ -41,6 +41,19 @@ final readonly class AdminCategoriesApiAction
     {
         $adminId = (int) $identity->id;
         $do = (string) ($input['do'] ?? 'create');
+        $permissionRoute = match ($do) {
+            'create' => 'admin-categories-create',
+            'update', 'toggle' => 'admin-categories-update',
+            'delete' => 'admin-categories-delete',
+            default => null,
+        };
+
+        if ($permissionRoute === null) {
+            return Api::fail('অজানা অ্যাকশন।', [], 400);
+        }
+        if (!$this->permissions->canAccessRoute($identity, $permissionRoute)) {
+            return Api::forbidden();
+        }
 
         if ($do === 'create') {
             $name = trim((string) ($input['name'] ?? ''));

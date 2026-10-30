@@ -54,6 +54,9 @@ final readonly class AdminNotificationsApiAction
             if ($action !== 'retry') {
                 return Api::fail('Unknown notification action.', [], 400);
             }
+            if (!$this->permissions->canAccessRoute($identity, 'admin-notifications-retry')) {
+                return Api::forbidden();
+            }
 
             $ok = $this->queue->requeue($id);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console;
 
+use App\Env;
 use App\Repository\ServiceRepository;
 use App\Repository\UserRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -113,30 +114,48 @@ final class SeedCommand extends Command
         $io = new SymfonyStyle($input, $output);
 
         $usersExist = (int) $this->db->createCommand('SELECT COUNT(*) FROM {{%user}}')->queryScalar() > 0;
+        $usersSeeded = $usersExist;
 
         // ---- Users -----------------------------------------------------------
+        // Never ship a known password or bootstrap a production administrator
+        // from sample data. Demo accounts are opt-in and require explicit,
+        // per-environment credentials outside production.
         if (!$usersExist) {
-            $this->users->create([
-                'username' => 'admin',
-                // Seeded with a real name so the roster, the dashboard greeting
-                // and every order this demo account touches show a name rather
-                // than the login handle.
-                'full_name' => 'অ্যাডমিন অ্যাকাউন্ট',
-                'phone' => '01700000000',
-                'email' => 'admin@demo.local',
-                'password_hash' => password_hash('Admin1234!', PASSWORD_DEFAULT),
-                'role' => 'superadmin',
-                'balance' => 5000,
-            ]);
-            $this->users->create([
-                'username' => 'demo',
-                'full_name' => 'ডেমো উদ্দিন',
-                'phone' => '01712345678',
-                'email' => 'demo@demo.local',
-                'password_hash' => password_hash('Demo1234!', PASSWORD_DEFAULT),
-                'role' => 'user',
-                'balance' => 250,
-            ]);
+            $adminPassword = Env::get('SEED_ADMIN_PASSWORD');
+            $demoPassword = Env::get('SEED_DEMO_PASSWORD');
+            $demoCredentialsReady = !Env::isProd()
+                && is_string($adminPassword)
+                && strlen($adminPassword) >= 12
+                && is_string($demoPassword)
+                && strlen($demoPassword) >= 12;
+
+            if ($demoCredentialsReady) {
+                $this->users->create([
+                    'username' => 'admin',
+                    'full_name' => 'অ্যাডমিন অ্যাকাউন্ট',
+                    'phone' => '01700000000',
+                    'email' => 'admin@demo.local',
+                    'password_hash' => password_hash($adminPassword, PASSWORD_DEFAULT),
+                    'role' => 'superadmin',
+                    'balance' => 5000,
+                ]);
+                $this->users->create([
+                    'username' => 'demo',
+                    'full_name' => 'ডেমো উদ্দিন',
+                    'phone' => '01712345678',
+                    'email' => 'demo@demo.local',
+                    'password_hash' => password_hash($demoPassword, PASSWORD_DEFAULT),
+                    'role' => 'user',
+                    'balance' => 250,
+                ]);
+                $usersSeeded = true;
+            } else {
+                $io->warning(
+                    Env::isProd()
+                        ? 'Production seed does not create administrator or demo accounts. Bootstrap the first super-admin with `php yii app:super-admin`.'
+                        : 'No demo users created. Set SEED_ADMIN_PASSWORD and SEED_DEMO_PASSWORD (12+ characters each) for this non-production environment, or run `php yii app:super-admin`.',
+                );
+            }
         }
 
         // ---- Catalog: idempotent by slug -------------------------------------
@@ -300,7 +319,7 @@ final class SeedCommand extends Command
 
         $io->success(sprintf(
             'Users: %s. Catalog: %d services present, %d newly added, %d categories.',
-            $usersExist ? 'kept' : 'seeded (admin/Admin1234! superadmin, demo/Demo1234! customer)',
+            $usersExist ? 'existing users preserved' : ($usersSeeded ? 'demo users seeded from explicit non-production secrets' : 'no default users created; use app:super-admin to bootstrap'),
             count($existingSlugs) + $created,
             $created,
             count($catIds),

@@ -39,8 +39,6 @@ final class ApiTokenRepository
             'expires_at' => $expiresAt,
             'created_at' => date('Y-m-d H:i:s'),
         ])->execute();
-        $id = (int) $this->db->getLastInsertID();
-
         // The refresh token is a second row with a distinct selector; rotating
         // it on every use makes replay detectable.
         [$rSelector, $rVerifierHash, $rVerifier] = self::generatePair();
@@ -103,18 +101,65 @@ final class ApiTokenRepository
         return (int) $row['user_id'];
     }
 
-    /** Rotate a refresh token: revoke the presented one, issue a fresh pair. */
+    /**
+     * Rotate a refresh token exactly once.
+     *
+     * The row lock serializes concurrent refresh requests. Revocation and the
+     * replacement pair are committed together, so a losing request cannot mint
+     * a second valid pair after observing the same pre-revocation state.
+     */
     public function rotate(string $refreshBearer): ?array
     {
-        $userId = $this->resolve($refreshBearer);
-        if ($userId === null) {
+        $parts = explode('.', $refreshBearer, 2);
+        if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
             return null;
         }
 
-        $parts = explode('.', $refreshBearer, 2);
-        $this->revokeByHash(self::verifierHashFor($parts[0], $parts[1]));
+        $hash = self::verifierHashFor($parts[0], $parts[1]);
 
-        return $this->issue($userId);
+        return $this->db->transaction(function () use ($hash): ?array {
+            $row = $this->db
+                ->createCommand(
+                    'SELECT * FROM {{%api_token}} WHERE [[token_hash]] = :h LIMIT 1 FOR UPDATE',
+                )
+                ->bindValue(':h', $hash)
+                ->queryOne();
+
+            if (!is_array($row)
+                || $row['revoked_at'] !== null
+                || ($row['expires_at'] !== null && strtotime((string) $row['expires_at']) <= time())
+            ) {
+                return null;
+            }
+
+            $userId = (int) $row['user_id'];
+            $activeUser = $this->db
+                ->createCommand(
+                    "SELECT [[id]] FROM {{%user}} WHERE [[id]] = :id AND [[status]] = 'active' AND [[deleted_at]] IS NULL",
+                )
+                ->bindValue(':id', $userId)
+                ->queryScalar();
+
+            if ($activeUser === false) {
+                return null;
+            }
+
+            $revoked = $this->db
+                ->createCommand()
+                ->update(
+                    '{{%api_token}}',
+                    ['revoked_at' => date('Y-m-d H:i:s')],
+                    '[[token_hash]] = :h AND [[revoked_at]] IS NULL',
+                )
+                ->bindValue(':h', $hash)
+                ->execute();
+
+            if ($revoked !== 1) {
+                return null;
+            }
+
+            return $this->issue($userId);
+        });
     }
 
     /** Revoke the presented access token (logout). */
