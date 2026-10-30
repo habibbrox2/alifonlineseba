@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Web;
 
+use App\Env;
 use App\Tests\Support\WebTester;
 use PHPUnit\Framework\Assert;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -30,7 +31,10 @@ use Yiisoft\Di\ContainerConfig;
 final class AdminBulkStatusCest
 {
     private const ADMIN_USER = 'admin';
-    private const ADMIN_PASSWORD = 'Admin1234!';
+    private static function adminPassword(): string
+    {
+        return Env::get('SEED_ADMIN_PASSWORD', 'Admin1234!') ?? 'Admin1234!';
+    }
     /** Every row this file plants carries the prefix; cleanup deletes by it. */
     private const PLANT_PREFIX = 'bulktest_';
     private const OPERATOR_USER = 'bulktest_operator';
@@ -640,7 +644,7 @@ final class AdminBulkStatusCest
         return (int) $this->db()->getLastInsertID();
     }
 
-    private function signIn(WebTester $I, string $user = self::ADMIN_USER, string $password = self::ADMIN_PASSWORD): void
+    private function signIn(WebTester $I, string $user = self::ADMIN_USER, string $password = self::adminPassword()): void
     {
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [

@@ -73,6 +73,8 @@ jobs:
           echo "APP_KEY=$APP_KEY" >> "$GITHUB_ENV"
           export SEED_ADMIN_PASSWORD="$(openssl rand -hex 24)"
           export SEED_DEMO_PASSWORD="$(openssl rand -hex 24)"
+          echo "SEED_ADMIN_PASSWORD=$SEED_ADMIN_PASSWORD" >> "$GITHUB_ENV"
+          echo "SEED_DEMO_PASSWORD=$SEED_DEMO_PASSWORD" >> "$GITHUB_ENV"
           php yii migrate:up --no-interaction
           php yii app:seed -n
 

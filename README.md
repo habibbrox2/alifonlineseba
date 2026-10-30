@@ -112,7 +112,7 @@ cp .env.example .env   # .env ফাইলে DB credential সেট করু�
 
 # ৩. ডাটাবেস মাইগ্রেশন ও সিড ডেটা
 php yii migrate:up --no-interaction
-php yii app:seed       # নমুনা ক্যাটালগ, সার্ভিস ও ইউজার তৈরি
+php yii app:seed       # নমুনা ক্যাটালগ ও সার্ভিস তৈরি
 
 # ৪. অ্যাসেট বিল্ড (Tailwind + JS sync + Lucide sprite)
 npm run build

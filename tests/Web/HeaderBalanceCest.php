@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Web;
 
+use App\Env;
 use App\Tests\Support\WebTester;
 use PHPUnit\Framework\Assert;
 
@@ -15,7 +16,10 @@ use PHPUnit\Framework\Assert;
 final class HeaderBalanceCest
 {
     private const DEMO_USER = 'demo';
-    private const DEMO_PASSWORD = 'Demo1234!';
+    private static function demoPassword(): string
+    {
+        return Env::get('SEED_DEMO_PASSWORD', 'Demo1234!') ?? 'Demo1234!';
+    }
 
     public function balanceAppearsInTopbar(WebTester $I): void
     {
@@ -23,7 +27,7 @@ final class HeaderBalanceCest
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => self::DEMO_USER,
-            'password' => self::DEMO_PASSWORD,
+            'password' => self::demoPassword(),
         ]);
 
         $I->seeElement('#header-balance');
@@ -42,7 +46,7 @@ final class HeaderBalanceCest
         $I->amOnPage('/login');
         $I->submitForm('form[action="/login"]', [
             'identifier' => self::DEMO_USER,
-            'password' => self::DEMO_PASSWORD,
+            'password' => self::demoPassword(),
         ]);
 
         $html = $I->grabPageSource();
