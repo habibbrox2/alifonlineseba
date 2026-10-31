@@ -89,16 +89,26 @@ fun OrdersScreen(
     val biometric = remember { BiometricHelper(context.applicationContext) }
 
     fun doWithBiometric(onSuccess: () -> Unit) {
-        val activity = context as? FragmentActivity
-        if (activity != null && biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
-            biometric.showPrompt(
-                activity,
-                onSuccess = onSuccess,
-                onFailure = { msg -> viewModel.showSnack(msg) },
-            )
-        } else {
-            onSuccess()
+        try {
+            val activity = context as? FragmentActivity
+            if (activity != null) {
+                try {
+                    if (biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
+                        biometric.showPrompt(
+                            activity,
+                            onSuccess = onSuccess,
+                            onFailure = { msg -> try { viewModel.showSnack(msg) } catch (e: Exception) { onSuccess() } },
+                        )
+                        return
+                    }
+                } catch (e: Exception) {
+                    // Fall through to proceed without biometric
+                }
+            }
+        } catch (e: Exception) {
+            // Fall through
         }
+        onSuccess()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

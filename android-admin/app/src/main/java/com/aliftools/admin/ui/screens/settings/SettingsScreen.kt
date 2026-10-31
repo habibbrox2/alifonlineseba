@@ -57,12 +57,20 @@ fun SettingsScreen(
     }
 
     fun requestSave() {
-        val activity = context as? FragmentActivity
-        if (activity != null && biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
-            biometric.showPrompt(activity, onSuccess = { viewModel.save() }, onFailure = {})
-        } else {
-            viewModel.save()
+        try {
+            val activity = context as? FragmentActivity
+            if (activity != null) {
+                try {
+                    if (biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
+                        biometric.showPrompt(activity, onSuccess = { viewModel.save() }, onFailure = {})
+                        return
+                    }
+                } catch (e: Exception) {
+                }
+            }
+        } catch (e: Exception) {
         }
+        viewModel.save()
     }
 
     AdminScaffold(

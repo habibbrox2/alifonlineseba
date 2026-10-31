@@ -83,16 +83,24 @@ fun WithdrawsScreen(
             busy = busy,
             onDismiss = viewModel::closeDetail,
             onApprove = {
-                val activity = context2 as? FragmentActivity
-                if (activity != null && biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
-                    biometric.showPrompt(
-                        activity,
-                        onSuccess = { viewModel.approve(row) },
-                        onFailure = { msg -> viewModel.showSnack(msg) }
-                    )
-                } else {
-                    viewModel.approve(row)
+                try {
+                    val activity = context2 as? FragmentActivity
+                    if (activity != null) {
+                        try {
+                            if (biometric.isBiometricAvailable() == BiometricManager.BIOMETRIC_SUCCESS) {
+                                biometric.showPrompt(
+                                    activity,
+                                    onSuccess = { viewModel.approve(row) },
+                                    onFailure = { msg -> try { viewModel.showSnack(msg) } catch (e: Exception) { viewModel.approve(row) } }
+                                )
+                                return@WithdrawDetailSheet
+                            }
+                        } catch (e: Exception) {
+                        }
+                    }
+                } catch (e: Exception) {
                 }
+                viewModel.approve(row)
             },
             onReject = { reason -> viewModel.reject(row, reason) },
             onClaim = { viewModel.claim(row) },
