@@ -34,8 +34,8 @@ class MainActivity : FragmentActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         try {
+            super.onCreate(savedInstanceState)
             // The emerald top bar draws behind the status bar; without this the bar
             // would sit below it on Android 14 and older.
             enableEdgeToEdge()
@@ -50,6 +50,9 @@ class MainActivity : FragmentActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize activity", e)
             try {
+                if (savedInstanceState == null) {
+                    // super already called above if we got here; try to recover
+                }
                 setContent {
                     AlifAdminTheme {
                         Surface(modifier = Modifier.fillMaxSize()) {
