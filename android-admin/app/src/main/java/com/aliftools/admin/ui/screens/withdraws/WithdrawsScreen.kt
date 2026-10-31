@@ -83,6 +83,7 @@ fun WithdrawsScreen(
             busy = busy,
             onDismiss = viewModel::closeDetail,
             onApprove = {
+                var handled = false
                 try {
                     val activity = context2 as? FragmentActivity
                     if (activity != null) {
@@ -93,14 +94,16 @@ fun WithdrawsScreen(
                                     onSuccess = { viewModel.approve(row) },
                                     onFailure = { msg -> try { viewModel.showSnack(msg) } catch (e: Exception) { viewModel.approve(row) } }
                                 )
-                                return@WithdrawDetailSheet
+                                handled = true
                             }
                         } catch (e: Exception) {
                         }
                     }
                 } catch (e: Exception) {
                 }
-                viewModel.approve(row)
+                if (!handled) {
+                    viewModel.approve(row)
+                }
             },
             onReject = { reason -> viewModel.reject(row, reason) },
             onClaim = { viewModel.claim(row) },
