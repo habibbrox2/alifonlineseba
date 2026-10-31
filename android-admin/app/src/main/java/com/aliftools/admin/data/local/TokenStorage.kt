@@ -1,6 +1,8 @@
 package com.aliftools.admin.data.local
 
 import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -12,7 +14,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,20 +23,37 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 @Singleton
 class TokenStorage @Inject constructor(@ApplicationContext private val context: Context) {
 
-    private val masterKey: MasterKey by lazy {
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+    private val masterKey: MasterKey? by lazy {
+        try {
+            MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create MasterKey", e)
+            null
+        }
     }
 
-    private val encryptedPrefs by lazy {
-        EncryptedSharedPreferences.create(
-            context,
-            "alif_admin_secure_tokens",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+    private val encryptedPrefs: SharedPreferences? by lazy {
+        val key = masterKey ?: return@lazy null
+        try {
+            EncryptedSharedPreferences.create(
+                context,
+                "alif_admin_secure_tokens",
+                key,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create EncryptedSharedPreferences, falling back to plain prefs", e)
+            // Fallback to regular SharedPreferences to avoid crash on devices with keystore issues
+            try {
+                context.getSharedPreferences("alif_admin_secure_tokens_fallback", Context.MODE_PRIVATE)
+            } catch (ex: Exception) {
+                Log.e(TAG, "Failed to create fallback SharedPreferences", ex)
+                null
+            }
+        }
     }
 
     private val accessTokenKey = "access_token"
@@ -52,10 +70,19 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
         // Hydrate the in-memory flows from the encrypted store once. ESP is
         // synchronous, so reading here (on the singleton's construction) is
         // safe and keeps the Flow API unchanged for callers.
-        _accessToken.value = encryptedPrefs.getString(accessTokenKey, null)
-        _refreshToken.value = encryptedPrefs.getString(refreshTokenKey, null)
-        _expiresAt.value = encryptedPrefs.getString(expiresAtKey, null)
-        _userRole.value = encryptedPrefs.getString(userRoleKey, null)
+        try {
+            val prefs = encryptedPrefs
+            _accessToken.value = prefs?.getString(accessTokenKey, null)
+            _refreshToken.value = prefs?.getString(refreshTokenKey, null)
+            _expiresAt.value = prefs?.getString(expiresAtKey, null)
+            _userRole.value = prefs?.getString(userRoleKey, null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to hydrate tokens from storage", e)
+            _accessToken.value = null
+            _refreshToken.value = null
+            _expiresAt.value = null
+            _userRole.value = null
+        }
     }
 
     val accessTokenFlow: Flow<String?> = _accessToken.asStateFlow()
@@ -89,11 +116,15 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
     }
 
     suspend fun saveTokens(token: String, refresh: String, expiresAtStr: String?, role: String) {
-        encryptedPrefs.edit {
-            putString(accessTokenKey, token)
-            putString(refreshTokenKey, refresh)
-            putString(expiresAtKey, expiresAtStr ?: "")
-            putString(userRoleKey, role)
+        try {
+            encryptedPrefs?.edit {
+                putString(accessTokenKey, token)
+                putString(refreshTokenKey, refresh)
+                putString(expiresAtKey, expiresAtStr ?: "")
+                putString(userRoleKey, role)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save tokens", e)
         }
         _accessToken.value = token
         _refreshToken.value = refresh
@@ -102,11 +133,15 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
     }
 
     suspend fun clearTokens() {
-        encryptedPrefs.edit {
-            remove(accessTokenKey)
-            remove(refreshTokenKey)
-            remove(expiresAtKey)
-            remove(userRoleKey)
+        try {
+            encryptedPrefs?.edit {
+                remove(accessTokenKey)
+                remove(refreshTokenKey)
+                remove(expiresAtKey)
+                remove(userRoleKey)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear tokens", e)
         }
         _accessToken.value = null
         _refreshToken.value = null
@@ -160,11 +195,19 @@ class TokenStorage @Inject constructor(@ApplicationContext private val context: 
     suspend fun resetExpiry(): String {
         val instant = java.time.Instant.now().plus(java.time.Duration.ofMinutes(15))
         val newExpiry = java.time.format.DateTimeFormatter.ISO_INSTANT.format(instant)
-        encryptedPrefs.edit {
-            putString(expiresAtKey, newExpiry)
+        try {
+            encryptedPrefs?.edit {
+                putString(expiresAtKey, newExpiry)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reset expiry", e)
         }
         _expiresAt.value = newExpiry
         return newExpiry
+    }
+
+    companion object {
+        private const val TAG = "TokenStorage"
     }
 }
 

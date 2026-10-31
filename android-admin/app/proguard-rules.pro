@@ -59,6 +59,10 @@
 -keepclassmembers class com.aliftools.admin.data.api.** { *; }
 -keep class com.aliftools.admin.data.model.** { *; }
 -keepclassmembers class com.aliftools.admin.data.model.** { *; }
+-keep class com.aliftools.admin.data.local.** { *; }
+-keepclassmembers class com.aliftools.admin.data.local.** { *; }
+-keep class com.aliftools.admin.data.repository.** { *; }
+-keepclassmembers class com.aliftools.admin.data.repository.** { *; }
 
 # Keep OkHttp logging interceptor
 -keepclassmembers class * extends okhttp3.Interceptor { *; }

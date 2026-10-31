@@ -82,8 +82,11 @@ fun AdminApp(
     LaunchedEffect(loggedOut) {
         if (loggedOut) {
             showMore = false
-            navController.navigate(Screen.Login.route) {
-                popUpTo(navController.graph.id) { inclusive = true }
+            try {
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                }
+            } catch (e: Exception) {
             }
             viewModel.consumeLoggedOut()
         }
@@ -94,10 +97,13 @@ fun AdminApp(
 
     fun openTab(route: String) {
         showMore = false
-        navController.navigate(route) {
-            popUpTo(Screen.Dashboard.route) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
+        try {
+            navController.navigate(route) {
+                popUpTo(Screen.Dashboard.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        } catch (e: Exception) {
         }
     }
 
@@ -114,14 +120,18 @@ fun AdminApp(
                     SplashScreen()
                     LaunchedEffect(authed) {
                         val signedIn = authed ?: return@LaunchedEffect
-                        val destination = if (signedIn) Screen.Dashboard else Screen.Login
-                        navController.navigate(destination.route) {
-                            popUpTo(Screen.Splash.route) { inclusive = true }
-                        }
-                        val deep = pendingDeepLink
-                        pendingDeepLink = null
-                        if (signedIn && deep != null) {
-                            navController.navigate(deep)
+                        try {
+                            val destination = if (signedIn) Screen.Dashboard else Screen.Login
+                            navController.navigate(destination.route) {
+                                popUpTo(Screen.Splash.route) { inclusive = true }
+                            }
+                            val deep = pendingDeepLink
+                            pendingDeepLink = null
+                            if (signedIn && deep != null) {
+                                navController.navigate(deep)
+                            }
+                        } catch (e: Exception) {
+                            // Prevent crashes from invalid navigation states
                         }
                     }
                 }
@@ -129,8 +139,11 @@ fun AdminApp(
                 composable(Screen.Login.route) {
                     LoginScreen(
                         onLoginSuccess = { _ ->
-                            navController.navigate(Screen.Dashboard.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
+                            try {
+                                navController.navigate(Screen.Dashboard.route) {
+                                    popUpTo(Screen.Login.route) { inclusive = true }
+                                }
+                            } catch (e: Exception) {
                             }
                         },
                     )
@@ -154,8 +167,11 @@ fun AdminApp(
                         onNavigateToPermissionsMatrix = { navController.navigate(Screen.PermissionsMatrix.route) },
                         onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
                         onLoggedOut = {
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(navController.graph.id) { inclusive = true }
+                            try {
+                                navController.navigate(Screen.Login.route) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                }
+                            } catch (e: Exception) {
                             }
                         },
                     )
@@ -249,7 +265,10 @@ fun AdminApp(
                     openTab(route)
                 } else {
                     showMore = false
-                    navController.navigate(route) { launchSingleTop = true }
+                    try {
+                        navController.navigate(route) { launchSingleTop = true }
+                    } catch (e: Exception) {
+                    }
                 }
             },
             onLogout = viewModel::logout,

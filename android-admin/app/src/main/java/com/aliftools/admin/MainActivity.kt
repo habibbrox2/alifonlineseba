@@ -35,28 +35,50 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // The emerald top bar draws behind the status bar; without this the bar
-        // would sit below it on Android 14 and older.
-        enableEdgeToEdge()
-        requestNotificationPermissionIfNeeded()
-        setContent {
-            AlifAdminTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AdminApp(initialDeepLink = intentRoute(intent))
+        try {
+            // The emerald top bar draws behind the status bar; without this the bar
+            // would sit below it on Android 14 and older.
+            enableEdgeToEdge()
+            requestNotificationPermissionIfNeeded()
+            setContent {
+                AlifAdminTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        AdminApp(initialDeepLink = try { intentRoute(intent) } catch (e: Exception) { null })
+                    }
                 }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize activity", e)
+            // Try to recover with basic setup
+            try {
+                super.onCreate(savedInstanceState)
+                setContent {
+                    AlifAdminTheme {
+                        Surface(modifier = Modifier.fillMaxSize()) {
+                            AdminApp(initialDeepLink = null)
+                        }
+                    }
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "Critical initialization failure", ex)
+                finish()
             }
         }
     }
 
     /** Android 13+ needs the runtime grant or notify() is silently dropped. */
     private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val granted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to request notification permission", e)
         }
     }
 
