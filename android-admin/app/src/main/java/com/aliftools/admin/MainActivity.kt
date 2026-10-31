@@ -49,9 +49,7 @@ class MainActivity : FragmentActivity() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize activity", e)
-            // Try to recover with basic setup
             try {
-                super.onCreate(savedInstanceState)
                 setContent {
                     AlifAdminTheme {
                         Surface(modifier = Modifier.fillMaxSize()) {
