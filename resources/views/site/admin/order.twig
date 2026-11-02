@@ -145,7 +145,7 @@
             {% endif %}
         </section>
 
-        {% if resultEntries %}
+        {% if resultEntries and (metadata.provider is not defined or metadata.provider != 'mock-nid-make') %}
             <section class="card p-6">
                 <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
                     {{ icon('file-text', 'w-5 h-5 text-primary-600') }} স্বয়ংক্রিয় ফলাফল

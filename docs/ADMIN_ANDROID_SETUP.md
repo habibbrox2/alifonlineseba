@@ -15,4 +15,22 @@
    ```
 5. The admin app reads `BuildConfig.BASE_URL` (never a hardcoded secret).
 
+## Compose screenshot regression
+
+Paparazzi and Roborazzi cover the shared design-system components, Bengali typography,
+spacing, and light/dark themes. Reference images are stored with the tests so normal
+test runs compare against committed baselines.
+Robolectric's Android SDK artifacts are cached under `android-admin/.gradle/robolectric-m2`.
+
+From `android-admin`, keep the Gradle daemon and build cache enabled for faster reruns:
+
+```powershell
+.\gradlew.bat :app:recordPaparazziDebug
+.\gradlew.bat :app:recordRoborazziDebug
+.\gradlew.bat :app:testDebugUnitTest --tests "com.aliftools.admin.screenshots.*"
+```
+
+Review and commit intentional reference-image changes under
+`app/src/test/snapshots/`. Paparazzi and Roborazzi use separate baseline folders.
+
 Biometric/secure-tokens note (2026-10): the admin app uses DataStore-backed tokens today and BiometricPrompt unlock is **deferred to a later phase** — no sensitive operation requires on-device biometric by default in this launch. EncryptedSharedPreferences migration (admin-app Tokenspace) is a candidate follow-up.

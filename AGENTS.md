@@ -187,6 +187,13 @@ When reporting work, summarize:
 3. Tests/checks run and actual results.
 4. Any checks not run, known risks, required environment setup or follow-up work.
 
+
+## Subagent delegation
+- Always utilize specialized subagents whenever necessary (such as for broad codebase research, deep investigation, or parallelizable subtasks) to ensure clean context and focused execution.
+
+## Git commit messages
+- Do **not** add "Generated with Codebuff", "Co-Authored-By: Codebuff", or similar AI attribution/footer lines to commit messages. Keep commit messages clean and descriptive.
+
 Do not claim that code is deployed, a notification was delivered, a migration succeeded, a test passed or an Android package was signed unless that result was directly verified.
 
 

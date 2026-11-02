@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn" font-family="solaimanlipi, nikosh, dejavusans">
+<html lang="bn">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <title>এনআইডি মেইক — NID Form</title>
@@ -9,13 +9,14 @@
             size: A4;
         }
         body {
-            font-family: dejavusans;
+            font-family: solaimanlipi, nikosh, dejavusans;
             font-size: 12pt;
             color: #222;
             line-height: 1.5;
         }
         .content-wrapper {
             width: 100%;
+            page-break-inside: avoid;
         }
         .page-header {
             text-align: center;
@@ -63,6 +64,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 5mm;
+            page-break-inside: avoid;
         }
         table.photo-signature-row td.photo-box {
             width: 32mm;
@@ -99,6 +101,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 3mm;
+            page-break-inside: avoid;
         }
         table.form-table td {
             padding: 2mm 3mm;
@@ -128,17 +131,14 @@
             width: 80%;
         }
 
-        textarea.value-text {
+        .address-value {
             width: 100%;
             min-height: 16mm;
-            border: none;
-            background: transparent;
             font-family: dejavusans;
             font-size: 11pt;
             color: #333;
-            resize: none;
-            outline: none;
-            overflow: hidden;
+            white-space: normal;
+            word-wrap: break-word;
         }
 
         .footer {
@@ -148,6 +148,7 @@
             border-top: 1px solid #ddd;
             font-size: 8pt;
             color: #888;
+            page-break-inside: avoid;
         }
     </style>
 </head>
@@ -247,7 +248,7 @@
         <tr>
             <td class="label">পূর্ণ ঠিকানা / Full Address</td>
             <td class="value">
-                <textarea class="value-text" readonly>{{ full_address|default('—') }}</textarea>
+                <div class="address-value">{{ full_address|default('—')|nl2br }}</div>
             </td>
         </tr>
     </table>

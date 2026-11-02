@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.paparazzi)
 }
 
 val keystoreProperties = Properties().apply {
@@ -208,6 +209,7 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.mockwebserver)
+    testImplementation(libs.paparazzi)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

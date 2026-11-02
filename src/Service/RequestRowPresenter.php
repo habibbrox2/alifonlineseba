@@ -39,6 +39,13 @@ final class RequestRowPresenter
         $hasDeliverable = ($row['deliverable_path'] ?? null) !== null
             && (string) $row['deliverable_path'] !== '';
 
+        $provider = (string) ($metadata['provider'] ?? '');
+        $resultEntries = $provider === 'mock-nid-make' ? [] : StatusPresenter::resultEntries($result);
+        $actions = StatusPresenter::requestActions($status, $hasDeliverable);
+        if ($provider === 'mock-nid-make') {
+            $actions = array_values(array_filter($actions, static fn (array $action): bool => $action['key'] !== 'view'));
+        }
+
         return [
             'id' => (int) $row['id'],
             'reference' => (string) $row['reference'],
@@ -47,7 +54,7 @@ final class RequestRowPresenter
             'status' => $status,
             'status_label' => StatusPresenter::label($status),
             'status_badge' => StatusPresenter::badge($status),
-            'actions' => StatusPresenter::requestActions($status, $hasDeliverable),
+            'actions' => $actions,
             'has_deliverable' => $hasDeliverable,
             'deliverable_name' => $hasDeliverable ? (string) $row['deliverable_name'] : null,
             'deliverable_size' => $hasDeliverable && $row['deliverable_size'] !== null
@@ -59,7 +66,7 @@ final class RequestRowPresenter
             'created_at' => (string) $row['created_at'],
             'updated_at' => (string) $row['updated_at'],
             'result' => $result,
-            'result_entries' => StatusPresenter::resultEntries($result),
+            'result_entries' => $resultEntries,
             'error' => isset($metadata['error']) ? (string) $metadata['error'] : null,
         ];
     }
